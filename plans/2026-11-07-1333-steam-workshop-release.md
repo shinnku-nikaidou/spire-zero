@@ -300,3 +300,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   already up; the same update again, without the preview, went through in a second. Last night's timeouts were the
   same: the first commit carrying new content timed out, a repeat passed (so not \`--note\`'s doing, as written above).
   The page (logged out): 394.189 MB, updated now.
+- 2026-11-16 09:37: 0.3.13 at d2f59348, asked by the potion session for the user's real game: the potion rules
+  (f372e07c a potion reward the belt has room for is always taken; d3e2c1a2, 26947aad the Foul Potion; 9a631812 free
+  disposal) and the champion v11-0 + c11-0 (c4014213, v10-2-2 / c10-2-2 carried to the Dread input). Three platforms
+  (the VM started for it and shut down after; 3:53). The item's nets are `weights/all/`'s byte for byte. Its Linux
+  brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and 29/29 saves in a
+  finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.12 with the game closed. Not uploaded.
