@@ -200,6 +200,58 @@ public class CloneSearchTests
     }
 
     [Fact]
+    public void TheAisOwnSkipIsNoWayBackOnceTheHostSaysItWasPlayed()
+    {
+        // As ASkippedCardRewardIsNotOpenedAgain, with a host that says which answers it played (the mod): each answer is
+        // played, so the states count as decided as before, and the run goes the same way.
+        var l0 = new MacroBrain(V, hostSaysPlayed: true);
+        var path = new List<string>();
+        while (Rewards(path).Surface != Surfaces.Map)
+        {
+            Assert.True(path.Count < 8, $"no way out: {string.Join(" ", path)}");
+            var at = path.ToList();
+            var answer = l0.Choose(Root(new Toy(p => Rewards([.. at, .. p]))));
+            l0.Played(answer.State!.Value);
+            path.Add(answer.Action.ToString());
+        }
+        Assert.Equal(["reward:0", "card:0", "reward:1", "rewards_done"], path);
+    }
+
+    /// <summary>A rewards screen with one card reward, BAD alone; leaving changes nothing. Skipping returns to the screen.</summary>
+    private static Afterstate BadCard(IReadOnlyList<string> path)
+    {
+        var bad = new CardView { Id = "BAD" };
+        var run = Start;
+        bool card = true, open = false;
+        foreach (var action in path)
+        {
+            if (action == "rewards_done") return Exit(run);
+            if (action == "reward:0") open = true;
+            else if (action == "card_alt:Skip") open = false;
+            else if (action == "card:0") (open, card, run) = (false, false, run with { Deck = [.. run.Deck, bad] });
+        }
+        if (open) return new(run, Surfaces.CardReward, new CardRewardScreen { Cards = [bad], Alternatives = ["Skip"] }, Acts("card:0", "card_alt:Skip"));
+        List<RewardView> rewards = card ? [new() { Index = 0, Kind = "card", Cards = [bad] }] : [];
+        return new(run, Surfaces.Rewards, new RewardsScreen { Rewards = rewards }, [.. rewards.Select(r => MacroAction.Of(MacroAction.Reward, r.Index)), MacroAction.RewardsDone]);
+    }
+
+    [Fact]
+    public void ACardRewardThePlayerOpenedCanStillBeSkipped()
+    {
+        // l0 would leave the BAD card; the player opens it instead. The rewards screen was answered but not left by the
+        // answer, so going back to it is no cycle: skipping is allowed, and wins. Counted as decided, it was forbidden, and
+        // l0 took BAD (the mod, 2026-11-16).
+        var l0 = new MacroBrain(V, hostSaysPlayed: true);
+        Assert.Equal("rewards_done", l0.Choose(Root(new Toy(p => BadCard(p)))).Action.ToString());
+        var opened = l0.Choose(Root(new Toy(p => BadCard(["reward:0", .. p]))));
+        Assert.Equal("card_alt:Skip", opened.Action.ToString());
+        Assert.Contains(opened.Scored, c => c.Action == "card_alt:Skip");
+        // The player skips as well, or l0 does: back on the rewards screen it leaves.
+        l0.Played(opened.State!.Value);
+        Assert.Equal("rewards_done", l0.Choose(Root(new Toy(p => BadCard(["reward:0", "card_alt:Skip", .. p])))).Action.ToString());
+    }
+
+    [Fact]
     public void EachOptionCarriesTheLineItWasValuedBy()
     {
         // Opening a card reward is valued by its best card (A, not BAD) and names it. In the shop, Y after X reaches the

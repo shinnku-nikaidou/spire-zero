@@ -127,6 +127,14 @@ public sealed class Dispatcher(
 
     public IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action) => macro.Policy.Plan(decision, action);
 
+    /// <summary>The host played the answer given at <paramref name="state"/> (<see cref="MacroAnswer.State"/>,
+    /// <see cref="ChoiceAnswer.State"/>), a macro decision's or a card prompt's: each macro route hears it, once.</summary>
+    public void Played(ulong state)
+    {
+        macro.Policy.Played(state);
+        if (!ReferenceEquals(macroChoices.Policy, macro.Policy)) macroChoices.Policy.Played(state);
+    }
+
     /// <summary>A combat decision, with who made it and what it planned and scored.</summary>
     public (CombatAction Action, DecisionNote Note) Decide(CombatDecision decision)
     {

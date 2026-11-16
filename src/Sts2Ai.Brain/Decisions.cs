@@ -93,7 +93,9 @@ public interface IMacroClone
 /// <param name="Explored">Whether it was drawn by self-play exploration (<see cref="Uniform"/>, <see cref="Softmax"/>).</param>
 /// <param name="Scored">The legal actions it was chosen among, each with its value, the chosen first and then best
 /// first; none from a policy that values nothing, or for an answer that was drawn.</param>
-public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null)
+/// <param name="State">SL: the state the answer was given at, as the node's clone keys it, for a host that says which
+/// answers it played (<see cref="IMacroPolicy.Played"/>); null for a policy that keeps no states.</param>
+public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null, ulong? State = null)
 {
     public IReadOnlyList<Candidate> Scored { get; init; } = Scored ?? [];
 }
@@ -103,7 +105,8 @@ public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IRea
 /// <param name="Explored">As <see cref="MacroAnswer.Explored"/>.</param>
 /// <param name="Scored">The answers it was chosen among, as "pick:I,J", each with its value, the chosen first and then
 /// best first; none from a policy that values nothing, or for an answer that was drawn.</param>
-public sealed record ChoiceAnswer(IReadOnlyList<int> Picks, bool Explored = false, IReadOnlyList<Candidate>? Scored = null)
+/// <param name="State">As <see cref="MacroAnswer.State"/> (<see cref="IChoicePolicy.Played"/>).</param>
+public sealed record ChoiceAnswer(IReadOnlyList<int> Picks, bool Explored = false, IReadOnlyList<Candidate>? Scored = null, ulong? State = null)
 {
     public IReadOnlyList<Candidate> Scored { get; init; } = Scored ?? [];
 }
@@ -118,6 +121,9 @@ public interface ICombatPolicy
 public interface IChoicePolicy
 {
     ChoiceAnswer Choose(ChoiceDecision decision);
+
+    /// <summary>As <see cref="IMacroPolicy.Played"/>, for a card prompt's answer.</summary>
+    void Played(ulong state) { }
 }
 
 /// <summary>Picks an out-of-combat action (map, rewards, events, shop, rest, treasure, card rewards, bundles).</summary>
@@ -127,4 +133,8 @@ public interface IMacroPolicy
 
     /// <summary>The actions the policy plans after <paramref name="action"/>, for the highlight and the log; none by default.</summary>
     IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action) => [];
+
+    /// <summary>The host played the answer given at <paramref name="state"/> (<see cref="MacroAnswer.State"/>). Only a host
+    /// that says which answers it played calls it: the mod, whose player may act instead of an answer.</summary>
+    void Played(ulong state) { }
 }

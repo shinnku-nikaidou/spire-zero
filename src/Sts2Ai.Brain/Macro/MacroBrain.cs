@@ -21,7 +21,10 @@ namespace Sts2Ai.Brain.Macro;
 /// V is read with the game's free disposal (<see cref="FreeDisposal"/>): a belt is worth the best of it with any of
 /// its potions thrown away, so no option wins by losing a potion V rates below an empty slot.
 /// </summary>
-public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null)
+/// <param name="hostSaysPlayed">Whether the host says which answers it played (<see cref="Played"/>): the mod, whose
+/// player may act instead of an answer. Otherwise every answer is played.</param>
+public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
+    bool hostSaysPlayed = false)
     : IMacroPolicy, IChoicePolicy
 {
     private readonly ScreenAfterstates _screen = new(new FreeDisposal(value));
@@ -38,8 +41,11 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
 
     /// <summary>
     /// SL: the states of this run's decisions on the node's clone (<see cref="CloneSearch.Key"/>), macro decisions and
-    /// card prompts. No answer goes back to one (<see cref="CloneSearch"/>): skipping a card reward returns to the rewards
-    /// screen that opened it, which would open it again, forever.
+    /// card prompts, whose answer was played. No answer goes back to one (<see cref="CloneSearch"/>): skipping a card
+    /// reward returns to the rewards screen that opened it, which would open it again, forever. A state the player left
+    /// with an act of their own is none: going back to it is no cycle of the answers (a card reward the player opened, the
+    /// map the player opened from the rewards; counted as decided, the way back was forbidden and the AI could skip
+    /// neither, 2026-11-16).
     /// </summary>
     private readonly HashSet<ulong> _decided = [];
 
@@ -64,9 +70,18 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         else pick = _draws.Pick(values, ref explored);
         var option = options[pick];
         _opened = option.Opens;
-        if (decision.Clone != null) _decided.Add(CloneSearch.Key(Root(decision)));
-        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action));
+        ulong? state = decision.Clone != null ? Answered(CloneSearch.Key(Root(decision))) : null;
+        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action), state);
     }
+
+    /// <summary>The state of a decision just answered: decided now, or once its host says the answer was played.</summary>
+    private ulong Answered(ulong state)
+    {
+        if (!hostSaysPlayed) _decided.Add(state);
+        return state;
+    }
+
+    public void Played(ulong state) => _decided.Add(state);
 
     /// <summary>Each legal action, in order, with its afterstate and its value: what <see cref="Choose(MacroDecision)"/> picks by.</summary>
     public IReadOnlyList<(MacroAction Action, RunView After, double Value)> Options(MacroDecision decision) =>
@@ -238,11 +253,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-        if (_draws.Even(choice, min) is { } even)
-        {
-            _decided.Add(CloneSearch.Key(root));
-            return new(even, Explored: true);
-        }
+        if (_draws.Even(choice, min) is { } even) return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
         bool explored = false;
         var groups = choice.Groups();
         // An answer is how many of each group it picks.
@@ -270,9 +281,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             if (taken == current) break;
             counts = taken;
         }
-        _decided.Add(CloneSearch.Key(root));
         return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
-            explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)));
+            explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)), Answered(CloneSearch.Key(root)));
     }
 
     /// <summary>The answers one pick away from <paramref name="counts"/> that the prompt accepts.</summary>

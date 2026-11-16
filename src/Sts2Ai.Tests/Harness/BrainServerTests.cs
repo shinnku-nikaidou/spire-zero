@@ -98,4 +98,61 @@ public class BrainServerTests
 
         Assert.Equal([1, 2, 3], logged);
     }
+
+    /// <summary>Answers each decision with its first legal action, at a state numbered in order from 1, and keeps the
+    /// states it hears were played.</summary>
+    private sealed class Numbered : IMacroPolicy, IChoicePolicy
+    {
+        private ulong _states;
+
+        public List<ulong> Heard { get; } = [];
+
+        public MacroAnswer Choose(MacroDecision decision) => new(decision.Legal[0], State: ++_states);
+
+        public ChoiceAnswer Choose(ChoiceDecision decision) => new([]);
+
+        public void Played(ulong state) => Heard.Add(state);
+    }
+
+    [Fact]
+    public void TheMacroSideHearsOfEachAnswerTheHostSaysItPlayed()
+    {
+        var combat = new CombatRoute("test", (_, _, _, _) => new(CombatAction.EndTurn, [], []));
+        var macro = new Numbered();
+        var server = new BrainServer(hello => (new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro)), "test"));
+
+        using var toBrain = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var brainIn = new AnonymousPipeClientStream(PipeDirection.In, toBrain.ClientSafePipeHandle);
+        using var toHost = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var hostIn = new AnonymousPipeClientStream(PipeDirection.In, toHost.ClientSafePipeHandle);
+        var serving = new Thread(() => server.Serve(new WireStream(brainIn, toHost)));
+        serving.Start();
+        var host = new WireStream(hostIn, toBrain);
+
+        var obs = new Observation { Run = Fixtures.Floor1(), Screen = new RewardsScreen { Rewards = [] } };
+        string hash = DecisionRequest.HashOf(obs);
+        string Ask(long id)
+        {
+            host.Send(new DecisionRequest(id, hash, Surfaces.Rewards, obs, [MacroAction.RewardsDone.ToString()]));
+            return host.Expect<Recommendation>().Action;
+        }
+        host.Send(new Hello("v-test", "NoSL", "mod", new RunHeader("run-1", "SILENT", 0)));
+        host.Expect<Ready>();
+        host.Send(new Executed(0, Ask(0), true));
+        // An action that failed was not played, nor an answer the player acted instead of (decision 2).
+        host.Send(new Executed(1, Ask(1), false));
+        Ask(2);
+        host.Send(new Executed(3, Ask(3), true));
+        host.Send(new Executed(0, "rewards_done", true));
+        // A new run forgets the last run's answers.
+        host.Send(new Hello("v-test", "NoSL", "mod", new RunHeader("run-2", "SILENT", 0)));
+        host.Expect<Ready>();
+        host.Send(new Executed(2, "rewards_done", true));
+        // Messages are read in order: once this is answered, every Executed before it was handled.
+        Ask(0);
+        toBrain.Dispose();
+        serving.Join();
+
+        Assert.Equal([1UL, 4UL], macro.Heard);
+    }
 }

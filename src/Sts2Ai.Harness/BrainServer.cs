@@ -9,7 +9,9 @@ namespace Sts2Ai.Harness;
 /// <paramref name="harness"/>, made at hello with the champion as a player sees it (<see cref="Ready.Shown"/>; it refuses the run by throwing); each decision is routed through it and
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. An SL checkpoint gets
-/// no answer: one that Harness refuses fails the run's next decision; each SL decision brings the steps since it. <paramref name="ended"/> gets each run's Harness at
+/// no answer: one that Harness refuses fails the run's next decision; each SL decision brings the steps since it. An
+/// answer the host says it played (<see cref="Executed"/>) is handed to the run's Harness with the state it was given at
+/// (<see cref="Dispatcher.Played"/>). <paramref name="ended"/> gets each run's Harness at
 /// run_end; <paramref name="received"/> every message a host sends; <paramref name="answered"/> the run's Harness after
 /// each answer is sent, so its decision log can be written as it grows.
 /// </summary>
@@ -38,6 +40,8 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
         Dispatcher? run = null;
         long last = -1;
         string? refused = null;
+        // Each answered decision's state (MacroAnswer.State), until the host says it played the answer.
+        var states = new Dictionary<long, ulong>();
         while (wire.Receive() is { } message)
         {
             received?.Invoke(message);
@@ -45,6 +49,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             {
                 case Hello next:
                     (hello, run, last, refused) = (next, null, -1, null);
+                    states.Clear();
                     try
                     {
                         (run, var shown) = harness(next);
@@ -63,7 +68,9 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                         if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
                         last = request.DecisionId;
                         run.Steps(request.Trace);
-                        wire.Send(Answer(run, request));
+                        var (recommendation, state) = Answer(run, request);
+                        if (state is { } given) states[request.DecisionId] = given;
+                        wire.Send(recommendation);
                         answered?.Invoke(run);
                     }
                     catch (Exception e)
@@ -86,6 +93,9 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     if (run != null) ended?.Invoke(hello!, run, end);
                     (hello, run) = (null, null);
                     break;
+                case Executed { Ok: true } executed:
+                    if (run != null && states.Remove(executed.DecisionId, out var played)) run.Played(played);
+                    break;
                 // Each decision is answered before the next message is read, so there is no search to drop.
                 case Executed or Cancel:
                     break;
@@ -96,7 +106,8 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
         }
     }
 
-    private static Recommendation Answer(Dispatcher harness, DecisionRequest request)
+    /// <returns>The answer, and the state it was given at, if the run keeps one (<see cref="MacroAnswer.State"/>).</returns>
+    private static (Recommendation Answer, ulong? State) Answer(Dispatcher harness, DecisionRequest request)
     {
         var obs = request.Obs;
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
@@ -104,7 +115,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's: are the mod and the brain built from the same commit?");
         // The live combat an SL host sends, with the run around it as a combat's leaf reads it, as a host in this process gives it.
         Func<CombatExport>? export = request.Export is { } bytes ? () => new CombatExport(Convert.FromBase64String(bytes), obs.Run.WithoutPreviews()) : null;
-        var (action, note) = (request.Surface, obs.Screen) switch
+        var (action, note, state) = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs,
                 export))),
@@ -112,15 +123,17 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };
-        return new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates);
+        return (new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates), state);
     }
 
-    private static (string Action, DecisionNote Note) Text((CombatAction Action, DecisionNote Note) decided) => (decided.Action.ToString(), decided.Note);
+    private static (string Action, DecisionNote Note, ulong? State) Text((CombatAction Action, DecisionNote Note) decided) =>
+        (decided.Action.ToString(), decided.Note, null);
 
-    private static (string Action, DecisionNote Note) Text((ChoiceAnswer Answer, DecisionNote Note) decided) =>
-        (MacroAction.Pick(decided.Answer.Picks).ToString(), decided.Note);
+    private static (string Action, DecisionNote Note, ulong? State) Text((ChoiceAnswer Answer, DecisionNote Note) decided) =>
+        (MacroAction.Pick(decided.Answer.Picks).ToString(), decided.Note, decided.Answer.State);
 
-    private static (string Action, DecisionNote Note) Text((MacroAnswer Answer, DecisionNote Note) decided) => (decided.Answer.Action.ToString(), decided.Note);
+    private static (string Action, DecisionNote Note, ulong? State) Text((MacroAnswer Answer, DecisionNote Note) decided) =>
+        (decided.Answer.Action.ToString(), decided.Note, decided.Answer.State);
 
     private static string Describe(Exception e) => $"{e.GetType().Name}: {e.Message}";
 }

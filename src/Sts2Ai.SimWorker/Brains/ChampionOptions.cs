@@ -36,7 +36,8 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, plan's runs in the
     /// engine, in as many threads as the pool has workers, and the pool plays the node's clone across a card prompt a
     /// plan is rooted at. With
-    /// <paramref name="explain"/>, for a host that shows the answers, map options carry their routes (<see cref="Dispatcher"/>).
+    /// <paramref name="explain"/>, for a host that shows the answers (the mod), map options carry their routes (<see cref="Dispatcher"/>),
+    /// and l0 counts a state as decided once the host says it played the answer (<see cref="Executed"/>): its player may act instead.
     /// </summary>
     public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log, bool explain = false) => hello =>
     {
@@ -55,7 +56,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         if (Macro == "l0")
         {
             var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null,
-                MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null);
+                MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null, hostSaysPlayed: explain);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null, explain);
         }
