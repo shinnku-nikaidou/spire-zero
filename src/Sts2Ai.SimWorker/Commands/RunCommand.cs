@@ -1,7 +1,9 @@
 using System.CommandLine;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
@@ -32,13 +34,15 @@ internal static class RunCommand
     private static readonly Option<string?> AutoWin = Opt.Maybe<string?>("--auto-win",
         "acts, numbered from 1 as the game shows them, such as 1,2: their plain monster fights, an event's included, are won at their start " +
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
+    private static readonly Option<string?> Mode = Opt.Maybe<string?>("--mode",
+        "the game mode: dread, which the game plays at ascension 10 only (--asc 10); the standard game if not given");
     private static readonly ChampionArgs Champion = new(file: true, world: "engine");
     private static readonly LoadoutArgs Loadout = new();
 
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, AutoWin], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, AutoWin, Mode], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -53,6 +57,7 @@ internal static class RunCommand
         int seed = r.GetValue(Seed);
         int asc = r.GetValue(Asc);
         var autoWin = Acts(r.GetValue(AutoWin));
+        var mode = GameModeOf(r.GetValue(Mode), asc);
         int maxDecisions = r.GetValue(MaxDecisions);
         var env = r.GetValue(Env);
         bool check = r.GetValue(Check);
@@ -88,7 +93,7 @@ internal static class RunCommand
         var clock = Stopwatch.StartNew();
         for (int i = start; i < start + n; i++)
         {
-            var setup = new RunSetup(character, seeds?[i] ?? GameSeeds.MakeSeed(seed, i), asc, loadout, autoWin);
+            var setup = new RunSetup(character, seeds?[i] ?? GameSeeds.MakeSeed(seed, i), asc, loadout, autoWin, mode);
             var started = clock.Elapsed;
             var first = PlayRun(pump, setup, env, firstBrain, maxDecisions, trace, observe, printObservations);
             if (workerPool != null) first.Errors.AddRange(workerPool.TakeGameErrors());
@@ -287,7 +292,7 @@ internal static class RunCommand
         {
             var steps = session?.Trace.ToList() ?? [];
             var surfaces = steps.GroupBy(s => s[..s.IndexOf(' ')]).ToDictionary(g => g.Key, g => g.Count());
-            var config = new RunConfig(HeadlessGame.GameVersion, Program.Commit, brain?.Champion ?? "none", hello.Env, setup.AutoWin);
+            var config = new RunConfig(HeadlessGame.GameVersion, Program.Commit, brain?.Champion ?? "none", hello.Env, setup.AutoWin, Observe.Mode(setup.Mode));
             var player = session?.Player;
             var record = new RunRecord(config, setup.Seed, setup.Character, setup.Ascension, outcome,
                 session?.Run.CurrentActIndex ?? 0, session?.Run.TotalFloor ?? 0, player?.Creature.CurrentHp ?? 0, player?.Creature.MaxHp ?? 0,
@@ -306,6 +311,15 @@ internal static class RunCommand
         var acts = text.Split(',').Select(a => int.TryParse(a, out int act) && act >= 1 && act <= count ? act - 1
             : throw new CliException($"--auto-win takes acts from 1 to {count}, such as 1,2; not {a}")).Distinct().Order().ToList();
         return acts;
+    }
+
+    /// <summary>The game mode of <c>--mode</c>: the standard game, or the Dread mode at ascension 10, where its lobby puts it.</summary>
+    internal static GameMode GameModeOf(string? text, int asc)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return GameMode.Standard;
+        if (!text.Equals("dread", StringComparison.OrdinalIgnoreCase)) throw new CliException($"--mode takes dread, not {text}");
+        if (asc != 10) throw new CliException($"the game plays the Dread mode at ascension 10 only, not {asc} (--asc 10)");
+        return GameMode.Dread;
     }
 
     /// <summary>One hash for a run's observation hashes, to compare runs across processes.</summary>

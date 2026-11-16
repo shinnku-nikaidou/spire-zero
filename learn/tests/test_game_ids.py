@@ -12,7 +12,11 @@ def test_the_tables_hold_every_character_and_what_the_nets_read():
     for character in ("IRONCLAD", "SILENT", "REGENT", "NECROBINDER", "DEFECT", "FOOL"):
         assert f"character:{character}" in macro["context"]
         assert f"STRIKE_{character}" in combat["cards"] and f"STRIKE_{character}" in macro["cards"]
-    assert {i.split(":")[0] for i in combat["context"][1:]} == {"encounter", "character"}  # it says the room and the act
+    # the encounter says the room and the act
+    assert {i.split(":")[0] for i in combat["context"][1:]} == {"encounter", "character", "mode", "dominion"}
+    for tables in (combat, macro):
+        assert "mode:Dread" in tables["context"] and "dominion:QUEEN_DOMINION" in tables["context"]
+        assert "mode:Standard" not in tables["context"]
     assert "OSTY" in combat["allies"] and "PLASMA_ORB" in combat["orbs"] and "LIZARD_TAIL:used" in combat["relics"]
     assert "Elite+0:quest" in macro["map"] and "Boss+20" in macro["map"]
 

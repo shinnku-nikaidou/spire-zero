@@ -137,6 +137,15 @@ pub fn seen(st: CombatState, player: Player, c: &mut Combat) -> (CombatObservati
         },
         act: g::dispatch::i_run_state::current_act_index(run_state, c),
         ascension: g::dispatch::i_run_state::ascension_level(run_state, c),
+        mode: {
+            // C#: Observe.Mode, the standard game's null
+            let mode = g::dispatch::i_run_state::game_mode(run_state, c);
+            if matches!(mode, GameMode::Standard | GameMode::None) { None } else { Some(name(mode, c)) }
+        },
+        dominion: {
+            let dominion = g::combat::combat_state::dominion(st, c);
+            if rt::is_null(&dominion) { None } else { Some(entry(dominion, c)) }
+        },
         round: g::combat::combat_state::round_number(st, c),
         player: PlayerView {
             uid: g::entities_creatures::creature::combat_id(me, c),

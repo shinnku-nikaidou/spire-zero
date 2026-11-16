@@ -20,6 +20,11 @@ public sealed record CombatObservation
     /// <summary>Act index, from 0.</summary>
     public required int Act { get; init; }
     public required int Ascension { get; init; }
+    /// <summary>The game mode as the game names it (<c>Dread</c>); null in the standard game.</summary>
+    public string? Mode { get; init; }
+    /// <summary>The Dread mode's dominion on this fight (<see cref="RunView.Dominion"/>); null in the standard game and in
+    /// a boss's fight.</summary>
+    public string? Dominion { get; init; }
     public required int Round { get; init; }
     public required PlayerView Player { get; init; }
     public required IReadOnlyList<CardView> Hand { get; init; }

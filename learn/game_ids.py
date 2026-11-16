@@ -29,9 +29,14 @@ def relics() -> list[str]:
     return IDS["relics"] + [f"{i}:used" for i in IDS["used_up_relics"]]
 
 
+def mode_ids() -> list[str]:
+    """Both nets' context ids of the game mode and the Dread mode's dominion (CombatTokens.ModeTokens)."""
+    return [f"mode:{i}" for i in IDS["modes"]] + [f"dominion:{i}" for i in IDS["dominions"]]
+
+
 def combat_tables() -> dict[str, list[str]]:
-    """The combat net's. Of the context the encounter, which says the room and the act, and the character; a relic's
-    status also reads "Spent" for a once-a-combat effect used."""
+    """The combat net's. Of the context the encounter, which says the room and the act, the character, and the game
+    mode and dominion; a relic's status also reads "Spent" for a once-a-combat effect used."""
     return {
         "cards": table(IDS["cards"]),
         "modifiers": table(modifiers()),
@@ -40,7 +45,9 @@ def combat_tables() -> dict[str, list[str]]:
         "intents": table(IDS["intents"]),
         "relics": table(relics()),
         "potions": table(IDS["potions"]),
-        "context": table([f"encounter:{i}" for i in IDS["encounters"]] + [f"character:{i}" for i in IDS["characters"]]),
+        "context": table(
+            [f"encounter:{i}" for i in IDS["encounters"]] + [f"character:{i}" for i in IDS["characters"]] + mode_ids()
+        ),
         "orbs": table(IDS["orbs"]),
         "allies": table(IDS["monsters"]),
         "relic_status": table([*IDS["relic_status"], "Spent"]),
@@ -60,6 +67,7 @@ def macro_tables() -> dict[str, list[str]]:
             + [f"ancient:{i}" for i in IDS["ancients"]]
             + [f"boss:{i}" for i in IDS["bosses"]]
             + [f"character:{i}" for i in IDS["characters"]]
+            + mode_ids()
         ),
         "map": table(f"{p}+{k}{quest}" for p in IDS["points"] for k in range(AHEAD) for quest in ("", ":quest")),
     }

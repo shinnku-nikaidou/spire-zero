@@ -55,6 +55,15 @@ public class TokensTests
     }
 
     [Fact]
+    public void ADreadRunReadsItsModeAndTheDominionOnItInItsContext()
+    {
+        var dread = Run() with { Mode = "Dread", Dominion = "QUEEN_DOMINION" };
+        Same("""["character:SILENT","act:OVERGROWTH","boss:B","ancient:NEOW","mode:Dread","dominion:QUEEN_DOMINION"]""", Tokens(dread)["context"]);
+        // From a boss's room on there is no dominion until the next act.
+        Same("""["character:SILENT","act:OVERGROWTH","boss:B","ancient:NEOW","mode:Dread"]""", Tokens(dread with { Dominion = null })["context"]);
+    }
+
+    [Fact]
     public void RelicsReadTheirCountersStatusesAndTheCardsTheyKeepAsTheCombatNetReadsThem()
     {
         var t = Tokens(Run(relics: """
@@ -129,6 +138,15 @@ public class TokensTests
         Same("""["FIRE"]""", t["potions"]);
         Same("""[["STRENGTH_POWER",0.2,0,null,0]]""", t["powers"]);
         Same("""["character:SILENT","encounter:E","room:Monster","act:0"]""", t["context"]);
+    }
+
+    [Fact]
+    public void ADreadFightReadsTheModeAndItsDominionInItsContext()
+    {
+        Same("""["character:SILENT","encounter:E","room:Monster","act:0","mode:Dread","dominion:KAISER_CRAB_DOMINION"]""",
+            Tokens(Obs() with { Mode = "Dread", Dominion = "KAISER_CRAB_DOMINION" })["context"]);
+        // A boss's fight has none.
+        Same("""["character:SILENT","encounter:E","room:Monster","act:0","mode:Dread"]""", Tokens(Obs() with { Mode = "Dread" })["context"]);
     }
 
     [Fact]

@@ -5,11 +5,14 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Dread;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.Core.Runs;
 using Microsoft.Extensions.Logging;
 using Sts2Ai.Brain;
+using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.SimWorker.Commands;
@@ -54,6 +57,9 @@ internal static class TablesCommand
             ["card_types"] = Enum.GetNames<CardType>(),
             ["riders"] = Enum.GetNames<TinkerTime.RiderEffect>(),
             ["points"] = Enum.GetNames<MapPointType>(),
+            // the game modes besides the standard game, and the Dread mode's dominions (RunView.Mode, RunView.Dominion)
+            ["modes"] = Enum.GetValues<GameMode>().Select(Observe.Mode).OfType<string>(),
+            ["dominions"] = Entries<DominionModel>(),
         };
         var sorted = ids.ToDictionary(kv => kv.Key, kv => kv.Value.Distinct().Order(StringComparer.Ordinal).ToList());
         File.WriteAllText(path, JsonSerializer.Serialize(sorted, Indented) + "\n");

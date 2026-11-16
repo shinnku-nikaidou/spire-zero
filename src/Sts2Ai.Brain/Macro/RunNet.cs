@@ -142,7 +142,7 @@ public sealed class RunNet : IRunValue, IDisposable
     /// The net's tokens of a run: each card with its modifiers (enchantment, affliction, keywords, what Tinker Time made
     /// of it), its modifiers' amounts, its damage (Osty's for an Osty attack), block and growth, which only its own id's row
     /// reads; each relic, with ":used" once used up, its numbers and its status; each potion; the context: character,
-    /// act, boss(es) and the act's ancient; the map (<see cref="MapTokens"/>); and the cards the relics keep (Pael's
+    /// act, boss(es), the act's ancient, and in the Dread mode the mode and the dominion now on the run; the map (<see cref="MapTokens"/>); and the cards the relics keep (Pael's
     /// Tooth's). Nothing is computed from the deck: what matters in it is the net's to learn.
     /// </summary>
     public static RunTokens Tokens(RunView run)
@@ -150,6 +150,7 @@ public sealed class RunNet : IRunValue, IDisposable
         var context = new List<string> { "character:" + run.Character, "act:" + run.ActId, "boss:" + run.Map.Boss };
         if (run.Map.SecondBoss != null) context.Add("boss:" + run.Map.SecondBoss);
         if (run.Map.Ancient != null) context.Add("ancient:" + run.Map.Ancient);
+        context.AddRange(CombatTokens.ModeTokens(run.Mode, run.Dominion));
         return new(
             [.. run.Deck.Select(Card)],
             [.. run.Relics.Select(CombatTokens.RelicId)],

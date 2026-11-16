@@ -4,7 +4,9 @@ new input brings new weights. A carried net gives every state its old tables cou
     cd learn && uv run python carry.py combat ../weights/all/c9-2.json --name c10-0
     cd learn && uv run python carry.py v ../weights/all/v9-2.json --name v10-0
 
-An id the old tables lack starts from the old net's row for an id it does not know, which is how the old net read it.
+An id the old tables lack starts from the old net's row for an id it does not know, which is how the old net read it,
+except a context id of the game mode or the Dread mode's dominion: a state of before has no such token at all, so its row
+starts at zero, and as the context is a sum a carried net values a Dread state as the old net valued it without them.
 A weight the old net lacks is zero: a card's growth, and the columns of a layer that reads more numbers than before
 (the new numbers come last). Everything else is copied. The file's test states are the old file's, valued again; they
 must come to the old values, and the brain checks the same on load.
@@ -54,6 +56,8 @@ V_ROWS = {
 }
 # The weights a net of before may lack, and the layers that may read more numbers than before.
 NEW = {"card_grown.weight"}
+# The ids whose rows start at zero when new: tokens a state of before never had (CombatTokens.ModeTokens).
+ZERO = ("mode:", "dominion:")
 WIDER = {"enemy_scalars.weight", "body.0.weight"}
 
 
@@ -75,6 +79,8 @@ def carried(old: dict[str, torch.Tensor], own: dict[str, torch.Tensor], rows, wa
             index = {i: k for k, i in enumerate(was[table])}
             source = torch.tensor([b * len(was[table]) + index.get(i, 0) for b in range(blocks) for i in now[table]])
             theirs = theirs[source]
+            fresh = [i not in index and i.startswith(ZERO) for _ in range(blocks) for i in now[table]]
+            theirs[torch.tensor(fresh)] = 0
         if theirs.shape != mine.shape:
             grown = (
                 name in WIDER

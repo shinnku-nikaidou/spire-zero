@@ -40,6 +40,8 @@ public static class Observe
     {
         Character = player.Character.Id.Entry,
         Ascension = run.AscensionLevel,
+        Mode = Mode(run.GameMode),
+        Dominion = run.Dominion?.Id.Entry,
         Act = run.CurrentActIndex,
         ActId = run.Act.Id.Entry,
         Floor = run.TotalFloor,
@@ -80,6 +82,9 @@ public static class Observe
 
     public static Coord Coord(MapCoord c) => new(c.col, c.row);
 
+    /// <summary>The game mode as the game names it, null for the standard game (<see cref="RunView.Mode"/>).</summary>
+    public static string? Mode(GameMode mode) => mode is GameMode.Standard or GameMode.None ? null : mode.ToString();
+
     public static CombatObservation Combat(CombatState st, Player player)
     {
         var pcs = player.PlayerCombatState ?? throw new InvalidOperationException("player has no combat state");
@@ -92,6 +97,8 @@ public static class Observe
             Room = st.Encounter?.RoomType.ToString(),
             Act = st.RunState.CurrentActIndex,
             Ascension = st.RunState.AscensionLevel,
+            Mode = Mode(st.RunState.GameMode),
+            Dominion = st.Dominion?.Id.Entry,
             Round = st.RoundNumber,
             Player = new PlayerView
             {

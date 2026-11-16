@@ -15,6 +15,13 @@ def test_an_id_the_old_tables_lack_starts_from_the_old_nets_row_for_an_unknown_i
     assert out["cards.weight"].flatten().tolist() == [9, 1, 9, 3]
 
 
+def test_a_new_game_mode_or_dominion_id_starts_at_zero():
+    was, now = {"context": ["<unk>", "boss:X"]}, {"context": ["<unk>", "boss:X", "dominion:X_DOMINION", "mode:Dread"]}
+    old = {"bags.context.weight": torch.tensor([[9.0], [1.0]])}
+    out = carry.carried(old, {"bags.context.weight": torch.ones(4, 1)}, {"bags.context.weight": ("context", 1)}, was, now)
+    assert out["bags.context.weight"].flatten().tolist() == [9, 1, 0, 0]
+
+
 def test_a_weight_that_stacks_a_tables_rows_is_carried_block_by_block():
     old = {"head.weight": torch.tensor([[9.0], [1.0], [3.0], [8.0], [2.0], [4.0]])}
     out = carry.carried(old, {"head.weight": torch.zeros(8, 1)}, ROWS, WAS, NOW)

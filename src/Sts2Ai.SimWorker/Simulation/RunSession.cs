@@ -31,7 +31,10 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// <param name="AutoWin">The run's rule (<see cref="RunView.AutoWin"/>): the acts, indexes from 0, whose plain monster
 /// fights, an event's included, are won at their start as the game's <c>win</c> console command wins them, their rewards
 /// following as after any win; elites and bosses are fought. Null in the normal game.</param>
-internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, IReadOnlyList<int>? AutoWin = null);
+/// <param name="Mode">The game mode: <see cref="GameMode.Standard"/>, or <see cref="GameMode.Dread"/>, which the game plays
+/// at ascension 10 only (its lobby sets it).</param>
+internal sealed record RunSetup(string Character, string Seed, int Ascension = 0, Loadout? Loadout = null, IReadOnlyList<int>? AutoWin = null,
+    GameMode Mode = GameMode.Standard);
 
 /// <summary>
 /// One whole run in the real engine, started the way the game starts a new singleplayer run.
@@ -182,7 +185,7 @@ internal sealed class RunSession : IDisposable
         // StartRunLobby.BeginRunLocally: the acts are rolled from the seed.
         var actRng = new Rng(StringHelper.GetDeterministicHashCode(setup.Seed), "act_selection");
         var acts = ActModel.GetRandomList(actRng, UnlockState.all, isMultiplayer: false).Select(a => a.ToMutable()).ToList();
-        var run = RunState.CreateForNewRun([player], acts, [], GameMode.Standard, isCustom: false, setup.Ascension, setup.Seed);
+        var run = RunState.CreateForNewRun([player], acts, [], setup.Mode, isCustom: false, setup.Ascension, setup.Seed);
         RunManager.Instance.SetUpNewSingleplayer(run, shouldSave: false);
 
         var session = new RunSession(pump, setup, player, run, choices, combat, macro, observed);
@@ -221,7 +224,7 @@ internal sealed class RunSession : IDisposable
         var run = RunState.FromSerializable(save);
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
-        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, AutoWin: clone.AutoWin);
+        var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, AutoWin: clone.AutoWin, Mode: run.GameMode);
         var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save, _replay = replay };
         try
         {

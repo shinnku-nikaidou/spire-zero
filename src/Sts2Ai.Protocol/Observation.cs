@@ -16,6 +16,11 @@ public sealed record RunView
 {
     public required string Character { get; init; }
     public required int Ascension { get; init; }
+    /// <summary>The game mode as the game names it (<c>Dread</c>); null in the standard game.</summary>
+    public string? Mode { get; init; }
+    /// <summary>The Dread mode's dominion now on the run, the act's boss's (the second boss's if there are two), as the
+    /// boss icon of the top bar shows it; null in the standard game and from a boss's room on, until the next act.</summary>
+    public string? Dominion { get; init; }
     /// <summary>Act index, from 0.</summary>
     public required int Act { get; init; }
     /// <summary>The act's id: which of the act's variants this run rolled.</summary>

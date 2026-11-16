@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Models.Relics;
+using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Protocol;
 
@@ -33,6 +34,9 @@ internal static class GameIds
     private static List<string> Entries<T>() where T : AbstractModel =>
         [.. ModelDb.All.OfType<T>().Where(Real).Select(m => m.Id.Entry).Distinct().Where(id => !Unreached.ContainsKey(id)).Order(StringComparer.Ordinal)];
 
+    /// <summary>How <see cref="Unreached"/> starts the reason of an id only the Dread mode meets.</summary>
+    public const string DreadOnly = "Dread mode only: a sweep of runs reaches it with --mode dread";
+
     /// <summary>
     /// The ids that no combat of one player's standard run meets, each with why, read from the game's own code
     /// (v0.113.0). <see cref="All"/> leaves them out, so that "never met" names only what a sweep should have met; one
@@ -55,12 +59,12 @@ internal static class GameIds
         ["MAGIC_BOMB_POWER"] = "nothing applies it",
         ["NO_ENERGY_GAIN_POWER"] = "nothing applies it",
         // The bosses' dominions of the Dread game mode.
-        ["AEONGLASS_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Aeonglass's dominion applies it)",
-        ["INSATIABLE_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Insatiable's dominion applies it)",
-        ["LAGAVULIN_MATRIARCH_DOMINION_POWER"] = "Dread mode only; the simulator plays standard runs (the Lagavulin Matriarch's dominion applies it)",
-        ["EXPLOSIVE_POWER"] = "Dread mode only; the simulator plays standard runs (only the Waterfall Giant's dominion applies it)",
-        ["YOU_ARE_MINE_POWER"] = "Dread mode only; the simulator plays standard runs (only the Queen's dominion applies it)",
-        ["AMNESIA_POWER"] = "Dread mode only; the simulator plays standard runs (only choosing the card Amnesia applies it, which only the Knowledge Demon's dominion offers)",
+        ["AEONGLASS_DOMINION_POWER"] = DreadOnly + " (the Aeonglass's dominion applies it)",
+        ["INSATIABLE_DOMINION_POWER"] = DreadOnly + " (the Insatiable's dominion applies it)",
+        ["LAGAVULIN_MATRIARCH_DOMINION_POWER"] = DreadOnly + " (the Lagavulin Matriarch's dominion applies it)",
+        ["EXPLOSIVE_POWER"] = DreadOnly + " (only the Waterfall Giant's dominion applies it)",
+        ["YOU_ARE_MINE_POWER"] = DreadOnly + " (only the Queen's dominion applies it)",
+        ["AMNESIA_POWER"] = DreadOnly + " (only choosing the card Amnesia applies it, which only the Knowledge Demon's dominion offers)",
         // The game's own test models outside its Mocks namespaces, which no encounter uses, and its placeholders for removed content.
         ["BIG_DUMMY"] = "a test monster: only mock encounters use it",
         ["ONE_HP_MONSTER"] = "a test monster: no encounter uses it",
@@ -143,15 +147,17 @@ internal sealed record SweepRun(int Index, RunSetup Setup, int PolicySeed);
 
 /// <summary>
 /// The runs of a lockstep sweep over whole runs: <paramref name="runs"/> for every character and ascension given, each
-/// started as the game starts a new run, or with <paramref name="given"/> in place of the character's own loadout.
-/// Consecutive runs go through the characters, then the ascensions.
+/// started as the game starts a new run, or with <paramref name="given"/> in place of the character's own loadout, in the
+/// game mode <paramref name="mode"/>. Consecutive runs go through the characters, then the ascensions.
 /// </summary>
-internal sealed class RunSweep(IReadOnlyList<CharacterModel> characters, IReadOnlyList<int> ascensions, int runs, int seed, Loadout? given)
+internal sealed class RunSweep(IReadOnlyList<CharacterModel> characters, IReadOnlyList<int> ascensions, int runs, int seed, Loadout? given,
+    GameMode mode = GameMode.Standard)
 {
     public int Count => characters.Count * ascensions.Count * runs;
 
     public SweepRun this[int i] => new(i,
-        new RunSetup(characters[i % characters.Count].Id.Entry, GameSeeds.MakeSeed(seed, i), ascensions[i / characters.Count % ascensions.Count], given),
+        new RunSetup(characters[i % characters.Count].Id.Entry, GameSeeds.MakeSeed(seed, i), ascensions[i / characters.Count % ascensions.Count], given,
+            Mode: mode),
         unchecked(seed * 1_000_003 + i));
 }
 

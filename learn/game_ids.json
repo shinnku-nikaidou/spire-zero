@@ -1785,5 +1785,24 @@
     "Treasure",
     "Unassigned",
     "Unknown"
+  ],
+  "modes": [
+    "Blitz",
+    "Daily",
+    "Dread"
+  ],
+  "dominions": [
+    "AEONGLASS_DOMINION",
+    "CEREMONIAL_BEAST_DOMINION",
+    "INSATIABLE_DOMINION",
+    "KAISER_CRAB_DOMINION",
+    "KIN_DOMINION",
+    "KNOWLEDGE_DEMON_DOMINION",
+    "LAGAVULIN_MATRIARCH_DOMINION",
+    "QUEEN_DOMINION",
+    "SOUL_FYSH_DOMINION",
+    "TEST_SUBJECT_DOMINION",
+    "VANTOM_DOMINION",
+    "WATERFALL_GIANT_DOMINION"
   ]
 }

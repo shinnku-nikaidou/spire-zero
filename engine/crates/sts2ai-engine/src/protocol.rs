@@ -300,6 +300,8 @@ pub struct CombatObservation {
     pub room: Option<Str>,
     pub act: i32,
     pub ascension: i32,
+    pub mode: Option<Str>,
+    pub dominion: Option<Str>,
     pub round: i32,
     pub player: PlayerView,
     pub hand: Vec<CardView>,
@@ -546,6 +548,8 @@ fn observation<S: Sink>(obs: &CombatObservation, form: Form, out: &mut S) {
     m.str_opt("room", obs.room);
     m.int("act", obs.act);
     m.int("ascension", obs.ascension);
+    m.str_opt("mode", obs.mode);
+    m.str_opt("dominion", obs.dominion);
     m.int("round", obs.round);
     player_json(&obs.player, m.name("player"));
     pile(&obs.hand, form, m.name("hand"));

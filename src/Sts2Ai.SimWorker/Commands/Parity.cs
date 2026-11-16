@@ -30,6 +30,8 @@ internal static class ParityCommand
     private static readonly Option<int?> Runs = Opt.Maybe<int?>("--runs",
         "whole runs in place of the sweep's combats: this many for every character and ascension, played by the same random player, every combat of a run " +
         "checked as a combat of the sweep is, and the run around it compared too. The player dies early at a character's own HP: --hp and --max-hp let it go on");
+    private static readonly Option<string?> Mode = Opt.Maybe<string?>("--mode",
+        "the game mode of --runs: dread, which the game plays at ascension 10 only (--asc 10); the standard game if not given");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
@@ -59,7 +61,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Character, Asc, Encounter, Decks, Cards, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Mode, Character, Asc, Encounter, Decks, Cards, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -95,12 +97,14 @@ internal static class ParityCommand
         if (cards != null && loadout?.Deck != null) throw new CliException("--cards is for drawn decks: not with --deck");
         var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout, cards);
         RunSweep? runs = null;
+        if (r.GetValue(Mode) != null && r.GetValue(Runs) == null) throw new CliException("--mode is for whole runs: with --runs");
         if (r.GetValue(Runs) is { } each)
         {
             if (each < 1) throw new CliException("--runs is at least 1");
             if (r.GetValue(Encounter) is not "all" || r.GetResult(Decks) is { Implicit: false }) throw new CliException("--runs plays whole runs: not with --encounter or --decks");
             if (cards != null) throw new CliException("--runs plays whole runs: not with --cards");
-            runs = new RunSweep(characters, ascensions, each, r.GetValue(Seed), loadout);
+            var mode = ascensions.Select(a => RunCommand.GameModeOf(r.GetValue(Mode), a)).Distinct().Single();
+            runs = new RunSweep(characters, ascensions, each, r.GetValue(Seed), loadout, mode);
         }
         int count = runs?.Count ?? sweep.Count;
         string unit = runs == null ? "combats" : "runs";

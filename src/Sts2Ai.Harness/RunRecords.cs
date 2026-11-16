@@ -17,7 +17,9 @@ public sealed record CombatEnd(bool Died, int Hp, int MaxHp, int Potions);
 /// <param name="Champion">The brain on each side of the routing table, with its budget.</param>
 /// <param name="AutoWin">The run's rule (<see cref="RunView.AutoWin"/>): the acts, indexes from 0, whose plain monster fights
 /// were won at their start; null in the normal game. Such a run is self-play data, never in a report or a gate.</param>
-public sealed record RunConfig(string Game, string Commit, string Champion, string Env, IReadOnlyList<int>? AutoWin = null);
+/// <param name="Mode">The game mode (<see cref="RunView.Mode"/>): <c>Dread</c>, or null in the standard game. A report holds
+/// runs of one config, so of one mode.</param>
+public sealed record RunConfig(string Game, string Commit, string Champion, string Env, IReadOnlyList<int>? AutoWin = null, string? Mode = null);
 
 /// <summary>One run of an evaluation, as the report needs it.</summary>
 /// <param name="RunId">The run id the brain knew the run by, as in the decision log.</param>
