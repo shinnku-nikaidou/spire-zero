@@ -121,7 +121,8 @@ again, or when its host has not been heard from for 15 min. A chunk taken back i
 - `box.py up HOST THREADS...` ships `worker.py` and `config.json` (the file service's URL, its key, the hub's
   certificate; mode 600 in `~/sts2/pool`) and starts the worker at nice 19. A worker already running there is cut first,
   so `up` is also how a new `worker.py` goes out. `box.py down HOST` ends it: its runs cut, their chunks back, its
-  outbox sent.
+  outbox sent. `up HOST THREADS --only KIND` starts a worker that takes only that kind of job (selfplay, eval, forks):
+  for a machine too small for some steps' runs.
 - A thread asks the dealer (`/next`), plays the chunk with `sim-REV.sh run OPTIONS --start INDEX --n N --log --records`
   in the job's inputs, and leaves it in `~/sts2/pool/outbox/`; one sender thread PUTs the outbox to `dist.py` in order
   and tries again until the hub takes it.

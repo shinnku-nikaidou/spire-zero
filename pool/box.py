@@ -2,9 +2,10 @@
 """box.py: jobs on the hub's work pool (pool/README.md). Every host runs one worker (worker.py) with a number
 of threads, its only knob; the hub (deal.py) deals the chunks of every open job to whichever thread is free.
 
-  box.py up HOST THREADS...   ships worker.py and its config to HOST and starts it at nice 19, with THREADS: a number, or
-    windows 'HH:MM-HH:MM N' in UTC+8 then a number for the rest of the day (one argument a line). A worker running there
-    is cut first (box.py down), so its chunks in play go back to the hub.
+  box.py up HOST THREADS... [--only KIND]   ships worker.py and its config to HOST and starts it at nice 19, with
+    THREADS: a number, or windows 'HH:MM-HH:MM N' in UTC+8 then a number for the rest of the day (one argument a line).
+    A worker running there is cut first (box.py down), so its chunks in play go back to the hub. --only KIND: the
+    worker takes only that kind of job (selfplay, eval, forks).
   box.py threads HOST THREADS...   rewrites HOST's threads; the worker reads it within 10 s. Fewer threads than in play:
     the extra ones are cut at once, their chunks go back to the hub.
   box.py down HOST   ends HOST's worker now: runs in play killed and their chunks given back, the outbox sent, exit.
@@ -224,6 +225,12 @@ down() {
 
 
 def up(argv: list[str]) -> None:
+    only = ""
+    if "--only" in argv:
+        at = argv.index("--only")
+        only, argv = (argv[at + 1:at + 2] or [""])[0], argv[:at] + argv[at + 2:]
+        if only not in ("selfplay", "eval", "forks"):
+            raise Refused(f"--only {only}: a kind is selfplay, eval or forks")
     if len(argv) < 2:
         raise SystemExit(__doc__)
     host, threads = argv[0], argv[1:]
@@ -246,7 +253,7 @@ __threads__
 down
 mv "$d/worker.py.new" "$d/worker.py"
 cd "$d"
-setsid nohup nice -n 19 python3 worker.py --name {host} >> worker.log 2>&1 < /dev/null &
+setsid nohup nice -n 19 python3 worker.py --name {host}{" --only " + only if only else ""} >> worker.log 2>&1 < /dev/null &
 sleep 5
 alive && echo "{host}: worker $(cat worker.pid) running" || {{ echo "{host}: the worker did not start" >&2; tail -5 worker.log >&2; exit 1; }}
 tail -2 worker.log
