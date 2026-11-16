@@ -43,6 +43,6 @@ So the AI tries what is near and learns what is far.
 
 ## Three rules it does not bend
 
-- **Strategy is not written as rules.** Whether to take a card or fight an elite is for the networks to learn from results. People write how to talk to the game and what the learning aims at. The only exceptions are a few rules about potions, which make up for V rating them too low.
+- **Strategy is not written as rules.** Whether to take a card or fight an elite is for the networks to learn from results. People write how to talk to the game and what the learning aims at. The only exceptions are a few rules about potions, which make up for V rating them too low, and one about chests: the relic in a treasure chest is always taken.
 - **No language model is asked.** Only the search and the two networks decide, so every move can be reproduced and traced.
 - **No bluffing.** When a decision comes up that no part of the AI is responsible for, the run stops with an error. It never picks at random. One random move would quietly spoil the training data and the evaluation results.
