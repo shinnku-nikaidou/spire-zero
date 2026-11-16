@@ -1,0 +1,41 @@
+# The SL self-play dataset v11g0-td4 (the user, 2026-11-16: "直接v11-0-td4 + c11-0，繼續跑就好"): v11g0 with the
+# champion that took its place, v11-0-td4 + c11-0 (V on multi-step targets, plans/2026-11-15-1809-v-multistep-targets.md;
+# v11g0, by v11-0 + c11-0, stopped for it). Every character alike: 8,000 at A10, 8,000 in the Dread mode, 4,000 over
+# A0-A9, more the nearer A10 (weights 1 up to 10).
+name = "v11g0-td4"
+deadline = "+72h"                   # box.py deadline v11g0-td4 UNTIL moves it; the user stops the step when the data is enough
+priority = 0
+seeds = 2500000                     # the ledger's blocks 2500000-3099999, one a character (the FOOL's 3000000-3099999)
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
+champion = "eval/champions/sl.json" # v11-0-td4 + c11-0
+workers = 4
+
+# v10g1's five characters' tiers, now every character's: a third of each one's runs a tier, a decision drawn evenly
+# with chance epsilon, the others by a softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at the test's effort.
+[games.full]
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "medium" }
+
+# The Dread mode, which the game plays at ascension 10 only.
+[games.dread]
+mode = "dread"
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "medium" }
+
+[[runs]]
+game = "full"
+asc = 10
+n = 8000
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 8000
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [73, 145, 218, 291, 364, 436, 509, 582, 655, 727]
