@@ -141,6 +141,8 @@ pub fn observation(value: &Json) -> Res<CombatObservation> {
         room: m.str_opt("room")?,
         act: m.int("act")?,
         ascension: m.int("ascension")?,
+        mode: m.str_opt("mode")?,
+        dominion: m.str_opt("dominion")?,
         round: m.int("round")?,
         player: player(m.need("player")?)?,
         hand: m.list("hand", card)?,
