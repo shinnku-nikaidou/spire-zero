@@ -317,3 +317,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   1138): won, identical over the wire, 49/49 nodes and 29/29 saves in a finished room replay exactly, 0 game errors.
   Installed in `mods/` over 0.3.13; the game was closed by then. Not uploaded. To check in the real game: the number of
   "record    checkpoint" lines in mod.log equals the game's writes of current_run.save in godot.log, past 30 too.
+- 2026-11-16 11:26: 0.3.15 at 8acb59c7, asked by the discard session: da26190b (a turn start's choice asked where the
+  real game asks it, so the SL plan stops searching again at each Tools of the Trade discard; a relic's counter read as
+  it settles after its flash). Three platforms (3:25; the VM started and shut down). The engine changed, so its Linux
+  brain ran `parity --world engine` (FOOL, DEFECT, A0 and A10, seed 1132, `--continue 4`): 720 combats, 0 differences,
+  363 / 357 as before; and `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and
+  29/29 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.14 with the game closed. Not uploaded.
