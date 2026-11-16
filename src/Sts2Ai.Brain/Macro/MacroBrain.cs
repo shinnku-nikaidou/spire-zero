@@ -135,6 +135,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// And at a merchant a Foul Potion the belt holds is thrown first, the only option while one is left: 100 gold each
     /// (the user's rule, 2026-11-16). It is never thrown in a fight (<see cref="PimcBrain.Ordered"/>) and never discarded,
     /// and a map move into a shop is valued with its gold (<see cref="ScreenAfterstates.Entered"/>).
+    ///
+    /// And a chest's relic is taken: while the chest offers one, skipping it is not offered (the user's rule, 2026-11-16,
+    /// after the AI left one in the real game).
     /// </summary>
     public static List<MacroAction> Offered(RunView run, ScreenView? screen, IReadOnlyList<MacroAction> legal)
     {
@@ -146,12 +149,14 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         };
         bool potionWaits = screen is RewardsScreen screenRewards && legal.Any(a =>
             a.Verb == MacroAction.Reward && screenRewards.Rewards.Any(r => r.Index == a.Index && r.Kind == "potion"));
+        bool relicWaits = screen is TreasureScreen && legal.Any(a => a.Verb == MacroAction.Relic);
         // At a merchant a Foul Potion is thrown before anything else: 100 gold each (the user's rule, 2026-11-16). The game
         // lists the throw only while the merchant's inventory is closed (FoulPotion.PassesCustomUsabilityCheck).
         if (screen is ShopScreen && legal.Where(a => a.Verb == MacroAction.Potion && run.Potions[a.Index] == PimcBrain.Foul).Take(1).ToList() is [var foul])
             return [foul];
         // A Foul Potion is kept for a merchant: never discarded (the user's rule, 2026-11-16; in their own runs one of 41).
         var offered = legal.Where(a => (room || a.Verb != MacroAction.DiscardPotion) && !(potionWaits && a == MacroAction.RewardsDone)
+            && !(relicWaits && a == MacroAction.RelicSkip)
             && !(a.Verb == MacroAction.DiscardPotion && run.Potions[a.Index] == PimcBrain.Foul)).ToList();
         return offered.Count > 0 ? offered : [.. legal];
     }

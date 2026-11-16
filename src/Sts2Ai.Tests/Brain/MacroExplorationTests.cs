@@ -52,6 +52,22 @@ public class MacroExplorationTests
         Assert.False(forced.Explored);
     }
 
+    [Fact]
+    public void AChestsRelicIsNeverSkipped()
+    {
+        // V rates both relics below none, so skipping would win; it is not offered, not even to a uniform draw.
+        var chest = new MacroDecision(Surfaces.Treasure, Fixtures.Acts("relic:0", "relic:1", "relic_skip"),
+            () => new Observation { Run = Fixtures.Floor1(), Screen = new TreasureScreen { Relics = ["BAD", "WORSE"] } });
+        Assert.DoesNotContain(new MacroBrain(V).Options(chest), o => o.Action == MacroAction.RelicSkip);
+        Assert.Equal(MacroAction.Of(MacroAction.Relic, 0), new MacroBrain(V).Choose(chest).Action);
+        Assert.All(Enumerable.Range(0, 200), seed =>
+            Assert.NotEqual(MacroAction.RelicSkip, new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(chest).Action));
+        // An empty chest can only be left.
+        var empty = new MacroDecision(Surfaces.Treasure, Fixtures.Acts("relic_skip"),
+            () => new Observation { Run = Fixtures.Floor1(), Screen = new TreasureScreen { Relics = [] } });
+        Assert.Equal(MacroAction.RelicSkip, new MacroBrain(V).Choose(empty).Action);
+    }
+
     private static List<CardView> Cards(string[] ids) => [.. ids.Select(id => new CardView { Id = id })];
 
     private static MacroDecision Rewards(params string[] cards) => new(Surfaces.Rewards, Fixtures.Acts("reward:0", "rewards_done"), () => new Observation
