@@ -32,7 +32,9 @@ public sealed record CombatNetFile(
 /// the run then. That run is the one the leaf state stands in (<see cref="ICombatWorld.Run"/>: the deck, relics, max HP
 /// and gold as the combat has left them so far) with the HP the bucket leaves and the potions kept, each subset of those
 /// held by the chance the net gives it after a win in the bucket's group (each potion's taken apart from the others'). A
-/// finished combat is V of its run.
+/// finished combat is V of its run. A belt is priced as the best of it with any of its potions thrown away, which the
+/// game lets a player do for nothing (<see cref="FreeDisposal"/>): a potion V rates below an empty slot is not drunk
+/// for nothing to be rid of it.
 /// This class only feeds a state's tokens to the graph, and turns its endings into runs for V.
 /// </summary>
 public sealed class CombatNet : ICombatLeaf, IDisposable
@@ -114,7 +116,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     private LeafOutcome? Ended(CombatStatus status, RunView run) => status switch
     {
         CombatStatus.Lost => new(0, 0, 0),
-        CombatStatus.Won => new(Price(run, Key(run), run.Hp, run.Potions), 1, run.Hp),
+        CombatStatus.Won => new(FreeDisposal.Best(run.Potions, potions => Price(run, Key(run), run.Hp, potions)), 1, run.Hp),
         _ => null,
     };
 
@@ -133,23 +135,24 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         int maxHp = Math.Max(1, run.MaxHp);
         double share = run.Hp / (double)maxHp;
         double width = (1 - _file.LossMin) / _file.Buckets, value = 0, left = 0;
+        var belts = FreeDisposal.Kept(run.Potions);
         for (int k = 1; k < outcome.Length; k++)
         {
             if (outcome[k] == 0) continue;
             double after = share - (_file.LossMin + (k - 0.5) * width);
             int hp = Math.Clamp((int)Math.Round(after * maxHp), 1, maxHp);
-            for (int mask = 0; mask < 1 << held.Count; mask++)
+            // Each belt kept is worth the best of it with any of its potions thrown away (FreeDisposal).
+            var prices = belts.Select(belt => Price(run, key, hp, belt)).ToArray();
+            FreeDisposal.Spread(prices);
+            for (int mask = 0; mask < belts.Length; mask++)
             {
                 double chance = outcome[k];
-                var potions = run.Potions.ToArray();
                 for (int i = 0; i < held.Count; i++)
                 {
-                    bool keeps = (mask >> i & 1) == 1;
                     double keptHere = kept[(k - 1) / perGroup][i];
-                    chance *= keeps ? keptHere : 1 - keptHere;
-                    if (!keeps) potions[held[i]] = null;
+                    chance *= (mask >> i & 1) == 1 ? keptHere : 1 - keptHere;
                 }
-                if (chance > 0) value += chance * Price(run, key, hp, potions);
+                value += chance * prices[mask];
             }
             left += outcome[k] * after;
         }

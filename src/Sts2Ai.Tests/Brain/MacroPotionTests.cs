@@ -64,6 +64,44 @@ public class MacroPotionTests
     }
 
     [Fact]
+    public void ThrowingAPotionAwayNeverWinsByVsDislikeOfIt()
+    {
+        // V rates each potion below an empty slot. A potion can be thrown away for nothing, so a belt is worth the best of
+        // it with any thrown away: the discard is worth what proceeding is, and the first legal answer is taken.
+        var l0 = new MacroBrain(new Belt(-1));
+        var full = new MacroDecision(Surfaces.Rewards, Fixtures.Acts("rewards_done", "discard_potion:0"), () => new Observation
+        {
+            Run = Holding("A", "B", "C"),
+            Screen = new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "FIRE_POTION" }] },
+        });
+        Assert.All(l0.Options(full), o => Assert.Equal(0, o.Value, 9));
+        Assert.Equal(MacroAction.RewardsDone, l0.Choose(full).Action);
+        // On the map, drinking it is worth the best move after it, as is the best move holding it: the move is taken.
+        var map = Map(Holding("A", null, null));
+        Assert.All(l0.Options(map), o => Assert.Equal(0, o.Value, 9));
+        Assert.Equal(MacroAction.Map, l0.Choose(map).Action.Verb);
+        // A potion V rates above an empty slot keeps its value.
+        Assert.Equal(3, new MacroBrain(new Belt(1)).Options(full).Single(o => o.Action == MacroAction.RewardsDone).Value, 9);
+    }
+
+    [Fact]
+    public void AFreeDisposalBeltIsTheBestOfItsPotionsKept()
+    {
+        var v = new FreeDisposal(new Liking(new() { ["A"] = 2, ["B"] = -1, ["C"] = 0.5 }));
+        Assert.Equal(2.5, v.Value(Holding("A", "B", "C")), 9);
+        Assert.Equal(0, v.Value(Holding(null, "B", null)), 9);
+        Assert.Equal(0, v.Value(Holding(null, null, null)), 9);
+        Assert.Equal("test", v.Name);
+    }
+
+    /// <summary>A V that adds each potion's own worth.</summary>
+    private sealed class Liking(Dictionary<string, double> worth) : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => run.Potions.OfType<string>().Sum(p => worth[p]);
+    }
+
+    [Fact]
     public void AtAMerchantAFoulPotionIsThrownFirst()
     {
         var shop = new ShopScreen { Entries = [new() { Slot = 0, Kind = "card", Cost = 50 }] };

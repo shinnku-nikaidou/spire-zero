@@ -60,11 +60,19 @@ public sealed class SlRoute(Budget budget)
 /// which reads the observation alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
 /// line that ends the combat is scored by the leaf at its end. The beam stops when no state is left, or after
 /// <see cref="MaxTurns"/> turns. Nothing else prunes it: the leaf prices a win by V on the run the combat leaves, which a
-/// line can still raise past winning now with what the state holds (max HP or gold gained, a card grown, a potion drunk
-/// that V rates below an empty slot), so no state's value caps its lines'. A greedy dive, a beam of one, goes first.
+/// line can still raise past winning now with what the state holds (max HP or gold gained, a card grown), so no state's
+/// value caps its lines'. A greedy dive, a beam of one, goes first.
 /// Every loss is worth the same, so among losing lines the one that died from the turn
-/// start the leaf valued highest is the pick. Among wins worth exactly the same, the one with the fewest turns ended
-/// is: a combat no line loses HP in has many, and the dive, which goes first, often finds a slow one. A losing plan
+/// start the leaf valued highest is the pick. Among wins worth exactly the same, the one that drinks the fewest potions
+/// is, then the one with the fewest turns ended: a combat no line loses HP in has many, and the dive, which goes first,
+/// often finds a slow one.
+///
+/// A potion is not drunk where not drinking it loses no more HP (the user, 2026-11-16). The game lets a potion be thrown
+/// away at any time for nothing, so a belt is never worth less than the belt with fewer potions: V prices a win so
+/// (<see cref="FreeDisposal"/>, in the combat net), and a turn's end takes the value of any end of that turn that is the
+/// same state with only fewer potions (<see cref="TurnDfs"/>). A line that drank a potion for nothing is then worth no
+/// more than the line that kept it, which is searched first (the potions come last, <see cref="PimcBrain.Ordered"/>) and
+/// wins the tie. A losing plan
 /// that is not proved is played for its first <see cref="Budget.Replan"/> turns only, then planned again, from where a beam reaches deeper (or to its end, at 0).
 ///
 /// Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the
@@ -113,7 +121,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
         private double _bestFrom = double.NegativeInfinity;
-        private int _bestEnds;
+        /// <summary>The best win's potions drunk and turns ended, which a win worth exactly the same is compared by.</summary>
+        private (int Drunk, int Turns) _bestEnds;
         private List<TurnEnd> _left = [];
         private int _nodes, _turns;
         private bool _complete;
@@ -150,9 +159,10 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                         // A loss is 0 however it comes: then the turn start it came from decides. Wins worth exactly the
                         // same: the one with fewer turns ended.
                         double from = states[i].Value;
-                        int ends = line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn);
+                        var ends = (Drunk: line.Actions.Count(a => a.Kind == CombatActionKind.UsePotion),
+                            Turns: line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn));
                         if (_best == null || line.Value > _best.Value || (line.Value == _best.Value && (line.Status == CombatStatus.Lost
-                                ? from > _bestFrom : line.Status == CombatStatus.Won && ends < _bestEnds)))
+                                ? from > _bestFrom : line.Status == CombatStatus.Won && ends.CompareTo(_bestEnds) < 0)))
                             (_best, _bestFrom, _bestEnds) = (line, from, ends);
                     }
                 }
@@ -341,7 +351,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         }
 
         /// <summary>A line that ended the turn or the combat, as the world stood there, before the leaf has valued it.</summary>
-        private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key)
+        /// <param name="Bare">At the next turn's start, the key of the state with every potion thrown away: the ends with
+        /// the same one differ only by their potions. 0 once the combat is over.</param>
+        private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Bare = 0)
         {
             public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, State.Status, outcome.Value, Key, State.History, outcome.Win, outcome.Hp);
         }
@@ -363,17 +375,53 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// all of a turn's ends together (<see cref="Value"/>); a state another line already ended at is not asked about again.</summary>
         private void Ends(CombatStatus status, CombatObservation obs)
         {
-            ulong key = KeyOf(status, obs);
-            if (status == CombatStatus.InProgress && !_keys.Add(key)) return;
-            _ended.Add(Reached(status, obs, _actions, _hashes, key));
+            if (status != CombatStatus.InProgress)
+            {
+                _ended.Add(Reached(status, obs, _actions, _hashes, 0));
+                return;
+            }
+            ulong hidden = world.HiddenKey(), key = Mix(world.StateKey(obs), hidden);
+            if (!_keys.Add(key)) return;
+            ulong bare = obs.Potions.All(p => p == null) ? key
+                : Mix(world.StateKey(obs with { Potions = [.. obs.Potions.Select(_ => (string?)null)] }), hidden);
+            _ended.Add(Reached(status, obs, _actions, _hashes, key) with { Bare = bare });
         }
 
         /// <summary>Asks the leaf about the ends the search found, in the order found.</summary>
         private void Value()
         {
-            var outcomes = leaf.Outcomes([.. _ended.Select(e => e.State)]);
+            var outcomes = leaf.Outcomes([.. _ended.Select(e => e.State)]).ToArray();
+            Thrown(outcomes);
             for (int i = 0; i < _ended.Count; i++) _ends.Add(_ended[i].Valued(outcomes[i]));
             _ended.Clear();
+        }
+
+        /// <summary>
+        /// A potion can be thrown away in a fight too, for nothing: a state is worth at least the same state with fewer
+        /// potions. So each end of the turn at the next turn's start takes the outcome of the best end that differs from
+        /// it only by holding fewer of its potions, if the leaf values that one higher: where a potion drunk changed
+        /// nothing else, the end that kept it is worth as much.
+        /// </summary>
+        private void Thrown(LeafOutcome[] outcomes)
+        {
+            foreach (var same in Enumerable.Range(0, _ended.Count).Where(i => _ended[i].Bare != 0).GroupBy(i => _ended[i].Bare))
+            {
+                // By how many potions each holds, so that an end's own is final before an end holding more is compared with it.
+                var ends = same.OrderBy(i => _ended[i].State.Obs.Potions.Count(p => p != null)).ToList();
+                for (int m = 1; m < ends.Count; m++)
+                    for (int f = 0; f < m; f++)
+                        if (outcomes[ends[f]].Value > outcomes[ends[m]].Value && Holds(_ended[ends[m]].State.Obs.Potions, _ended[ends[f]].State.Obs.Potions))
+                            outcomes[ends[m]] = outcomes[ends[f]];
+            }
+        }
+
+        /// <summary>Whether <paramref name="belt"/> holds every potion <paramref name="fewer"/> does, and more.</summary>
+        private static bool Holds(IReadOnlyList<string?> belt, IReadOnlyList<string?> fewer)
+        {
+            var left = belt.OfType<string>().ToList();
+            foreach (var potion in fewer.OfType<string>())
+                if (!left.Remove(potion)) return false;
+            return left.Count > 0;
         }
 
         /// <summary>A line's end valued at once: the cycles' cash-outs compare the values as they go.</summary>

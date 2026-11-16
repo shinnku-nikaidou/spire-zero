@@ -17,12 +17,15 @@ namespace Sts2Ai.Brain.Macro;
 /// <see cref="MacroLeaf"/>'s: V, but for a run that is over (0 for an event option the screen says kills, and on the
 /// clone 1 or 0 as the game ends it) and a combat an option starts (an event's fight), valued by
 /// <paramref name="fights"/>, the combat leaf.
+///
+/// V is read with the game's free disposal (<see cref="FreeDisposal"/>): a belt is worth the best of it with any of
+/// its potions thrown away, so no option wins by losing a potion V rates below an empty slot.
 /// </summary>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null)
     : IMacroPolicy, IChoicePolicy
 {
-    private readonly ScreenAfterstates _screen = new(value);
-    private readonly MacroLeaf _leaf = new(value, fights);
+    private readonly ScreenAfterstates _screen = new(new FreeDisposal(value));
+    private readonly MacroLeaf _leaf = new(new FreeDisposal(value), fights);
     private readonly MacroDraws _draws = new(uniform, softmax);
 
     /// <summary>

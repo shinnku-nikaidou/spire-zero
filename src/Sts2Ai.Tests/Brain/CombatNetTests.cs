@@ -24,6 +24,13 @@ public class CombatNetTests
         public double Value(RunView run) => 0.5 * run.Hp / run.MaxHp + 0.1 * run.Potions.Count(p => p != null);
     }
 
+    /// <summary>A V for the tests that rates each potion held below an empty slot: half the HP share, less 0.1 for each.</summary>
+    private sealed class Disliked : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => 0.5 * run.Hp / run.MaxHp - 0.1 * run.Potions.Count(p => p != null);
+    }
+
     /// <summary>A V for the tests that is 1 only while every potion of <paramref name="held"/> is still held.</summary>
     private sealed class AllKept(int held) : IRunValue
     {
@@ -133,6 +140,27 @@ public class CombatNetTests
             expected += all;
         }
         Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
+    }
+
+    [Fact]
+    public void APotionVRatesBelowAnEmptySlotIsPricedAsTheEmptySlot()
+    {
+        // The game lets a potion be thrown away for nothing, so whatever potions the endings keep, each is worth V of the
+        // run with none: the HP alone.
+        var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
+        using var net = CombatNet.Load(file, new Disliked());
+        double width = (1 - file.LossMin) / file.Buckets;
+        foreach (var test in file.Tests.Where(t => t.Obs.Potions.Any(p => p != null)))
+        {
+            int maxHp = test.Obs.Player.MaxHp;
+            double share = test.Obs.Player.Hp / (double)maxHp, expected = 0;
+            for (int k = 1; k <= file.Buckets; k++)
+                expected += test.Outcome[k] * 0.5 * Math.Clamp((int)Math.Round((share - (file.LossMin + (k - 0.5) * width)) * maxHp), 1, maxHp) / maxHp;
+            Assert.InRange(((ICombatLeaf)net).Value(CombatStatus.InProgress, test.Obs, Fixtures.Around(test.Obs), test.History) - expected, -1e-3, 1e-3);
+            var run = Fixtures.Around(test.Obs);
+            Assert.Equal(new Disliked().Value(run with { Potions = [.. run.Potions.Select(_ => (string?)null)] }),
+                ((ICombatLeaf)net).Value(CombatStatus.Won, test.Obs, run, test.History), 9);
+        }
     }
 
     [Fact]

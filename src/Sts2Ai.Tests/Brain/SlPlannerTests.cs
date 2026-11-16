@@ -22,15 +22,21 @@ public class SlPlannerTests
 
         private readonly int _enemyHp;
 
-        public Toy(int enemyHp = 24)
+        /// <summary>A potion in the first slot that does nothing when drunk; none if null.</summary>
+        private readonly string? _potion;
+        private bool _held;
+
+        public Toy(int enemyHp = 24, string? potion = null)
         {
             _enemyHp = enemyHp;
+            _potion = potion;
             Reset();
         }
 
         private void Reset()
         {
             (_hp, _enemy, _block, _energy, _round, _drawn) = (20, _enemyHp, 0, 2, 1, 0);
+            _held = _potion != null;
             _hand = [];
             Draw();
         }
@@ -51,13 +57,14 @@ public class SlPlannerTests
             Hand = [.. _hand.Select(c => new CardView { Id = c.Id, Uid = c.Uid })],
             Draw = [],
             Discard = [],
-            Potions = [null, null, null],
+            Potions = [_held ? _potion : null, null, null],
             Enemies = [Start.Enemies[0] with { Uid = 1, Hp = Math.Max(0, _enemy), MaxHp = _enemyHp, Block = 0, Powers = [],
                 Intents = [new IntentView { Type = "Attack", Damage = Attack, Hits = 1 }] }],
         };
 
         public IReadOnlyList<CombatAction> Legal() => Status != CombatStatus.InProgress ? [] :
-            [CombatAction.EndTurn, .. _energy > 0 ? _hand.Select(c => CombatAction.Play(c.Uid, c.Id == "S" ? 1u : null)) : []];
+            [CombatAction.EndTurn, .. _energy > 0 ? _hand.Select(c => CombatAction.Play(c.Uid, c.Id == "S" ? 1u : null)) : [],
+                .. _held ? new[] { CombatAction.Potion(0) } : []];
 
         public CombatStatus Status => _hp <= 0 ? CombatStatus.Lost : _enemy <= 0 ? CombatStatus.Won : CombatStatus.InProgress;
 
@@ -67,6 +74,11 @@ public class SlPlannerTests
         {
             if (!Legal().Contains(action)) throw new InvalidOperationException($"{action} is not legal");
             _steps.Add(action.ToString());
+            if (action.Kind == CombatActionKind.UsePotion)
+            {
+                _held = false;
+                return;
+            }
             if (action.Kind == CombatActionKind.EndTurn)
             {
                 _hp -= Math.Max(0, Attack - _block);
@@ -413,6 +425,34 @@ public class SlPlannerTests
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(pick, plan.Result.First.ToString());
         Assert.Equal(pick == "play:2" ? 0.9 - below : 0.9, plan.Value);
+    }
+
+    /// <summary>A leaf that values each potion held below an empty slot while the combat goes on, as a combat net can; a
+    /// win is priced with free disposal, as the combat net's are, and is not.</summary>
+    private sealed class Disliking : ICombatLeaf
+    {
+        public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history)
+        {
+            var outcome = Leaf.Outcome(status, obs, run, history);
+            return status != CombatStatus.InProgress ? outcome : outcome with { Value = outcome.Value - 0.01 * obs.Potions.Count(p => p != null) };
+        }
+    }
+
+    [Fact]
+    public void APotionThatChangesNothingIsNotDrunk()
+    {
+        // The toy's potion does nothing, and the leaf values every state holding it lower: drinking it for nothing would
+        // win each turn's end. It is thrown away for nothing as the game allows, so the end that keeps it is worth as
+        // much, and comes first.
+        var world = new Toy(potion: "NOTHING");
+        var found = new SlPlanner(new Disliking()).SearchTurn(world, [], 100_000, int.MaxValue);
+        var kept = found.Ends.Where(e => e.Status == CombatStatus.InProgress && !e.Actions.Any(a => a.Kind == CombatActionKind.UsePotion)).ToList();
+        var drunk = found.Ends.Where(e => e.Status == CombatStatus.InProgress && e.Actions.Any(a => a.Kind == CombatActionKind.UsePotion)).ToList();
+        Assert.NotEmpty(drunk);
+        Assert.All(drunk, d => Assert.Contains(kept, k => k.Value == d.Value && k.Actions.SequenceEqual(d.Actions.Where(a => a.Kind != CombatActionKind.UsePotion))));
+        var plan = new SlPlanner(new Disliking()).Plan(world, new Budget(NodesPerWorld: 100_000, Beam: 1000));
+        Assert.Equal(CombatStatus.Won, plan.End);
+        Assert.DoesNotContain(plan.Result.Plan.Prepend(plan.Result.First), a => a.Kind == CombatActionKind.UsePotion);
     }
 
     [Fact]
