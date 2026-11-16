@@ -251,7 +251,7 @@ internal sealed class RunSession : IDisposable
     }
 
     /// <summary>The run's card prompts go to this session: the game keeps its selectors with the run it has set up.</summary>
-    private void UseSelector() => _selectorScope = RunManager.Instance.CardSelectorStack.PushSelector(Player, _selector);
+    private void UseSelector() => _selectorScope = PromptSelector.Install(Player, _selector);
 
     /// <summary>The run's chest picking, which awards its relics to this session (<see cref="Award"/>): the game makes it with the run it sets up.</summary>
     private void UseTreasureAwards()

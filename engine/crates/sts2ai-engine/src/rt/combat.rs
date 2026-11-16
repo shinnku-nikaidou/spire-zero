@@ -7,6 +7,10 @@ use crate::r#gen::state::{Arenas, Roots};
 pub enum Stop {
     /// A prompt has no answer yet: the action is run again from its start once the answer is known.
     Choice,
+    /// A turn start's setup that paused for the player's choice will never go on: the rest of the turn start ended
+    /// the combat, or every player was ready to end the turn, and the game never runs the setup's rest
+    /// (manual/combat_manager.rs, `start_turn`, which takes this stop).
+    Dropped,
 }
 
 /// What a C# Task is here: the value, or the reason the action stopped. `await x` is `x?`.

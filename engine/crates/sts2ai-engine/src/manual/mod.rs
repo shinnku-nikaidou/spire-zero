@@ -32,6 +32,8 @@ pub struct Extra {
     pub canon_in_build: Option<canon::Table>,
     /// Where the turn loop stands (manual/combat_manager.rs).
     pub waits: combat_manager::Waits,
+    /// The turn start whose player's setup is running (manual/combat_manager.rs, `start_turn`).
+    pub turn_start: Option<combat_manager::TurnStart>,
     /// The game's two signals to the turn loop, while nobody has taken them: every player is ready to end the turn
     /// (an EndTurnSignal), every player is ready for the enemies' turn (what to run during it; null for nothing).
     pub end_turn_signal: Option<crate::rt::Obj>,

@@ -1,4 +1,5 @@
 using HarmonyLib;
+using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -7,12 +8,32 @@ using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.TestSupport;
+using Sts2Ai.SimWorker.Simulation;
 
 namespace Sts2Ai.SimWorker.Runtime.Patches;
 
 internal static partial class HeadlessPatches
 {
     // ---- choices ----
+
+    /// <summary>
+    /// In combat the game asks a player on the screen: <c>CardSelectCmd</c> finds no selector on the player's stack,
+    /// pauses what asked (<c>SignalPlayerChoiceBegun</c>: a hook of the turn's start lets the rest of the turn start run
+    /// first), then asks the local selector in the screen's place. A session's selector is that local selector
+    /// (<see cref="PromptSelector.Install"/>), so the stack does not show it while a combat is in progress, and the
+    /// combat runs in the order the real game runs it. Outside combat it stays on the stack, where card rewards and
+    /// bundles look for it. The game's own selector (Whispering Earring's) is on top of it and answers at once, as in
+    /// the game.
+    /// </summary>
+    [HarmonyPatch(typeof(CardSelectorStack), nameof(CardSelectorStack.GetSelector))]
+    private static class AskedOnTheScreen
+    {
+        private static void Postfix(ref ICardSelector? __result)
+        {
+            if (__result is PromptSelector && CombatManager.Instance.IsInProgress) __result = null;
+        }
+    }
 
     /// <summary>The crystal sphere's screen: <see cref="CrystalSphereShown"/> plays the minigame instead.</summary>
     [HarmonyPatch(typeof(NCrystalSphereScreen), nameof(NCrystalSphereScreen.ShowScreen))]

@@ -14,5 +14,5 @@ internal static class LiveCombat
 
     /// <param name="run">The run around the combat as it stands.</param>
     public static CombatExport Export(Player player, RunView run) =>
-        new(Writer.Value.Write(HeadlessGame.GameVersion, PromptSelector.Around(player)).Bytes, run);
+        new(Writer.Value.Write(HeadlessGame.GameVersion, PromptSelector.Around()).Bytes, run);
 }

@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.TestSupport;
@@ -38,10 +39,32 @@ internal sealed class PromptSelector(
     public int Prompts { get; private set; }
 
     /// <summary>What an export of the live combat says of the program around the game: the count of the selector that
-    /// answers <paramref name="player"/>'s prompts, a session's, which is on the game's stack while the session lives.</summary>
-    public static EngineExport.Around Around(Player player) =>
-        RunManager.Instance.CardSelectorStack.GetSelector(player) is PromptSelector selector ? new(selector.Prompts)
-            : throw new InvalidOperationException("the player's card selector is not a session's");
+    /// answers the player's prompts, a session's, which is the game's local selector while the session lives.</summary>
+    public static EngineExport.Around Around() =>
+        RunManager.Instance.CardSelectorStack.LocalSelector is PromptSelector selector ? new(selector.Prompts)
+            : throw new InvalidOperationException("the local card selector is not a session's");
+
+    /// <summary>
+    /// Makes <paramref name="selector"/> the one that answers <paramref name="player"/>'s prompts, until the scope given
+    /// back is disposed. It is on the player's stack, where card rewards and bundles look for it, and it is the game's
+    /// local selector, which answers where the player's screen does. In combat the stack does not show it
+    /// (<c>HeadlessPatches.AskedOnTheScreen</c>): the game then asks as it asks a player, and what asked pauses first.
+    /// </summary>
+    public static IDisposable Install(Player player, PromptSelector selector)
+    {
+        var stack = RunManager.Instance.CardSelectorStack;
+        var pushed = stack.PushSelector(player, selector);
+        var local = stack.UseLocalSelector(selector);
+        return new Scopes(local, pushed);
+    }
+
+    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var scope in scopes) scope.Dispose();
+        }
+    }
 
     /// <summary>The prompt the game waits on, if any.</summary>
     public CardChoice? Waiting => _waiting?.Choice;
@@ -54,15 +77,18 @@ internal sealed class PromptSelector(
         if (_waiting != null) throw new InvalidOperationException("a card prompt while another waits for its answer");
         int prompt = Prompts++;
         var cards = options.ToList();
-        var context = ChoiceContexts.Current ?? throw new InvalidOperationException("card prompt outside the CardSelectCmd entries");
+        // Asked as the player's screen is (the local selector), the prompt comes after the entry's first await, where
+        // the entry's context is the latest one, as the mod reads it.
+        var context = ChoiceContexts.Current ?? ChoiceContexts.Last ?? throw new InvalidOperationException("card prompt outside the CardSelectCmd entries");
         var (min, max) = ChoiceContexts.Bounds(context, minSelect, maxSelect, cards.Count);
         // The tie-break only has to be unrelated to the hidden state, and the same on replay.
         var (choice, gameIndex) = CardChoices.Canonical(cards, min, max, context, new Random(prompt));
         // The player's cards and potions ask from inside their action, which the executor is executing then. What a
         // turn's end brings (a card a power plays there) asks as the end-turn action finishes, the executor still on
-        // it: that action has finished, and the turns wait for the answer.
+        // it: that action has finished, and the turns wait for the answer. A hook of the turns that asks (Tools of the
+        // Trade at a turn's start) pauses, and asks from the action the game makes of its rest: the turns' too.
         var executor = RunManager.Instance.ActionExecutor;
-        bool byAction = executor.IsRunning && executor.CurrentlyRunningAction is { State: not GameActionState.Finished };
+        bool byAction = executor.IsRunning && executor.CurrentlyRunningAction is { State: not GameActionState.Finished } and not GenericHookGameAction;
         bool byTurns = CombatManager.Instance.DebugOnlyGetState() != null && !byAction;
         _waiting = new(choice, gameIndex, cards, new(), byTurns);
         pump.Held = true;

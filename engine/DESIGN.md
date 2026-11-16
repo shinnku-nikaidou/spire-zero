@@ -396,13 +396,25 @@ game's objects (`Combat.x`).
 - The fight round cap is the simulator's rule, not the game's, and `world.rs` has it as the simulator does: when the
   player can act again in round 81, the player is killed by the game's own kill command, forced, and the win
   condition is checked.
+- Who answers a card prompt, and when: the game asks a player on the screen. `CardSelectCmd` finds no selector on
+  the player's stack, pauses what asked (`SignalPlayerChoiceBegun`), then asks the local selector in the screen's
+  place (`CardSelectorStack.LocalSelector`). The engine has one selector, written by hand
+  (`manual/i_card_selector.rs`): it is that local selector, takes the next answer or stops the step, and gives the
+  prompt its number. The stack holds only the game's own selector while Whispering Earring plays cards, which answers
+  at once (`manual/card_selector_stack.rs`). The simulator answers the same way: in combat its selector is the local
+  one and the stack does not show it (`HeadlessPatches.AskedOnTheScreen`); outside combat card rewards and bundles
+  find it on the stack.
 - A hook that asks the player in the game is left waiting while the turn goes on and finishes later as an action of
-  its own. Here its prompt stops the step like any other, and when the step is run again with the answer, the hook's
-  rest runs where the hook stands, before what follows it. No combat of the check has shown a difference from this;
-  it is a known place to look when one does.
-- Who answers a card prompt: the game asks the selector on top of the player's stack (`ICardSelector`). The engine has
-  one selector, written by hand (`manual/i_card_selector.rs`): it takes the next answer or stops the step, and gives
-  the prompt its number. The stack is not kept as objects.
+  its own. At a turn's start this changes what the player sees: a setup that asks (Tools of the Trade's discard)
+  pauses at its first choice, the rest of the turn start runs (`AfterSideTurnStart`, the orbs, the win check, the
+  play phase) with what it queued, and only then is the choice shown; the setup's rest and its
+  `RunAutoPrePlayPhase` run after the answer, as an action the executor checks the win after. The engine's turn
+  start is written by hand for this (`manual/combat_manager.rs`, `start_turn`): the rest runs where the setup pauses.
+  Elsewhere a hook's prompt stops the step like any other, and when the step is run again with the answer, the
+  hook's rest runs where the hook stands, before what follows it: the game's other hooks that can pause a listener
+  (`Hook.AfterDeath`, `AfterDiedToDoom`, `BeforeFlush`, `BeforeSideTurnStart`, `BeforeSideTurnEnd`,
+  `AfterSideTurnEnd`, the turn end's `AfterAutoPostPlayPhaseEntered`, `DoTurnEnd` and `FlushPlayerHand`) are known
+  places to look when a difference shows there.
 
 **Events.** An event of the game is a list of delegates, called in the order they subscribed. Nearly all are how
 the game tells its screen that something changed. An event is state when a subscriber is game code: a member of an

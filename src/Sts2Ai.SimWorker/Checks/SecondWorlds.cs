@@ -157,7 +157,7 @@ internal sealed class EngineWorlds(EngineExport export) : ISecondWorlds, IRunWor
     private Func<SecondWorld> Make(RunView run, Player player)
     {
         long started = Stopwatch.GetTimestamp();
-        var written = export.Write(HeadlessGame.GameVersion, PromptSelector.Around(player));
+        var written = export.Write(HeadlessGame.GameVersion, PromptSelector.Around());
         byte[] bytes = written.Bytes;
         Written = (Written.Count + 1, Written.Bytes + bytes.Length, Written.Ms + Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         Tally.Add(written);

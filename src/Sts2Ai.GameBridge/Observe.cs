@@ -324,11 +324,36 @@ public static class Observe
     public static RelicView Relic(RelicModel r) => new()
     {
         Id = r.Id.Entry,
-        Counter = r.ShowCounter ? r.DisplayAmount : null,
+        Counter = Settled(r, () => r.ShowCounter ? r.DisplayAmount : (int?)null),
         Status = r.Status != RelicStatus.Normal ? r.Status.ToString() : null,
         Melted = r.IsMelted ? true : null,
         UsedUp = r.IsUsedUp ? true : null,
         Spent = Spent(r),
         Cards = r is PaelsTooth { SerializableCards.Count: > 0 } tooth ? tooth.SerializableCards.Select(c => c.Id!.Entry).ToList() : null,
     };
+
+    /// <summary>Each relic class's flag of its flash (<c>_isActivating</c>), or null for a class that has none.</summary>
+    private static readonly ConcurrentDictionary<Type, FieldInfo?> Flashing = new();
+
+    /// <summary>
+    /// What <paramref name="read"/> reads of <paramref name="relic"/> once its flash is over. A relic that flashes when it
+    /// triggers (Iron Club, Kunai, Happy Flower, ...) shows the trigger's full count, or no counter, while the flash
+    /// lasts: a second of the real game's time, which the headless game and the engine do not wait. A flashing relic is
+    /// read with the flag cleared, then the flag is put back; the flag only draws, and no setter or event runs.
+    /// </summary>
+    private static T Settled<T>(RelicModel relic, Func<T> read)
+    {
+        var flag = Flashing.GetOrAdd(relic.GetType(),
+            type => type.GetField("_isActivating", BindingFlags.Instance | BindingFlags.NonPublic) is { FieldType: var t } field && t == typeof(bool) ? field : null);
+        if (flag == null || !(bool)flag.GetValue(relic)!) return read();
+        flag.SetValue(relic, false);
+        try
+        {
+            return read();
+        }
+        finally
+        {
+            flag.SetValue(relic, true);
+        }
+    }
 }

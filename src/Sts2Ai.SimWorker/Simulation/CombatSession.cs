@@ -103,7 +103,7 @@ internal sealed class CombatSession : IDisposable
         _trace = trace;
         _selector = selector;
         _prompts = prompts;
-        _selectorScope = RunManager.Instance.CardSelectorStack.PushSelector(player, selector);
+        _selectorScope = PromptSelector.Install(player, selector);
     }
 
     /// <param name="prompts">Answers the card prompts of the combat's start, and those of a combat played by <see cref="Step"/>.</param>

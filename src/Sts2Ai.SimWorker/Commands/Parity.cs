@@ -258,7 +258,7 @@ internal static class ParityCommand
     /// <summary>What is kept of each decision: the dump's files, and with a census the delegates of an export's walk.</summary>
     private static Keep? Kept(CombatDump? dump) => Census is not var (census, export) ? dump == null ? null : dump.Keep : (player, status, prompt, observation) =>
     {
-        if (status == CombatStatus.InProgress && !prompt) export.Write(HeadlessGame.GameVersion, PromptSelector.Around(player), census);
+        if (status == CombatStatus.InProgress && !prompt) export.Write(HeadlessGame.GameVersion, PromptSelector.Around(), census);
         return dump?.Keep(player, status, prompt, observation);
     };
 

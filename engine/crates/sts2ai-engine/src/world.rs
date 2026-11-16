@@ -87,6 +87,9 @@ impl ffi::World for Live {
                     prompted: None,
                 })
             }
+            Err(Stop::Dropped) => {
+                unreachable!("{action}: a dropped setup's stop left the turn start")
+            }
             Err(Stop::Choice) => {
                 let asked =
                     c.x.asked

@@ -293,13 +293,16 @@ members = [
     # A model by its class or id: the game looks in tables it fills by reflection, the engine in the arenas of
     # canonical models (manual/model_db.rs, manual/canon.rs).
     "ModelDb.Get", "ModelDb.GetId", "ModelDb.GetByIdOrNull", "ModelDb.Contains",
-    # The stack of who answers a player's card prompts: the engine has one selector, and it is always on top.
-    "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector",
+    # Who answers a player's card prompts: the engine's one selector answers where the game's screen does (the local
+    # selector), and the stack holds only the game's own selector while Whispering Earring plays cards.
+    "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector", "CardSelectorStack.LocalSelector",
     # The id of an epoch class, which the game keeps in a table filled by reflection (manual/epoch_model.rs).
     "EpochModel.GetId",
     # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).
     "CombatManager.StartCombatInternal", "CombatManager.SetReadyToEndTurn", "CombatManager.SetReadyToBeginEnemyTurn",
     "CombatManager.WaitUntilQueueIsEmptyOrWaitingOnNonPlayerDrivenAction", "CombatManager.DoTurnEndCards",
+    # A player's setup that pauses for a choice lets the rest of the turn start run first (manual/combat_manager.rs).
+    "CombatManager.StartTurn",
     "ActionExecutor.ExecuteActions", "ActionExecutor.FinishedExecutingActions", "ActionExecutor.IsRunning",
     "GameAction.Execute", "GameAction.WaitForActionToResumeExecutingAfterPlayerChoice",
     "ActionQueueSynchronizer.RequestEnqueue", "ActionQueueSynchronizer.RequestResumeActionAfterPlayerChoice",
