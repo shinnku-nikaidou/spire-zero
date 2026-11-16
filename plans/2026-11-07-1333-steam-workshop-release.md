@@ -330,3 +330,5 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and 29/29 saves replay exactly, 0 game
   errors. Installed in `mods/` over 0.3.15 with the game closed. The game's Steam launch options (localconfig.vdf) are
   empty, so its next start shows the notice. Not uploaded.
+- 2026-11-16 12:05: 0.3.16 (8538a7fb) uploaded on the user's word ("可以發版本了"), public, three platforms. The first
+  commit timed out, the repeat passed. Steam's API: public, not banned, 394.459 MB, updated 12:04, 26 subscribers.
