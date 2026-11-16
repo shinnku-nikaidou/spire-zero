@@ -332,3 +332,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   empty, so its next start shows the notice. Not uploaded.
 - 2026-11-16 12:05: 0.3.16 (8538a7fb) uploaded on the user's word ("可以發版本了"), public, three platforms. The first
   commit timed out, the repeat passed. Steam's API: public, not banned, 394.459 MB, updated 12:04, 26 subscribers.
+- 2026-11-16 11:08: 0.3.17 at f6df7313, Linux only (the Mac unreachable, "No route to host"), for the user's game: the
+  champion v11-0-td4 + c11-0; the panel's head names the nets and the search size ("net v11-0-td4 + c11-0 beam 16x300",
+  8949b0b6: `Ready.Shown`, wire v4, the card 380 wide); a chest's relic always taken (49ac513d); a card reward or the
+  map the player opened can be gone back from (f6df7313). Its Linux brain on `run --check` (IRONCLAD A10, low, seed
+  1138): won, identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors. Not installed yet:
+  the game was running. The listing gets a Dread column and the high report's numbers once it ends.
