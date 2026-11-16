@@ -392,3 +392,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   17 languages' texts (multiplayer coming, at the top) then went up without `--content`, all OK; checked on the public
   page in English, Traditional Chinese and German. Installed in `mods/` over 0.3.19 with the game closed. The listing's
   IRONCLAD numbers are still the void reports' (200 / 168 / 70) until its replay at 800111d7 ends.
+- 2026-11-16 22:12: the listing's Ironclad numbers from its reports played again at 800111d7 once the hook action's game
+  error was fixed (step report-v11-0-td4-c11-0-ironclad, 600 runs, no game error, none failed): A0 199/200, A10 172/200,
+  Dread 76/200, in place of the void 200 / 168 / 70; the Defect's Dread stays 44/199 (the game's own failure, per the
+  docs plan). Texts sent without `--content`, the 17 languages at once; the item stays 0.3.20.
