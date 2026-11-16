@@ -306,3 +306,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   (the VM started for it and shut down after; 3:53). The item's nets are `weights/all/`'s byte for byte. Its Linux
   brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and 29/29 saves in a
   finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.12 with the game closed. Not uploaded.
+- 2026-11-16 09:41: 0.3.13 (d2f59348) uploaded, public. The user's word came in the potion session ("上傳", 09:38,
+  read in that session's transcript before acting). The first commit timed out, the repeat passed, as before. For a
+  minute after, the page said the item was hidden; Steam's API said public and not banned, and the page came back on
+  its own (394.190 MB, updated 09:40). 24 subscribers.
