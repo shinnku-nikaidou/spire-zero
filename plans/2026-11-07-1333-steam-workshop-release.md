@@ -294,3 +294,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): identical over the wire, 31/31 nodes and 18/18
   saves in a finished room replay exactly, 0 game errors. Installed in `mods/` over 0.3.11 with the game closed; it
   wins over the Workshop's 0.3.11. Not uploaded (the user's word first).
+- 2026-11-16 08:41: 0.3.12 (25689778, three platforms) uploaded on the user's word ("Upload it"), public, with the
+  preview and the 17 texts. Steam was not running (closed the night before); started with `steam -silent`, logged on
+  in 6 s. The first update (new content and the preview) timed out at its commit, k_EResultTimeout, with the content
+  already up; the same update again, without the preview, went through in a second. Last night's timeouts were the
+  same: the first commit carrying new content timed out, a repeat passed (so not \`--note\`'s doing, as written above).
+  The page (logged out): 394.189 MB, updated now.
