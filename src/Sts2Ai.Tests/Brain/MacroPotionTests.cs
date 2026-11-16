@@ -40,6 +40,29 @@ public class MacroPotionTests
         Assert.Contains(l0.Options(shop), o => o.Action.ToString() == "discard_potion:0");
     }
 
+    [Fact]
+    public void APotionTheBeltHasRoomForIsTaken()
+    {
+        // V rates a potion below an empty slot, so it would proceed and leave the potion on the screen.
+        var l0 = new MacroBrain(new Belt(-1));
+        var potion = Rewards(Holding("A", null, null), "potion");
+        Assert.DoesNotContain(l0.Options(potion), o => o.Action == MacroAction.RewardsDone);
+        Assert.Equal("reward:0", l0.Choose(potion).Action.ToString());
+        // Any other reward may be left.
+        Assert.Contains(l0.Options(Rewards(Holding("A", null, null), "gold")), o => o.Action == MacroAction.RewardsDone);
+        // With a full belt the game lists no potion to take (RewardActions.Legal): proceeding is offered.
+        var full = new MacroDecision(Surfaces.Rewards, Fixtures.Acts("rewards_done", "discard_potion:0"), () => new Observation
+        {
+            Run = Holding("A", "B", "C"),
+            Screen = new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "FIRE_POTION" }] },
+        });
+        Assert.Contains(l0.Options(full), o => o.Action == MacroAction.RewardsDone);
+        // The same at a state the clone's search reaches: the gold taken, the potion still on the screen.
+        var later = new RewardsScreen { Rewards = [new RewardView { Index = 1, Kind = "potion", Id = "FIRE_POTION" }] };
+        Assert.DoesNotContain(MacroBrain.Offered(Holding("A", null, null), later, Fixtures.Acts("reward:1", "rewards_done", "discard_potion:0")),
+            a => a == MacroAction.RewardsDone);
+    }
+
     private static readonly IReadOnlyList<MacroAction> MapLegal = Fixtures.Acts("map:3,1", "map:4,1", "potion:0");
 
     private static MacroDecision Map(RunView run, IMacroClone? clone = null) => new(Surfaces.Map, MapLegal,

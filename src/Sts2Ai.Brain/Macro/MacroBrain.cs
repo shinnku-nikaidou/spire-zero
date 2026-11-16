@@ -123,6 +123,11 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// often it would still throw a potion away (<c>potion_below_empty</c>, <c>learn/v/potions.py</c>: of the held-out
     /// decisions that hold a potion, the share V values higher with one of them gone). Under that file's limit this
     /// rule changes next to nothing, and it is deleted.
+    ///
+    /// And a potion reward the belt has room for is taken: while one is on the rewards screen (the game lists it only
+    /// with a free slot, <c>RewardActions.Legal</c>), proceeding is not offered. The user's rule (2026-11-16: never leave
+    /// a potion while the belt has room). V rated many potions below an empty slot, a bias it inherited from the discards
+    /// above, and left 52-61 % of them on the screen (the A10 tests of v10-2 and v10-2-2); the user takes 98 % of them.
     /// </summary>
     public static List<MacroAction> Offered(RunView run, ScreenView? screen, IReadOnlyList<MacroAction> legal)
     {
@@ -132,7 +137,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             ShopScreen shop => shop.Entries.Any(e => e.Kind == "potion"),
             _ => false,
         };
-        var offered = legal.Where(a => room || a.Verb != MacroAction.DiscardPotion).ToList();
+        bool potionWaits = screen is RewardsScreen screenRewards && legal.Any(a =>
+            a.Verb == MacroAction.Reward && screenRewards.Rewards.Any(r => r.Index == a.Index && r.Kind == "potion"));
+        var offered = legal.Where(a => (room || a.Verb != MacroAction.DiscardPotion) && !(potionWaits && a == MacroAction.RewardsDone)).ToList();
         return offered.Count > 0 ? offered : [.. legal];
     }
 
