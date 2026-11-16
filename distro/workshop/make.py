@@ -3,8 +3,8 @@
 # by names.mjs);
 # the numbers are v11-0-td4 + c11-0's SL runs on test seeds at the high effort (the report report-v11-0-td4-c11-0 on
 # promotion-1-200: A0, A10 and the Dread mode, which is played at A10), the runs finished by 2026-11-16 11:27 UTC, about
-# 100 of each 200, as the user chose; shown as whole percents rounded up, also the user's choice, never 100 % with a run
-# lost.
+# 100 of each 200, as the user chose; shown as whole percents rounded up, also the user's choice (100 % where one run of
+# about 100 was lost, too).
 import json
 import pathlib
 
@@ -24,11 +24,8 @@ DOCS = "https://sts2-docs.shinnkunikaidou.workers.dev/"
 
 
 def pct(won, runs, lang):
-    # The share as a whole percent rounded up, but 99 % at most while a run was lost.
-    p = -(-100 * won // runs)
-    if won < runs:
-        p = min(p, 99)
-    p = str(p)
+    # The share as a whole percent rounded up.
+    p = str(-(-100 * won // runs))
     if lang == "tur":
         p = "%" + p
     elif lang in ("deu", "fra", "spa", "esp"):
