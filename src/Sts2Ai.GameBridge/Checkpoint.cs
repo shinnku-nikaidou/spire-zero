@@ -27,8 +27,12 @@ public static class Checkpoint
     /// The checkpoint of the run as it is now, saved as the game saves it: on arrival at a map point with no room, after a
     /// won fight or a finished ancient with that room, which a load then enters as finished (<c>SaveManager.SaveRun</c>).
     /// </summary>
-    public static string Take(Player player, AbstractRoom? preFinishedRoom = null) => JsonSerializer.Serialize(new Opened(
-        SaveManager.ToJson(RunManager.Instance.ToSave(preFinishedRoom)),
+    public static string Take(Player player, AbstractRoom? preFinishedRoom = null) => Of(RunManager.Instance.ToSave(preFinishedRoom), player);
+
+    /// <summary>The checkpoint of <paramref name="save"/>, a save of the run as it is now (one the game just wrote and
+    /// read back), with <paramref name="player"/>'s relics.</summary>
+    public static string Of(SerializableRun save, Player player) => JsonSerializer.Serialize(new Opened(
+        SaveManager.ToJson(save),
         [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))]));
 
     /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>

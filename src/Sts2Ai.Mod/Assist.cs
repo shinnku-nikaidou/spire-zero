@@ -264,6 +264,8 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (_env == PlayEnvironment.SL && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
         {
             (_key, _stable) = (null, 0);
+            // Auto-play hands the room over, rather than wait on it: nothing plays it until the game's next save.
+            if (_goal != Goal.Off) Stop(L10n.T("no SL clone of this room"));
             panel.Show(champion, status, _env, L10n.T("No SL clone of this room"),
                 L10n.T("{0} · the next room has one", NodeRecord.Broken ?? L10n.T("no checkpoint")), Tone.Warn, Drive());
             return;

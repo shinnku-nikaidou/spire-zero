@@ -11,8 +11,8 @@ namespace Sts2Ai.Harness;
 /// at a time; <see cref="Map"/> hands each request to whichever worker is free and returns the replies in request
 /// order, whatever order they finish in, so timing cannot change a result. A worker that dies, or does not answer
 /// within the timeout (a worker alive but stuck), is killed and started again and gets its request once more; a
-/// second failure fails the call. A reply with an error fails it too, and the game's Log.Error lines in the replies
-/// are kept for <see cref="TakeGameErrors"/>.
+/// second failure fails the call. A reply with an error fails it too, and its worker, which exits after one, is started
+/// again; the game's Log.Error lines in the replies are kept for <see cref="TakeGameErrors"/>.
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
@@ -113,15 +113,22 @@ public sealed class WorkerPool : IDisposable
                     throw new InvalidOperationException($"worker sent a bad reply ({e.Message}): {(text.Length > 300 ? text[..300] + "..." : text)}");
                 }
                 if (reply.Id != id) throw new InvalidOperationException($"worker replied to request {reply.Id}, expected {id}");
+                // A worker exits after a request that threw (Serve): one goes back to the pool in its place.
+                if (reply.Error != null) Replace(ref worker);
                 return reply;
             }
             catch (WorkerDiedException) when (attempt == 0)
             {
-                Interlocked.Increment(ref _restarts);
-                worker.Dispose();
-                worker = new Worker(_start, _timeout);
+                Replace(ref worker);
             }
         }
+    }
+
+    private void Replace(ref Worker worker)
+    {
+        Interlocked.Increment(ref _restarts);
+        worker.Dispose();
+        worker = new Worker(_start, _timeout);
     }
 
     /// <summary>Call when no <see cref="Map"/> is running: every worker is then free.</summary>
