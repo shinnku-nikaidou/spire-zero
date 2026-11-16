@@ -310,3 +310,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   read in that session's transcript before acting). The first commit timed out, the repeat passed, as before. For a
   minute after, the page said the item was hidden; Steam's API said public and not banned, and the page came back on
   its own (394.190 MB, updated 09:40). 24 subscribers.
+- 2026-11-16 11:04: 0.3.14 at de5bb713, asked by the auto-play session for the user's real game ("請它建置"): 902a9d47
+  (SL checkpoints from the game's `Saved` event, not the `SaveRun` prefix that went quiet after 30 calls in the 0.3.11
+  and 0.3.13 games; a worker that reported an error is replaced; auto-play stops where SL has no clone). Three
+  platforms (the VM started and shut down again; 3:23). Its Linux brain on `run --check` (IRONCLAD A10, low, seed
+  1138): won, identical over the wire, 49/49 nodes and 29/29 saves in a finished room replay exactly, 0 game errors.
+  Installed in `mods/` over 0.3.13; the game was closed by then. Not uploaded. To check in the real game: the number of
+  "record    checkpoint" lines in mod.log equals the game's writes of current_run.save in godot.log, past 30 too.
