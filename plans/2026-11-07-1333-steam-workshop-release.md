@@ -347,7 +347,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   upload's commit timed out three times, but the first had gone through: the item updated at 11:22:45Z and its change
   notes carry 0.3.17's. The texts are 0.3.16's for now; the listing's Dread column and the high report's numbers go up
   in a second upload once the report ends.
-- 2026-11-16 19:55: the listing, on the user's word ("就依照100局上傳吧", then "依比例向上取整" and "就100/100"): a Dread
+- 2026-11-16 19:33: the listing, on the user's word ("就依照100局上傳吧", then "依比例向上取整" and "就100/100"): a Dread
   column (the game's own name for the mode, English where the game has none: Arabic, Thai), "with Search effort set to
   High" in the intro, the high report's runs finished by 11:27 UTC (about 100 of each 200) as whole percents rounded up,
   100 % where one run of about 100 was lost too; no run counts shown (the user: "簡介註明「每格約 100 局」 不需要").
