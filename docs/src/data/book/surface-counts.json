@@ -4,78 +4,78 @@
   "what": "each run's surfaces counts, summed over the report's runs; the example is the SL play of seed 0SSL7NS01MU6 (run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE); card prompts outside combat are the card prompts less those of the combat prompts' brain"
  },
  "runs": 200,
- "won": 41,
+ "won": 61,
  "surfaces": [
   {
    "surface": "combat",
-   "decisions": 101884,
+   "decisions": 111439,
    "runs": 200,
-   "example": 717
+   "example": 615
   },
   {
    "surface": "rewards",
-   "decisions": 10347,
+   "decisions": 11087,
    "runs": 200,
-   "example": 66
+   "example": 71
   },
   {
    "surface": "card_choice",
-   "decisions": 7733,
+   "decisions": 8385,
    "runs": 200,
-   "example": 108
+   "example": 44
   },
   {
    "surface": "map",
-   "decisions": 7125,
+   "decisions": 8054,
    "runs": 200,
    "example": 47
   },
   {
    "surface": "event",
-   "decisions": 3161,
+   "decisions": 3794,
    "runs": 200,
-   "example": 21
+   "example": 23
   },
   {
    "surface": "rest",
-   "decisions": 2812,
-   "runs": 196,
-   "example": 18
+   "decisions": 3131,
+   "runs": 199,
+   "example": 22
   },
   {
    "surface": "card_reward",
-   "decisions": 2418,
+   "decisions": 2497,
    "runs": 200,
-   "example": 16
+   "example": 15
   },
   {
    "surface": "shop",
-   "decisions": 1590,
-   "runs": 189,
-   "example": 14
+   "decisions": 1759,
+   "runs": 192,
+   "example": 11
   },
   {
    "surface": "treasure",
-   "decisions": 502,
-   "runs": 195,
+   "decisions": 574,
+   "runs": 193,
    "example": 4
   },
   {
    "surface": "crystal_sphere",
-   "decisions": 78,
-   "runs": 26,
+   "decisions": 96,
+   "runs": 32,
    "example": 0
   },
   {
    "surface": "bundle",
-   "decisions": 11,
-   "runs": 11,
+   "decisions": 8,
+   "runs": 8,
    "example": 0
   }
  ],
  "card_choice_macro": {
-  "all": 7733,
-  "example": 108
+  "all": 8385,
+  "example": 44
  },
  "example": {
   "seed": "0SSL7NS01MU6",

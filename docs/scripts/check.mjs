@@ -1,8 +1,8 @@
 // Checks the built site in dist/ (run after `astro build`):
 // - every internal link in page content reaches an existing page and anchor,
 // - links stay in the locale of the page they are on,
-// - every page exists in all three locales (Simplified Chinese at the root,
-//   Traditional Chinese under /zh-tw/, English under /en/),
+// - every page exists in all three locales (English at the root, Simplified Chinese under /zh-cn/, Traditional
+//   Chinese under /zh-tw/),
 // - no Markdown bold was left unrendered (in Chinese, `**入口：**到达` does not render;
 //   write `**入口**：到达`),
 // - the book describes the system as it is now: no commit hash, date, generation name, `.claude/` or `tmp/` path in
@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
-const prefixes = ['/en', '/zh-tw', ''];
+// The root's prefix comes last: every route starts with it.
+const prefixes = ['/zh-cn', '/zh-tw', ''];
 
 function* pageFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -77,7 +78,7 @@ const unwritten = [
   ['a status word', /規劃中|规划中|已實作|已实现|已核實|已核实/g],
 ];
 const limits = { codeSpans: 5, links: 8, paragraph: { zh: 200, en: 120 }, page: 6000, book: 55000 };
-const sizeOf = (route, text) => (localeOf(route) === '/en' ? text.split(' ').filter(Boolean).length : text.replace(/\s/g, '').length);
+const sizeOf = (route, text) => (localeOf(route) === '' ? text.split(' ').filter(Boolean).length : text.replace(/\s/g, '').length);
 
 // The site's own sources and data: page sources, figures and the data they read.
 function* sourceFiles(dir) {
@@ -109,7 +110,7 @@ for (const [route, page] of pages) {
   if (/class="[^"]*sl-badge/.test(page.prose)) errors.push(`${route}: a status badge`);
   const spans = [...page.prose.matchAll(/<code[\s>]/g)].length;
   if (spans > limits.codeSpans) errors.push(`${route}: ${spans} code spans (at most ${limits.codeSpans})`);
-  const cap = limits.paragraph[localeOf(route) === '/en' ? 'en' : 'zh'];
+  const cap = limits.paragraph[localeOf(route) === '' ? 'en' : 'zh'];
   for (const m of page.prose.matchAll(/<(p|li)[\s>][\s\S]*?<\/\1>/g)) {
     const text = textOf(m[0].replace(/<(ul|ol)[\s>][\s\S]*<\/\1>/g, ''));
     if (sizeOf(route, text) > cap) errors.push(`${route}: a paragraph of ${sizeOf(route, text)} (at most ${cap}): "${text.slice(0, 30)}…"`);

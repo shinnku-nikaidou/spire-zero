@@ -4,17 +4,17 @@
   "seed": "0SSL7NS01MU6",
   "outcome": "won",
   "floor": 48,
-  "decisions": 1011,
+  "decisions": 852,
   "surfaces": {
-   "event": 21,
-   "card_choice": 108,
+   "event": 23,
    "map": 47,
-   "combat": 717,
-   "rewards": 66,
-   "card_reward": 16,
-   "rest": 18,
-   "treasure": 4,
-   "shop": 14
+   "combat": 615,
+   "card_choice": 44,
+   "rewards": 71,
+   "card_reward": 15,
+   "shop": 11,
+   "rest": 22,
+   "treasure": 4
   },
   "how": "combats (floor, room, encounter, HP at start and end) from the run's record; decisions per floor from its decision log: those with a run view are outside combat, the others are a combat's decisions and card prompts, each on the floor of the next run view; a floor without a combat is the room its decisions were on (an event may have been a ? point), and each act's first floor is its Ancient"
  },
@@ -40,7 +40,7 @@
    "floor": 1,
    "act": 0,
    "macro": 3,
-   "other": 1,
+   "other": 0,
    "room": "Ancient",
    "hp": 70,
    "max_hp": 70
@@ -49,11 +49,11 @@
    "floor": 2,
    "act": 0,
    "macro": 5,
-   "other": 16,
+   "other": 19,
    "room": "Monster",
    "encounter": "SLIMES_WEAK",
    "hp": 70,
-   "end_hp": 69,
+   "end_hp": 70,
    "max_hp": 70
   },
   {
@@ -62,7 +62,7 @@
    "macro": 3,
    "other": 1,
    "room": "Event",
-   "hp": 69,
+   "hp": 70,
    "max_hp": 70
   },
   {
@@ -70,59 +70,59 @@
    "act": 0,
    "macro": 3,
    "other": 0,
-   "room": "Event",
-   "hp": 69,
+   "room": "Shop",
+   "hp": 70,
    "max_hp": 70
   },
   {
    "floor": 5,
    "act": 0,
    "macro": 5,
-   "other": 14,
+   "other": 28,
    "room": "Monster",
    "encounter": "NIBBITS_WEAK",
-   "hp": 62,
-   "end_hp": 62,
+   "hp": 70,
+   "end_hp": 70,
    "max_hp": 70
   },
   {
    "floor": 6,
    "act": 0,
    "macro": 5,
-   "other": 8,
+   "other": 11,
    "room": "Monster",
    "encounter": "SHRINKER_BEETLE_WEAK",
-   "hp": 62,
-   "end_hp": 62,
+   "hp": 70,
+   "end_hp": 70,
    "max_hp": 70
   },
   {
    "floor": 7,
    "act": 0,
    "macro": 3,
-   "other": 0,
-   "room": "Event",
-   "hp": 62,
+   "other": 1,
+   "room": "RestSite",
+   "hp": 70,
    "max_hp": 70
   },
   {
    "floor": 8,
    "act": 0,
-   "macro": 3,
-   "other": 1,
-   "room": "RestSite",
-   "hp": 62,
+   "macro": 7,
+   "other": 41,
+   "room": "Elite",
+   "encounter": "PHROG_PARASITE_ELITE",
+   "hp": 70,
+   "end_hp": 51,
    "max_hp": 70
   },
   {
    "floor": 9,
    "act": 0,
-   "macro": 6,
-   "other": 14,
-   "room": "Monster",
-   "encounter": "CUBEX_CONSTRUCT_NORMAL",
-   "hp": 62,
-   "end_hp": 62,
+   "macro": 3,
+   "other": 1,
+   "room": "RestSite",
+   "hp": 51,
    "max_hp": 70
   },
   {
@@ -131,27 +131,29 @@
    "macro": 2,
    "other": 0,
    "room": "Treasure",
-   "hp": 62,
+   "hp": 51,
    "max_hp": 70
   },
   {
    "floor": 11,
    "act": 0,
-   "macro": 3,
-   "other": 1,
-   "room": "RestSite",
-   "hp": 62,
+   "macro": 6,
+   "other": 23,
+   "room": "Monster",
+   "encounter": "CUBEX_CONSTRUCT_NORMAL",
+   "hp": 51,
+   "end_hp": 51,
    "max_hp": 70
   },
   {
    "floor": 12,
    "act": 0,
-   "macro": 7,
-   "other": 45,
+   "macro": 6,
+   "other": 27,
    "room": "Elite",
-   "encounter": "PHROG_PARASITE_ELITE",
-   "hp": 62,
-   "end_hp": 58,
+   "encounter": "BYRDONIS_ELITE",
+   "hp": 51,
+   "end_hp": 51,
    "max_hp": 70
   },
   {
@@ -160,29 +162,29 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 58,
+   "hp": 51,
    "max_hp": 70
   },
   {
    "floor": 14,
    "act": 0,
    "macro": 5,
-   "other": 31,
+   "other": 25,
    "room": "Monster",
    "encounter": "FLYCONID_NORMAL",
-   "hp": 58,
-   "end_hp": 55,
+   "hp": 51,
+   "end_hp": 50,
    "max_hp": 70
   },
   {
    "floor": 15,
    "act": 0,
-   "macro": 6,
-   "other": 45,
+   "macro": 5,
+   "other": 26,
    "room": "Elite",
-   "encounter": "BYRDONIS_ELITE",
-   "hp": 55,
-   "end_hp": 53,
+   "encounter": "BYGONE_EFFIGY_ELITE",
+   "hp": 50,
+   "end_hp": 50,
    "max_hp": 70
   },
   {
@@ -191,18 +193,18 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 53,
+   "hp": 50,
    "max_hp": 70
   },
   {
    "floor": 17,
    "act": 0,
-   "macro": 5,
-   "other": 73,
+   "macro": 3,
+   "other": 33,
    "room": "Boss",
    "encounter": "CEREMONIAL_BEAST_BOSS",
-   "hp": 53,
-   "end_hp": 30,
+   "hp": 52,
+   "end_hp": 52,
    "max_hp": 70
   },
   {
@@ -217,8 +219,8 @@
   {
    "floor": 19,
    "act": 1,
-   "macro": 5,
-   "other": 33,
+   "macro": 4,
+   "other": 29,
    "room": "Monster",
    "encounter": "EXOSKELETONS_WEAK",
    "hp": 70,
@@ -228,63 +230,61 @@
   {
    "floor": 20,
    "act": 1,
-   "macro": 3,
-   "other": 21,
+   "macro": 6,
+   "other": 13,
    "room": "Monster",
    "encounter": "BOWLBUGS_WEAK",
    "hp": 70,
-   "end_hp": 70,
+   "end_hp": 59,
    "max_hp": 70
   },
   {
    "floor": 21,
    "act": 1,
-   "macro": 7,
-   "other": 1,
-   "room": "Shop",
-   "hp": 70,
+   "macro": 4,
+   "other": 0,
+   "room": "Event",
+   "hp": 59,
    "max_hp": 70
   },
   {
    "floor": 22,
    "act": 1,
    "macro": 3,
-   "other": 66,
-   "room": "Monster",
-   "encounter": "OVICOPTER_NORMAL",
-   "hp": 70,
-   "end_hp": 66,
+   "other": 1,
+   "room": "Event",
+   "hp": 59,
    "max_hp": 70
   },
   {
    "floor": 23,
    "act": 1,
-   "macro": 3,
-   "other": 1,
-   "room": "RestSite",
-   "hp": 70,
+   "macro": 6,
+   "other": 30,
+   "room": "Monster",
+   "encounter": "OVICOPTER_NORMAL",
+   "hp": 61,
+   "end_hp": 61,
    "max_hp": 70
   },
   {
    "floor": 24,
    "act": 1,
-   "macro": 5,
-   "other": 33,
-   "room": "Monster",
-   "encounter": "SPINY_TOAD_NORMAL",
-   "hp": 70,
-   "end_hp": 70,
+   "macro": 4,
+   "other": 35,
+   "room": "Elite",
+   "encounter": "INFESTED_PRISMS_ELITE",
+   "hp": 63,
+   "end_hp": 63,
    "max_hp": 70
   },
   {
    "floor": 25,
    "act": 1,
-   "macro": 6,
-   "other": 36,
-   "room": "Elite",
-   "encounter": "INFESTED_PRISMS_ELITE",
-   "hp": 70,
-   "end_hp": 66,
+   "macro": 3,
+   "other": 1,
+   "room": "RestSite",
+   "hp": 63,
    "max_hp": 70
   },
   {
@@ -293,58 +293,56 @@
    "macro": 2,
    "other": 0,
    "room": "Treasure",
-   "hp": 66,
+   "hp": 63,
    "max_hp": 70
   },
   {
    "floor": 27,
    "act": 1,
-   "macro": 5,
-   "other": 56,
-   "room": "Elite",
-   "encounter": "DECIMILLIPEDE_ELITE",
-   "hp": 66,
-   "end_hp": 55,
+   "macro": 3,
+   "other": 1,
+   "room": "RestSite",
+   "hp": 63,
    "max_hp": 70
   },
   {
    "floor": 28,
    "act": 1,
    "macro": 4,
-   "other": 0,
-   "room": "Event",
-   "hp": 55,
+   "other": 26,
+   "room": "Monster",
+   "encounter": "SPINY_TOAD_NORMAL",
+   "hp": 65,
+   "end_hp": 65,
    "max_hp": 70
   },
   {
    "floor": 29,
    "act": 1,
-   "macro": 5,
-   "other": 27,
-   "room": "Monster",
-   "encounter": "BOWLBUGS_NORMAL",
-   "hp": 57,
-   "end_hp": 53,
+   "macro": 3,
+   "other": 1,
+   "room": "RestSite",
+   "hp": 65,
    "max_hp": 70
   },
   {
    "floor": 30,
    "act": 1,
-   "macro": 4,
-   "other": 1,
-   "room": "Shop",
-   "hp": 53,
+   "macro": 5,
+   "other": 0,
+   "room": "Event",
+   "hp": 65,
    "max_hp": 70
   },
   {
    "floor": 31,
    "act": 1,
-   "macro": 3,
-   "other": 42,
+   "macro": 5,
+   "other": 30,
    "room": "Monster",
-   "encounter": "CHOMPERS_NORMAL",
-   "hp": 55,
-   "end_hp": 44,
+   "encounter": "BOWLBUGS_NORMAL",
+   "hp": 67,
+   "end_hp": 67,
    "max_hp": 70
   },
   {
@@ -353,18 +351,18 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 59,
+   "hp": 67,
    "max_hp": 70
   },
   {
    "floor": 33,
    "act": 1,
-   "macro": 5,
+   "macro": 6,
    "other": 44,
    "room": "Boss",
    "encounter": "KNOWLEDGE_DEMON_BOSS",
-   "hp": 61,
-   "end_hp": 61,
+   "hp": 69,
+   "end_hp": 69,
    "max_hp": 70
   },
   {
@@ -379,8 +377,8 @@
   {
    "floor": 35,
    "act": 2,
-   "macro": 5,
-   "other": 17,
+   "macro": 6,
+   "other": 24,
    "room": "Monster",
    "encounter": "TURRET_OPERATOR_WEAK",
    "hp": 70,
@@ -399,7 +397,7 @@
   {
    "floor": 37,
    "act": 2,
-   "macro": 3,
+   "macro": 8,
    "other": 1,
    "room": "Shop",
    "hp": 70,
@@ -426,13 +424,13 @@
   {
    "floor": 40,
    "act": 2,
-   "macro": 3,
-   "other": 29,
+   "macro": 5,
+   "other": 27,
    "room": "Monster",
    "encounter": "SCROLLS_OF_BITING_WEAK",
-   "hp": 90,
-   "end_hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "end_hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 41,
@@ -440,8 +438,8 @@
    "macro": 2,
    "other": 0,
    "room": "Treasure",
-   "hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 42,
@@ -449,19 +447,19 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 43,
    "act": 2,
-   "macro": 5,
-   "other": 26,
+   "macro": 6,
+   "other": 28,
    "room": "Monster",
    "encounter": "SLIMED_BERSERKER_NORMAL",
-   "hp": 90,
-   "end_hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "end_hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 44,
@@ -469,28 +467,28 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 45,
    "act": 2,
-   "macro": 4,
+   "macro": 3,
    "other": 0,
    "room": "Shop",
-   "hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 46,
    "act": 2,
-   "macro": 4,
-   "other": 38,
+   "macro": 5,
+   "other": 37,
    "room": "Monster",
    "encounter": "OWL_MAGISTRATE_NORMAL",
-   "hp": 90,
-   "end_hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "end_hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 47,
@@ -498,19 +496,19 @@
    "macro": 3,
    "other": 1,
    "room": "RestSite",
-   "hp": 90,
-   "max_hp": 90
+   "hp": 97,
+   "max_hp": 97
   },
   {
    "floor": 48,
    "act": 2,
    "macro": 2,
-   "other": 97,
+   "other": 89,
    "room": "Boss",
    "encounter": "TEST_SUBJECT_BOSS",
-   "hp": 90,
-   "end_hp": 67,
-   "max_hp": 90
+   "hp": 97,
+   "end_hp": 85,
+   "max_hp": 97
   }
  ]
 }

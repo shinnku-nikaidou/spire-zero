@@ -1,78 +1,78 @@
 ---
-title: 价值网络
-description: V 读什么、算什么：读一局的牌组、遗物、药水和前面的地图，对每一层输出死在那里的风险，连乘得到赢下整局的概率。
+title: The value net
+description: 'What V reads and what it computes: it reads the deck, relics, potions and map ahead of a run, outputs for each floor the risk of dying there, and multiplies through to get the chance of winning the whole run.'
 ---
 import ArchDiagram from '../../components/v/ArchDiagram.svelte';
 import EnteringFork from '../../components/v/EnteringFork.svelte';
 import NetWalk from '../../components/v/NetWalk.svelte';
 
-V 读一局的现状，回答赢下整局的概率。它读的只有「是哪一个」和原始的数字：牌组里的每张牌、遗物、药水、地图上还走得到的点，加上九个数字。它不直接输出胜率，而是对每一层输出一个风险：走到这一层的话，死在这里的概率。把之后每一层活下来的概率乘起来，就是胜率。
+V reads the current state of a run and answers with the chance of winning the whole run. It reads only what each thing is, plus raw numbers: every card in the deck, the relics, the potions, the map points that can still be reached, and nine numbers. It does not output the chance of winning directly. For each floor it outputs a risk: the chance of dying on that floor if the run reaches it. Multiplying together the chances of surviving every floor from here on gives the chance of winning.
 
-<ArchDiagram client:visible lang="zh-CN" net="value" />
+<ArchDiagram client:visible lang="en" net="value" />
 
-## 只读原始的东西
+## It reads only raw things
 
-V 的输入里没有任何人算好的分数。「一瓶药水值 8 点血」这样的价目表就是手写的策略，网络会照抄，对局也纠正不了它。
+V's input holds no score that a person worked out. A price list such as "a potion is worth 8 HP" is hand-written strategy: the network would copy it, and the runs could not correct it.
 
-它读这些：
+It reads these:
 
-- **牌组**：每张牌是哪一张、升级了没、带着什么附魔，以及这一局里在它身上长大的数字。
-- **遗物和药水**：各是哪一个；遗物还带着它的计数。
-- **情境**：角色是谁、在哪一幕、Boss 是谁。
-- **地图**：这一幕里还走得到的每个点。
-- **九个数字**：层数、生命、最大生命、金币、进阶等级、药水栏位数等。
+- **The deck**: for each card, which card it is, whether it is upgraded, which enchantment it carries, and the numbers that have grown on it during this run.
+- **Relics and potions**: which one each is. A relic also comes with its counter.
+- **Context**: which character, which act, which boss, the game mode and, in the Dread mode, the act's dominion.
+- **The map**: every point in this act that can still be reached.
+- **Nine numbers**: the floor, HP, max HP, gold, the Ascension level, the number of potion slots and so on.
 
-它不读牌面印的费用和数字，不读已经打完的房间，也不读后面几幕的地图。
+It does not read the cost or the numbers printed on a card, the rooms already played, or the maps of the later acts.
 
-## 牌组是一堆，不是一串
+## The deck is a pile, not a sequence
 
-每张牌先变成 64 个数字，各自通过同一个两层的小网络，再把整副牌汇总成两样东西：平均，以及总和除以 16。
+Each card first becomes 64 numbers and passes by itself through the same small two-layer network. The whole deck is then summarised as two things: the average, and the sum divided by 16.
 
-不把牌组当成一串，是因为牌组没有顺序，网络得白费力气去学顺序不重要。不用「每种牌有几张」的长表，是因为几百格大多是空的，牌和牌之间什么都不共用。平均和总和都要，是因为只看平均，一副牌和把它每张牌复制一遍的牌组分不出来。
+The deck is not treated as a sequence because a deck has no order, and the network would waste effort learning that order does not matter. It is not a long table of how many of each card there are, because most of the hundreds of cells would be empty and the cards would share nothing with each other. Both the average and the sum are needed because, by the average alone, a deck cannot be told from the same deck with every card doubled.
 
-遗物、药水、情境和地图更简单：每一样查表得到 64 个数字，同一类的直接相加。
+Relics, potions, context and the map are simpler: each item is looked up in a table to get 64 numbers, and items of the same kind are simply added.
 
-## 地图：前面还有什么
+## The map: what still lies ahead
 
-地图上每个还走得到的点变成一个标记，写着它的类型和距离，例如「精英，3 步之后」。V 读到的地图是：每种房间在每个距离各有几个。点和点之间的连线不在里面。
+Each point on the map that can still be reached becomes a tag that states its type and distance, for example "elite, 3 steps ahead". The map V reads is this: how many rooms of each type there are at each distance. The links between points are not in it.
 
-地图上的两个选项，后面常常通到同样的点。所以被选中、正要走进去的那个点，记成「0 步之后」，两个选项才分得开。
+Two options on the map often lead on to the same points. So the point that is chosen and about to be entered is recorded as "0 steps ahead", which is what tells the two options apart.
 
-<EnteringFork client:visible lang="zh-CN" />
+<EnteringFork client:visible lang="en" />
 
-现在所在的房间不算在内。在房间里记下的局面，都是这个房间打完之后的，死在里面的那些局根本没留下记录。要是把「人在精英房」喂给 V，它学到的会是「已经打赢了精英」。所以每一次选路另外做成一条训练数据，标上这一局真正的结局，死在那个房间的也算。
+The room the run is in now is not counted. Positions recorded in a room all come from after the room was played, and the runs that died inside it left no record at all. If V were fed "the player is in an elite room", it would learn "the elite is already beaten". So each choice of path is made into a training sample of its own, labelled with the run's real outcome, including runs that died in that room.
 
-## 接起来
+## Joining it up
 
-上面这些全部接成 1,033 个数字，通过两层各 512 个单元的网络。牌组在这之前没看过遗物，地图也没看过生命，它们到这里才相遇。
+All of the above is joined into 1,033 numbers, which pass through a network of two layers with 512 units each. Before this point the deck has not seen the relics and the map has not seen the HP. They meet only here.
 
-整个网络大约 122 万个权重。六个角色、每一级进阶共用同一组权重：角色是一个标记，进阶是一个数字。
+The whole network has about 1.22 million weights. The six characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
 
-## 为什么输出每一层的风险
+## Why it outputs a risk for each floor
 
-输出是 64 个风险。胜率等于从现在这一层起，每一层「1 减风险」的连乘。
+The output is 64 risks. The chance of winning is the product, from the current floor on, of 1 minus the risk of each floor.
 
-这比直接输出胜率好学。活过的每一层都是一个标签，而大多数对局是输的，直接学输赢只学得到「输了」。
+This is easier to learn than outputting the chance of winning directly. Every floor survived is a label, whereas most runs are lost, and learning win or loss directly would teach little but "lost".
 
-这也比预测「能走到第几层」好用。以层数为目标，会偏爱稳稳走到后面、却永远赢不了的打法。
+It also works better than predicting which floor the run will reach. With the floor as the target, V would favour play that reaches the late floors safely and yet never wins.
 
-下图让一个真实的局面走过整个网络：亡灵契约师在进阶 9 的第 1 层，生命 52/66。V 认为它有 76% 走得到第 1 幕的 Boss，69% 打得过；25% 走得到第 3 幕的 Boss，62% 打得过，最后赢下整局的概率是 15%。
+The figure below takes one real position through the whole network: the Fool at Ascension 3 on floor 8, with 34/89 HP and a rest site ahead. V gives it a 56% chance of reaching the act 1 boss but only a 9% chance of beating it, and the chance of winning the whole run in the end is 0.04%.
 
-<NetWalk client:visible lang="zh-CN" />
+<NetWalk client:visible lang="en" />
 
-## 怎么学
+## How it learns
 
-每个记下来的决策是一个样本，标签是这一局实际在哪里结束：活过的层标 0，死的那一层标 1，赢的局每一层都是 0。标签只用真实的结局，不用网络自己的估计。
+Each recorded decision is one sample, and its label is where the run really ended: floors survived are labelled 0, the floor of death is labelled 1, and in a won run every floor is 0. The labels use only real outcomes, never the network's own estimates.
 
-一局里的决策共用同一个结局，所以每个样本的权重是「1 除以这一局的样本数」，一局只算一票。
+The decisions of one run share one outcome, so each sample is weighted by 1 divided by the number of samples in its run, and each run counts as one vote.
 
-训练时网络多预测一样东西：接下来六场战斗各会掉多少血。这只是为了让网络在一局里有更多可以对答案的地方。它不写进网络文件，也不参与决策。
+During training the network predicts one more thing: how much HP each of the next six combats will cost. This only gives the network more places in a run where it can check its answers. It is not written into the network file and takes no part in decisions.
 
-冠军的 V 从约四万局、约 563 万个样本学来。在留下来检查的对局上，它预测胜率的误差是 0.080，只知道层数的基准是 0.138，越小越好。但这个分数只说明它分得出好局和坏局，不保证它把同一个决策的几个选项排对。所以一个 V 好不好，最后要靠打出来的战绩判断。
+The champion's V learned from about 69,000 runs and about 10.6 million samples. On the runs held back for checking, the error of its predicted chance of winning is 0.084, against 0.144 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
 
-## 它表达不了什么
+## What it cannot express
 
-- **牌和牌互相看不到。** 每张牌各算各的才汇总，特定几张牌之间的配合要挤在汇总后的数字里学。
-- **地图没有连线。** 两条路上各有一个房间，读起来和同一条路上有两个一样。
-- **地图只到这一幕结束。**
-- **没见过的就不会。** 训练对局里没出现过的牌或遗物，V 对它一无所知。
+- **Cards cannot see each other.** Each card is computed by itself before the summary, so how particular cards work together has to be learned inside the few numbers of the summary.
+- **The map has no links.** One room on each of two paths reads the same as two rooms on one path.
+- **The map ends with this act.**
+- **What it has not seen, it does not know.** V knows nothing about a card or relic that never appeared in the training runs.

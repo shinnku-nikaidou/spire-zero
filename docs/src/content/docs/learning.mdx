@@ -1,66 +1,67 @@
 ---
-title: 学习
-description: 两个网络怎么从零学起：冠军自己打整局、故意探索、给每个局面标上真实的结局，新网络过了门槛才上任。
+title: Learning
+description: 'How the two networks learn from zero: the champion plays whole runs by itself, explores on purpose and labels every position with the real outcome, and new networks take over only after passing the gate.'
 ---
 
-两个网络都靠自我对弈学习。冠军用现在的网络在模拟器里打整局，故意把一部分决策改成随机抽，并记下每个决策和每场战斗的结局。每个记下的局面，标上之后真正发生的事。新的一对网络只用最新这一批对局来学，过了门槛才取代冠军。整个过程没有人类的对局，没有手写的策略，也没有语言模型。
+Both networks learn by self-play. The champion plays whole runs in the simulator with the current networks, deliberately replaces some of its decisions with random draws, and records every decision and the outcome of every combat. Each recorded position is labelled with what really happened afterwards. A new pair of networks continues from the champion's, learns from these runs and replaces the champion only after passing the gate. The whole process uses no human runs, no hand-written strategy and no language model.
 
 ```mermaid
 flowchart LR
-  C["冠军<br/>V + 战斗网络"] --> S["自我对弈<br/>训练种子、带探索"]
-  S --> L["记下每个局面<br/>和真实的结局"]
-  L --> T["训练新的<br/>一对网络"]
-  T --> G{"门槛<br/>测试种子"}
-  G -->|"通过"| C
-  G -->|"没过"| D["丢掉"]
+  C["The champion<br/>V + the combat net"] --> S["Self-play<br/>training seeds, with exploration"]
+  S --> L["Record every position<br/>and the real outcome"]
+  L --> T["Train a new<br/>pair of networks"]
+  T --> G{"The gate<br/>test seeds"}
+  G -->|"pass"| C
+  G -->|"fail"| D["Discard"]
 ```
 
-## 谁来打
+## Who plays
 
-打的是冠军那一对网络，用的是它上场评估时同样的搜索力度。
+The champion's pair of networks plays, with the same search effort it uses when it is evaluated.
 
-这是因为 V 的意思是「照冠军这样打下去，赢的概率」。标签要是来自一个比较弱、或搜索比较浅的玩家，V 学到的就是另一个问题的答案。
+The reason is that V means "the chance of winning if play goes on the way the champion plays". If the labels came from a weaker player, or from one that searches less deeply, V would learn the answer to a different question.
 
-## 探索：故意不选最好的
+## Exploration: not picking the best on purpose
 
-永远选 V 认为最好的选项，就永远不知道其他选项会带来什么。V 看错了，也没有机会发现。所以自我对弈要**探索**。
+An AI that always picks the option V thinks best never learns what the other options lead to. When V is wrong, there is no chance to find out. So self-play needs **exploration**.
 
-做法很简单：战斗之外的每个决策，有 ε 的概率从所有选项里平均抽一个，不管 V 怎么想；其余时候选 V 的最佳。
+At every decision outside combat, with probability ε the AI draws one option evenly from all of them, whatever V thinks. The rest of the time it draws by V's own values, so sharply that V's best nearly always wins: only an option V rates almost as high is sometimes taken instead.
 
-- **为什么平均抽。** 抽哪一个既不看 V，也不看这一局打得顺不顺。这样得到的结局，才是每个选项干净的证据。照 V 的喜好加权去抽，只会一再重试 V 本来就喜欢的。
-- **为什么分三档。** 一批对局平分成三档，ε 分别是 0.3、0.1 和 0.02。ε 大的看得到更多选项，ε 小的才打得到后面几层。
-- **代价。** 探索会输。探索最多的那一档只赢一成左右，最少的那一档赢将近四成。
+- **Why draw evenly.** Which option is drawn depends neither on V nor on how well the run is going. Only then are the outcomes clean evidence about each option. A draw weighted by V's preferences would only retry, again and again, what V already likes.
+- **Why also a sharp draw.** Where V rates two options almost alike, it cannot tell which is better, and trying the other one costs almost nothing.
+- **Why three tiers.** A batch of runs is split evenly into three tiers, with ε at 0.06, 0.03 and 0.01. Runs with a large ε see more options, and only runs with a small ε reach the late floors as often as the champion does.
+- **The cost.** Exploration loses runs: the more a tier explores, the fewer runs it wins.
 
-战斗里不探索，搜索找到什么就打什么。
+There is no exploration in combat: the AI plays whatever search finds.
 
-## 标签：之后真正发生的事
+## Labels: what really happened afterwards
 
-- **V 的标签**：每个战斗之外的决策，标上这一局实际结束在哪一层，或是赢了。
-- **战斗网络的标签**：每个回合的开始，标上这场战斗实际怎么收场。
+- **V's labels**: each decision outside combat is labelled with the floor where its run really ended, or with a win.
+- **The combat net's labels**: the start of each turn is labelled with how that combat really ended.
 
-两者都只用真实的结局。网络自己的估计不会回头变成标签。
+Both use real outcomes only. A network's own estimates never come back as labels.
 
-## 几百个决策，一个结局
+## Hundreds of decisions, one outcome
 
-示例对局里有 186 个战斗之外的决策，它们共用同一个结局。这样的标签没有偏差，但噪声很大：单看一局，说不出是哪个决策造成了输赢。目前做了四件事来应付：
+The example run has 193 decisions outside combat, and they share one outcome. Labels like this have no bias but a lot of noise: from one run alone, nobody can say which decision caused the win or the loss. The project does four things about this at present:
 
-- **按层给标签。** 活过的每一层都是信息，不只最后的输赢。
-- **一局只算一票。** 每个样本的权重是「1 除以这一局的样本数」。
-- **多一个练习用的目标。** 训练时 V 还要预测接下来六场战斗各掉多少血，让它在一局里有更多能对答案的地方。
-- **战斗交给搜索。** 一局七成的决策在战斗里，那些靠搜索解决。要靠结局来分功过的，只剩战斗之外的那一小部分。
+- **Labels are given by floor.** Every floor survived is information, not just the final win or loss.
+- **One run, one vote.** Each sample is weighted by 1 divided by the number of samples in its run.
+- **One more target for practice.** During training V also has to predict how much HP each of the next six combats costs, which gives it more places in a run where it can check its answers.
+- **Combat is left to search.** About three quarters of a run's decisions are in combat, and search settles those. Only the small part outside combat still has to be credited or blamed by the outcome.
 
-## 只用最新的一批，从冠军接着学
+## Continuing from the champion
 
-新网络只用最新一批对局训练。比较弱的冠军打出来的对局，给同一个局面的标签偏低：换现在的冠军来打，会赢得更多。
+Training continues from the champion's weights and does not start from zero. On the same data, a network that continues has a lower error on the runs held back for checking.
 
-训练从冠军的权重接着往下，不从零开始。在同一批数据上，接着学的网络在留下来检查的对局上误差更低。
+Older batches are a trade-off. Runs played by a weaker champion give a position a label that is too low: the current champion, playing on from there, would win more often. But a network that learns from the newest batch alone forgets the positions that only the older runs reach.
 
-冠军的两个网络，是从两万多局学来的。
+The champion's two networks learned from the newest batch together with the two before it, about 69,000 runs.
 
-## 训练种子和测试种子不相见
+## Training seeds and test seeds never meet
 
-自我对弈用的种子和评估用的种子来自两个不同的来源，不会重叠。两头都有检查：训练程序遇到含有评估对局的数据就拒绝，评估只能打事先登记好的测试种子。这样门槛量到的，才是网络在没学过的对局上的表现。
+The seeds for self-play and the seeds for evaluation come from two different sources and never overlap. Both ends are checked: the training program refuses data that contains evaluation runs, and evaluation can play only test seeds registered in advance. Only then does the gate measure how the networks do on runs they have not learned from.
 
-## 从零开始
+## Starting from zero
 
-搜索需要两个网络才能动。还没有任何网络的时候，可以用两个不需要网络的占位玩家打出第一批对局：一个在战斗之外随机选，一个在战斗里随机出牌。之后的每一批，都是上一批学出来的网络打的。
+Search needs both networks before it can run. When no network exists yet, two placeholder players that need no network can play the first batch of runs: one picks at random outside combat, and the other plays cards at random in combat. Every batch after that is played by the networks learned from the batch before.

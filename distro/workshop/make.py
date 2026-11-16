@@ -36,7 +36,7 @@ def pct(won, runs, lang):
 
 T = {}
 T["eng"] = dict(
-    steam="english", docs="en/",
+    steam="english", docs="",
     title="Spire Zero: AI Strategist for Slay the Spire 2",
     intro="An AI inside the game, for single-player runs:",
     advice="[b]Advice[/b]: at every decision it shows what it would do, and each option's chance to win the run.",
@@ -82,7 +82,7 @@ T["zht"] = dict(
     disclaimer="非官方的粉絲作品，與 Mega Crit 無關，也沒有得到它的認可。",
 )
 T["zhs"] = dict(
-    steam="schinese", docs="",
+    steam="schinese", docs="zh-cn/",
     title="Spire Zero：杀戮尖塔 2 AI 军师",
     intro="一个放在游戏里的 AI，用于单人游戏：",
     advice="[b]建议[/b]：每个决策它都告诉你它会怎么选，以及每个选项有多大机会赢下这一局。",
@@ -105,7 +105,7 @@ T["zhs"] = dict(
     disclaimer="非官方的粉丝作品，与 Mega Crit 无关，也没有得到它的认可。",
 )
 T["deu"] = dict(
-    steam="german", docs="en/",
+    steam="german", docs="",
     title="Spire Zero: KI-Stratege für Slay the Spire 2",
     intro="Eine KI im Spiel, für Einzelspieler-Runs:",
     advice="[b]Ratschläge[/b]: Bei jeder Entscheidung zeigt sie, was sie tun würde, und wie gut die Siegchance des Runs mit jeder Option ist.",
@@ -128,7 +128,7 @@ T["deu"] = dict(
     disclaimer="Ein inoffizielles Fanprojekt, weder mit Mega Crit verbunden noch von Mega Crit unterstützt.",
 )
 T["fra"] = dict(
-    steam="french", docs="en/",
+    steam="french", docs="",
     title="Spire Zero : stratège IA pour Slay the Spire 2",
     intro="Une IA dans le jeu, pour les parties en solo :",
     advice="[b]Conseils[/b] : à chaque décision, elle montre ce qu'elle ferait et les chances de gagner la partie avec chaque option.",
@@ -172,11 +172,11 @@ spa = dict(
     src_docs="Cómo está diseñada, en inglés, chino simplificado y chino tradicional:",
     disclaimer="Un proyecto de fans no oficial, sin relación con Mega Crit ni respaldado por ella.",
 )
-T["spa"] = dict(spa, steam="spanish", docs="en/")
-T["esp"] = dict(spa, steam="latam", docs="en/", modes_h="Dos modos (en la configuración)",
+T["spa"] = dict(spa, steam="spanish", docs="")
+T["esp"] = dict(spa, steam="latam", docs="", modes_h="Dos modos (en la configuración)",
                 runs_h="Qué ejecuta en tu computadora")
 T["ita"] = dict(
-    steam="italian", docs="en/",
+    steam="italian", docs="",
     title="Spire Zero: stratega IA per Slay the Spire 2",
     intro="Un'IA dentro il gioco, per le partite in singolo:",
     advice="[b]Consigli[/b]: a ogni decisione mostra cosa farebbe e la probabilità di vincere la partita con ciascuna opzione.",
@@ -199,7 +199,7 @@ T["ita"] = dict(
     disclaimer="Un progetto amatoriale non ufficiale, non affiliato a Mega Crit né approvato da Mega Crit.",
 )
 T["ptb"] = dict(
-    steam="brazilian", docs="en/",
+    steam="brazilian", docs="",
     title="Spire Zero: estrategista IA para Slay the Spire 2",
     intro="Uma IA dentro do jogo, para partidas solo:",
     advice="[b]Conselhos[/b]: em cada decisão, ela mostra o que faria e a chance de vencer a partida com cada opção.",
@@ -222,7 +222,7 @@ T["ptb"] = dict(
     disclaimer="Um projeto de fã não oficial, sem vínculo com a Mega Crit e sem o endosso dela.",
 )
 T["pol"] = dict(
-    steam="polish", docs="en/",
+    steam="polish", docs="",
     title="Spire Zero: strateg SI do Slay the Spire 2",
     intro="SI w grze, do rozgrywek jednoosobowych:",
     advice="[b]Podpowiedzi[/b]: przy każdej decyzji pokazuje, co by zrobiła, i jaką szansę na wygranie runu daje każda opcja.",
@@ -245,7 +245,7 @@ T["pol"] = dict(
     disclaimer="Nieoficjalny projekt fanowski, niezwiązany z Mega Crit ani przez nie niepopierany.",
 )
 T["rus"] = dict(
-    steam="russian", docs="en/",
+    steam="russian", docs="",
     title="Spire Zero: ИИ-стратег для Slay the Spire 2",
     intro="ИИ прямо в игре, для одиночных забегов:",
     advice="[b]Подсказки[/b]: при каждом решении показывает, что выбрал бы сам, и шанс выиграть забег с каждым вариантом.",
@@ -268,7 +268,7 @@ T["rus"] = dict(
     disclaimer="Неофициальный фанатский проект, не связанный с Mega Crit и не одобренный ею.",
 )
 T["tur"] = dict(
-    steam="turkish", docs="en/",
+    steam="turkish", docs="",
     title="Spire Zero: Slay the Spire 2 için yapay zekâ stratejisti",
     intro="Oyunun içinde, tek oyunculu oyunlar için bir yapay zekâ:",
     advice="[b]Tavsiye[/b]: her kararda ne yapacağını ve her seçeneğin oyunu kazanma şansını gösterir.",
@@ -291,7 +291,7 @@ T["tur"] = dict(
     disclaimer="Resmî olmayan bir hayran projesidir; Mega Crit ile bağlantılı değildir ve Mega Crit tarafından onaylanmamıştır.",
 )
 T["jpn"] = dict(
-    steam="japanese", docs="en/",
+    steam="japanese", docs="",
     title="Spire Zero：Slay the Spire 2 の AI 軍師",
     intro="ゲーム内で動く、シングルプレイ用の AI です。",
     advice="[b]アドバイス[/b]：あらゆる選択で、AI ならどうするかと、各選択肢でランに勝てる確率を表示します。",
@@ -314,7 +314,7 @@ T["jpn"] = dict(
     disclaimer="非公式のファンプロジェクトです。Mega Crit とは関係がなく、承認も受けていません。",
 )
 T["kor"] = dict(
-    steam="koreana", docs="en/",
+    steam="koreana", docs="",
     title="Spire Zero: Slay the Spire 2의 AI 책사",
     intro="게임 안에서 작동하는 싱글 플레이용 AI입니다.",
     advice="[b]조언[/b]: 모든 선택에서 AI라면 무엇을 할지, 그리고 각 선택지로 런을 이길 확률을 보여 줍니다.",
@@ -337,7 +337,7 @@ T["kor"] = dict(
     disclaimer="비공식 팬 프로젝트이며, Mega Crit과 관련이 없고 Mega Crit의 승인을 받지 않았습니다.",
 )
 T["ind"] = dict(
-    steam="indonesian", docs="en/",
+    steam="indonesian", docs="",
     title="Spire Zero: ahli strategi AI untuk Slay the Spire 2",
     intro="AI di dalam game, untuk permainan pemain tunggal:",
     advice="[b]Saran[/b]: di setiap keputusan, AI menunjukkan apa yang akan dipilihnya dan peluang tiap pilihan untuk memenangkan run.",
@@ -360,7 +360,7 @@ T["ind"] = dict(
     disclaimer="Proyek penggemar tidak resmi, tidak berafiliasi dengan maupun didukung oleh Mega Crit.",
 )
 T["tha"] = dict(
-    steam="thai", docs="en/",
+    steam="thai", docs="",
     title="Spire Zero: กุนซือ AI สำหรับ Slay the Spire 2",
     intro="AI ในเกม สำหรับการเล่นคนเดียว:",
     advice="[b]คำแนะนำ[/b]: ทุกการตัดสินใจ AI จะบอกว่ามันจะเลือกอะไร และแต่ละตัวเลือกมีโอกาสชนะรันนี้เท่าไร",
@@ -383,7 +383,7 @@ T["tha"] = dict(
     disclaimer="โปรเจกต์แฟนเมดที่ไม่เป็นทางการ ไม่เกี่ยวข้องและไม่ได้รับการรับรองจาก Mega Crit",
 )
 T["ara"] = dict(
-    steam="arabic", docs="en/",
+    steam="arabic", docs="",
     title="Spire Zero: استراتيجي بالذكاء الاصطناعي للعبة Slay the Spire 2",
     intro="ذكاء اصطناعي داخل اللعبة، للعب الفردي:",
     advice="[b]النصائح[/b]: في كل قرار يعرض ما كان سيفعله، وفرصة الفوز بالجولة مع كل خيار.",

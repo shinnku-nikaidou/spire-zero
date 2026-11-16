@@ -25,7 +25,7 @@ and running it needs your own copy of the game, pinned at **v0.113.1** (the `pub
 | `pool/` | the work pool that spreads self-play and evaluation over many machines ([pool/README.md](pool/README.md)) |
 | `distro/` | the script that builds the mod with its brain for every platform |
 | `plans/` | the working plans as they were written, by date and time (Taiwan time), mostly in Traditional Chinese |
-| `docs/` | the design manual, a Starlight site in Simplified Chinese, Traditional Chinese and English ([docs/README.md](docs/README.md)) |
+| `docs/` | the design manual, a Starlight site in English, Simplified Chinese and Traditional Chinese ([docs/README.md](docs/README.md)) |
 
 ## Building
 

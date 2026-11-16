@@ -49,7 +49,7 @@ export default defineConfig({
     // The macro brain's figures are Svelte islands (src/components/v/).
     svelte(),
     starlight({
-      title: { 'zh-CN': '杀戮尖塔 2 AI 架构手册', 'zh-TW': '殺戮尖塔 2 AI 架構手冊', en: 'STS2 AI Architecture' },
+      title: { en: 'STS2 AI Architecture', 'zh-CN': '杀戮尖塔 2 AI 架构手册', 'zh-TW': '殺戮尖塔 2 AI 架構手冊' },
       // The book's look (src/styles/spire.css): a stone wall and parchment, the sidebar as a map scroll.
       customCss: ['katex/dist/katex.min.css', './src/styles/viz.css', './src/styles/spire.css'],
       components: { PageTitle: './src/components/spire/PageTitle.astro' },
@@ -66,11 +66,12 @@ export default defineConfig({
           },
         },
       ],
+      // English is the default, at the site's root; the two Chinese books are under /zh-cn/ and /zh-tw/.
       defaultLocale: 'root',
       locales: {
-        root: { label: '简体中文', lang: 'zh-CN' },
+        root: { label: 'English', lang: 'en' },
+        'zh-cn': { label: '简体中文', lang: 'zh-CN' },
         'zh-tw': { label: '繁體中文', lang: 'zh-TW' },
-        en: { label: 'English', lang: 'en' },
       },
       sidebar: book,
     }),

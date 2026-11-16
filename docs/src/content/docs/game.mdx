@@ -1,68 +1,70 @@
 ---
-title: 游戏
-description: 杀戮尖塔 2 的一局是什么、玩家要决定什么、什么看不到，以及这一切为什么对 AI 很难。
+title: The game
+description: What a run of Slay the Spire 2 is, what the player decides, what stays hidden, and why all of this is hard for an AI.
 ---
 import RunTimeline from '../../components/book/RunTimeline.svelte';
 import SurfaceCounts from '../../components/book/SurfaceCounts.svelte';
 
-《杀戮尖塔 2》是一款单人卡牌游戏。玩家带着一副牌爬一座塔，一路战斗、拿新牌、捡遗物，直到打倒最后一个 Boss，或死在半路。这一章只讲后面各章用得到的部分。数字都读自游戏自己的代码，版本是 v0.113.1。
+Slay the Spire 2 is a single-player card game. The player climbs a tower with a deck of cards, fighting, taking new cards and picking up relics along the way, until the last boss is beaten or the player dies on the way up. This chapter covers only what the later chapters need. Every number is read from the game's own code, version v0.113.1.
 
-## 一局
+## A run
 
-一**局**有三幕。每一幕是一张地图，地图上每个点是一个房间，走过一个房间算一层，三幕加起来 48 层。每一幕开头有一位先古之民把生命补满、送一份礼物，尽头是一个 Boss。打倒第三幕的 Boss 就赢了。生命归零，这一局就结束。
+A **run** has three acts. Each act is a map, and each point on the map is a room. Each room passed counts as one floor, and the three acts add up to 48 floors. Each act opens with an Ancient, who restores HP to full and gives a gift, and ends with a boss. Beating the act 3 boss wins the run. When HP reaches zero, the run is over.
 
-房间有这几种：
+Rooms come in these kinds:
 
-- **战斗**：怪物、精英或 Boss。赢了有金币，还能从三张牌里挑一张加进牌组，也可以不拿。精英比较难，多给一件遗物。
-- **休息处**：回复最大生命的三成，或者升级一张牌，只能选一样。
-- **商店**：花金币买牌、遗物、药水，或删掉牌组里的一张牌。
-- **宝箱**：一件遗物。
-- **事件**：几个选项，各有代价和好处。
-- **问号**：进去才知道是事件、战斗、商店还是宝箱。
+- **Combat**: monsters, an elite or a boss. A win gives gold and a choice of one card out of three to add to the deck, or none. Elites are harder and also give a relic.
+- **Rest site**: heal 30% of max HP or upgrade one card, but only one of the two.
+- **Shop**: spend gold on cards, relics and potions, or on removing a card from the deck.
+- **Treasure**: one relic.
+- **Event**: a few options, each with a cost and a benefit.
+- **"?" room**: only on entering does the player learn whether it is an event, a combat, a shop or a treasure.
 
-遗物是整局有效的被动效果。药水是一次性的道具，最多带三瓶。
+A relic is a passive effect that lasts the whole run. A potion is a one-use item, and the player can carry at most three.
 
-本书从头到尾跟着同一局：静默猎手，SL 环境，在第 48 层获胜。下面是它的每一层。
+This book follows one run from start to finish: the Silent, in the SL environment, winning on floor 48. Here is every floor of it.
 
-<RunTimeline client:visible lang="zh-CN" />
+<RunTimeline client:visible lang="en" />
 
-这一局打了 22 场战斗，停了 9 个休息处，进了 4 家商店，一共做了 1,011 个决策，其中 717 个在战斗里。
+This run fought 21 combats, stopped at 11 rest sites and entered 3 shops. It made 852 decisions in all, 615 of them in combat.
 
-## 战斗
+## Combat
 
-玩家和敌人轮流行动。玩家的回合开始时有 3 点能量，抽 5 张牌。打牌要花能量，没打出去的牌回合结束时弃掉。牌从抽牌堆到手上，打完进弃牌堆；抽牌堆抽空了，弃牌堆就洗回去。
+The player and the enemies take turns. The player's turn starts with 3 Energy and a draw of 5 cards. Playing a card costs Energy, and cards left unplayed are discarded at the end of the turn. Cards go from the draw pile to the hand and, once played, to the discard pile. When the draw pile runs out, the discard pile is shuffled back into it.
 
-每个敌人头上会显示**意图**，也就是它下一步要做什么：攻击几点、打几次，还是防御、强化自己。所以玩家总是知道这个回合会挨多少打，却不知道再下一个回合。
+Above each enemy the game shows its **intent**, which is what it will do next: attack for how much and how many times, or defend, or strengthen itself. So the player always knows how much damage is coming this turn, but not the turn after.
 
-格挡能挡掉这个回合的伤害。生命不会自己回来：这一场掉的血，下一场还是少的。
+Block stops damage for this turn. HP does not come back by itself: HP lost in this combat is still missing in the next.
 
-游戏有六个角色，各有自己的牌和玩法。本书的例子用静默猎手，她靠中毒、小刀和弃牌取胜。游戏还有 10 级进阶，一级比一级难；到了进阶 10，第 3 幕的尽头连着两个 Boss。
+The game has six characters, each with its own cards and style of play. This book's examples use the Silent, who wins with Poison, Shivs and discarding. The game also has 10 Ascension levels, each harder than the one before. At Ascension 10, act 3 ends in two bosses in a row.
 
-## 什么由种子决定，什么看不到
+Harder still is the **Dread** mode. It is played at Ascension 10, and each act's boss casts its dominion over every other combat of the act: under the Kaiser Crab's, for example, every enemy starts with 7 Plating. At the end of each act an Ascender's Bane joins the deck, and the bosses themselves are stronger.
 
-每一局有一个**种子**，一串 12 个字符。地图长什么样、每场战斗遇到谁、牌怎么洗、奖励给什么，全部由种子和玩家的选择决定。同一个种子、同样的选择，一定打出同样的一局。
+## What the seed decides and what stays hidden
 
-整个项目都建立在这一点上。有了它，一局可以原样重放，AI 可以先在克隆上试打再动手，两个 AI 也可以打同一批种子来比高下。
+Every run has a **seed**, a string of 12 characters. The seed and the player's choices decide everything: the shape of the map, who appears in each combat, how the cards are shuffled and what the rewards hold. The same seed with the same choices always gives the same run.
 
-种子决定了一切，但玩家看不到全部：
+The whole project rests on this. Because of it, a run can be replayed exactly, the AI can try things on a copy before it acts, and two AIs can play the same seeds to see which is stronger.
 
-| 看得到 | 看不到 |
+The seed decides everything, but the player does not see all of it:
+
+| Visible | Hidden |
 |---|---|
-| 这一幕的整张地图，每个点的类型，Boss 是谁 | 问号房进去之前是什么 |
-| 每个敌人下一步的意图 | 再之后的招式 |
-| 抽牌堆里有哪些牌 | 抽牌堆的顺序 |
-| 自己和敌人的生命、格挡和状态 | 下一场战斗是谁，奖励会给什么，商店卖什么 |
+| The whole map of this act, the type of every point, who the boss is | What a "?" room is before the player enters |
+| Each enemy's intent for its next move | Its moves after that |
+| Which cards are in the draw pile | The order of the draw pile |
+| The HP, Block and status effects of the player and the enemies | Who the next combat is against, what the rewards will be, what the shops sell |
 
-AI 能不能用看不到的那一栏，是《两种环境》一章的主题。
+Whether the AI may use the hidden column is the subject of the chapter "Two environments".
 
-## 为什么难
+## Why it is hard
 
-- **路很长。** 目前最强的那一版 AI，书里叫它冠军，打一局平均要做约 550 个决策。第 2 层拿的一张牌，到第 48 层还在牌组里。
-- **结果只有一个。** 几百个决策共用同一个输赢，很难说清哪一个决策是对的。
-- **很多东西看不到。** 牌序、问号房、下一场战斗，都要在不知道的情况下做决定。
-- **选项多又一直变。** 一个回合可以用任何顺序打出手上的牌，每张牌还可能要选目标。
-- **死一次就结束。** 生命是一笔要分给二十几场战斗的预算，每个休息处都要在回血和升级之间取舍。
+- **The road is long.** The strongest version of the AI so far, which this book calls the champion, makes about 600 decisions in an average run. A card taken on floor 2 is still in the deck on floor 48.
+- **There is only one result.** Hundreds of decisions share one win or loss, so it is hard to say which decision was right.
+- **Much is hidden.** Every decision is made without knowing the draw order, the "?" rooms or the next combat.
+- **The options are many and keep changing.** In one turn the cards in hand can be played in any order, and each card may also need a target.
+- **One death ends it.** HP is a budget to spread over twenty-odd combats, and every rest site is a choice between healing and an upgrade.
 
-下图是冠军在进阶 10 打静默猎手的 200 局里，决策出现在哪些画面。战斗占了 74%。
+The figure below shows which screens the decisions fell on in the champion's 200 runs with the Silent at Ascension 10. Combat takes 74%.
 
-<SurfaceCounts client:visible lang="zh-CN" />
+<SurfaceCounts client:visible lang="en" />

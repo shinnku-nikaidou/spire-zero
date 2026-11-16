@@ -1,66 +1,66 @@
 ---
-title: 战斗网络
-description: 搜索停在还没打完的战斗时，那个局面值多少：战斗网络预测这场战斗怎么收场，每种收场交给 V 估价。
+title: The combat net
+description: 'What a position is worth when search stops in an unfinished combat: the combat net predicts how the combat ends, and V prices each ending.'
 ---
 import ArchDiagram from '../../components/v/ArchDiagram.svelte';
 import OutcomeHead from '../../components/combat/OutcomeHead.svelte';
 
-搜索常常停在一场还没打完的战斗里，这时需要知道眼前的局面值多少。**战斗网络**读这个局面，预测战斗会怎么收场：死，或者赢下来、还要再掉多少血、手上的药水还在不在。每一种收场对应一局具体的残局，交给 V 估价，再按概率加权。战斗网络只说会发生什么；值多少，永远由 V 来说。
+Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending corresponds to one concrete run as it stands after the combat. V prices that run, and the prices are weighted by probability. The combat net says only what will happen. What it is worth is always for V to say.
 
-下图是它在 16 个真实局面上的预测。红色那一条是死亡的概率，其余 50 条是赢下来的各种收场，灰色的是不可能发生的。例如对上第 1 幕的 Boss 瀑布巨兽的第 11 回合，愚者只剩 25/83 点生命：网络认为有 94% 会死，赢的话平均剩 3.5 点。
+The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 6 against the Waterfall Giant, the act 1 boss, the Fool has 27/77 HP left and only Strikes and Defends in hand: the net is all but sure that it dies.
 
-<OutcomeHead client:visible lang="zh-CN" />
+<OutcomeHead client:visible lang="en" />
 
-## 它读什么
+## What it reads
 
-网络读的是一个回合开始时玩家看得到的东西：
+The net reads what the player can see at the start of a turn:
 
-- **牌**：四个牌堆里每张牌是哪一张、升级了没，以及这场战斗在它身上改过的数字，例如现在的费用、长大了的伤害。
-- **玩家**：生命、格挡、能量、现在是第几回合。
-- **状态**：玩家和敌人身上每个状态是哪一种、有几层。
-- **敌人**：是谁、生命、格挡、现在的意图，加上它前三个回合亮过的意图。
-- **其他**：遗物、药水、角色是谁、这是哪一场遭遇、进阶等级。
+- **Cards**: for each card in the four piles, which card it is, whether it is upgraded, and the numbers this combat has changed on it, such as its current cost or damage that has grown.
+- **The player**: HP, Block, Energy and the current turn number.
+- **Status effects**: for each status effect on the player and the enemies, which kind it is and how many stacks it has.
+- **Enemies**: who each one is, its HP, Block and current intent, plus the intents it showed over the previous three turns.
+- **The rest**: relics, potions, which character is playing, which encounter this is, the Ascension level and, in the Dread mode, the dominion over this combat.
 
-它不读抽牌顺序，不读随机数，也不读敌人排好的下一招。所以它的估值不可能泄露看不到的东西，同一个网络在两种环境都能用。
+It does not read the draw order, the random numbers or the enemies' queued next moves. So its values cannot leak anything hidden, and the same net can be used in both environments.
 
-它也不读牌面上印的数字。打击造成 6 点伤害这件事，由网络从「这张牌是打击」自己学。输入里没有任何一栏在说这张牌好不好。
+It does not read the numbers printed on a card either. That Strike deals 6 damage is something the net learns by itself from "this card is Strike". No field in the input says whether a card is good or bad.
 
-## 怎么把一堆东西变成一串数字
+## How a pile of things becomes a string of numbers
 
-一场战斗里的东西数量不定：手上可能有 3 张牌，也可能有 10 张。网络的做法分三步：
+The number of things in a combat is not fixed: the hand may hold 3 cards or 10. The net handles this in three steps:
 
-1. **每样东西各变成 64 个数字。** 一张牌、一个状态、一个敌人，先按它是哪一种查表，再按它自己的数字微调。
-2. **同一堆的加起来。** 每张牌各自通过同一个小网络，然后同一个牌堆的结果相加。相加不管顺序，也不管有几张。用加总而不用平均，是因为这样一手厚牌和一手薄牌才分得出来。
-3. **接成一条，再过两层。** 所有加总接成 1,294 个数字，通过两层各 512 个单元的网络。牌、敌人和生命到这里才第一次相遇。
+1. **Each thing becomes 64 numbers.** A card, a status effect or an enemy is first looked up in a table by what kind it is, then adjusted by its own numbers.
+2. **Things in the same pile are added up.** Each card passes through the same small network by itself, and the results for one pile are then added together. Adding ignores order and works for any number of cards. The net uses a sum and not an average because only a sum tells a full hand from a thin one.
+3. **Joined end to end, then through two layers.** All the sums are joined into 1,294 numbers, which pass through a network of two layers with 512 units each. Only here do the cards, the enemies and the HP meet for the first time.
 
-整个网络大约有 185 万个权重。六个角色共用同一个网络，角色只是输入里的一个标记。
+The whole network has about 1.85 million weights. The six characters share one network, and the character is only a tag in the input.
 
-<ArchDiagram client:visible lang="zh-CN" net="combat" />
+<ArchDiagram client:visible lang="en" net="combat" />
 
-## 它输出什么
+## What it outputs
 
-**收场的分布。** 一共 51 个概率：死亡，加上 50 个区间。每个区间说的是，从现在到赢下这场战斗，还要再失去最大生命的几成。区间从 −25% 排到 100%，负的代表这场战斗打完反而回血。
+**The distribution of endings.** There are 51 probabilities in all: death, plus 50 bands. Each band says what share of max HP will still be lost between now and winning this combat. The bands run from −25% to 100%, and a negative band means the combat ends with HP gained instead.
 
-- **预测「还要掉多少」，不预测「最后剩多少」。** 现在有多少生命是确切知道的。搜索比较两个局面时，生命多的那个在网络开口之前就已经占优。
-- **不可能的收场直接关掉。** 只剩三成生命的人，不可能再掉五成还赢。这些区间的概率刚好是 0。这条规则写在网络里，训练和实战用的是同一条。
+- **It predicts how much is still to be lost, not how much is left at the end.** The current HP is known exactly. When search compares two positions, the one with more HP is already ahead before the net says a word.
+- **Impossible endings are switched off.** A player with 30% of HP left cannot lose another 50% and still win. The probability of those bands is exactly 0. This rule is written into the net, and training and real play use the same one.
 
-**药水。** 对手上的每一瓶药水，网络另外预测赢下来之后它已经用掉的概率。掉血多的胜利和掉血少的胜利分开预测，因为险胜往往是喝了药水换来的。
+**Potions.** For each potion in hand, the net separately predicts the chance that it has been used by the time the combat is won. Wins with heavy HP loss and wins with light HP loss are predicted apart, because a narrow win is often bought by drinking a potion.
 
-## 怎么变成一个数字
+## How it becomes one number
 
-对每一种可能的收场，算出那时剩多少生命、留着哪些药水，把这样的一局交给 V，得到赢下整局的概率。再按每种收场的概率加权相加。死亡值 0。
+For each possible ending, the AI works out how much HP is left then and which potions remain, hands that run to V, and gets a chance of winning the whole run. It then adds these up, weighted by the probability of each ending. Death is worth 0.
 
-网络不直接输出一个分数，原因有三个。没有任何数字需要人来设定。每种收场按它自己的生命和药水估价，险胜和大胜不会混在一起。同一次计算还顺带给出两个玩家看得懂的数字：赢下这场战斗的概率，以及赢的话平均剩多少生命。
+The net does not output a score directly, for three reasons. No number has to be set by a person. Each ending is priced by its own HP and potions, so a narrow win and a big win are not mixed together. And the same calculation also gives two numbers a player can understand: the chance of winning this combat and the average HP left after a win.
 
-## 怎么学
+## How it learns
 
-样本是自我对弈里每个回合的开始，标签是那场战斗实际怎么结束。冠军用的网络从约四万局、约 359 万个回合学来。每五局留一局不拿来学，只用来检查。
+A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from about 69,000 runs and about 6.55 million turns. One run in five is held back from learning and used only for checking.
 
-在留下来检查的对局上，同一种遭遇、同一个回合的局面里，网络分辨最后会死还是会活的准确度约 0.94。这个数字 1 是完美，0.5 是乱猜，只看血量是 0.70。它预测的死亡率是 5.44%，实际是 6.31%。
+On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.94. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.71. The death rate it predicts is 6.34%, and the real one is 5.93%.
 
-## 它看不到什么
+## What it cannot see
 
-- **只预测生命和药水。** 战斗里之后才会被偷走的金币、才会长大的牌，发生之前都不在估价里。
-- **牌和牌互相看不到。** 每张牌各算各的才相加，两张牌之间的配合只能靠后面两层去学。
-- **它学的是 SL 的收场。** 训练它的对局都是 SL 打的，所以在 NoSL 里，它是照一个更强的玩家来估。
-- **V 看错的，它跟着错。** 每个估价都是 V 给的。
+- **It predicts only HP and potions.** Gold that will be stolen later in the combat and cards that will grow later are not in the price until they happen.
+- **Cards cannot see each other.** Each card is computed by itself before the sum, so how two cards work together can be learned only by the two layers that follow.
+- **It learns SL's endings.** Every run it was trained on was played in SL, so in NoSL it estimates as if a stronger player were playing.
+- **Where V is wrong, it is wrong too.** Every price comes from V.

@@ -1,67 +1,69 @@
 ---
-title: 战斗之外
-description: 拿哪张牌、走哪条路、买什么：把每个选项打一遍，问 V 打完之后的局面有多好，选最好的。
+title: Outside combat
+description: 'Which card to take, which path to walk, what to buy: play each option, ask V how good the position after it is, and take the best.'
 ---
 import MapRoute from '../../components/book/MapRoute.svelte';
 
-战斗之外的每个决策都归这一章：下一步去地图上哪个点、领哪些奖励、拿哪张牌、买什么，以及在事件、休息处和宝箱前选哪个选项。方法一句话就能说完：把每个选项都打一遍，看看打完之后当下的局面，问一个学到的价值函数 V 这个局面有多好，然后选最好的。
+Every decision outside combat belongs to this chapter: which map point to go to next, which rewards to claim, which card to take, what to buy, and which option to pick at an event, a rest site or a treasure chest. The method fits in one sentence: play each option, look at the position right after it, ask a learned value function V how good that position is, and take the best.
 
 ```mermaid
 flowchart LR
-  S["决策<br/>画面 + 合法选项"] --> P["把每个选项打一遍<br/>（SL：在克隆上）"]
-  P --> A["后状态<br/>每个选项的 s′"]
-  A --> V["V(s′)<br/>一个学到的价值"]
-  V --> B["选最好的"]
-  P -.->|"仍是同一个房间<br/>的画面"| P
+  S["decision<br/>screen + legal options"] --> P["play each option<br/>(SL: on the copy)"]
+  P --> A["afterstates<br/>s′ for each option"]
+  A --> V["V(s′)<br/>one learned value"]
+  V --> B["take the best"]
+  P -.->|"still a screen<br/>of the room"| P
 ```
 
-1. **选项**：这个画面上游戏允许的动作。
-2. **后状态**：每个选项都执行一遍，执行完、还没有任何随机的事发生时的局面，就是它的*后状态*。SL 下，选项在当前房间的克隆上、在真实游戏里打出；如果游戏接着显示同一个房间的另一个画面，例如购买之后的商店、事件的下一页，搜索就继续穿过它。
-3. **一个价值**：V 读一个后状态，返回一个数字。同一个 V 给每个画面的每个选项评分，所以一张牌、一件遗物、一次升级、一次回血和地图上的一条路，都在同一个尺度上比较，不需要手写的换算率。
-4. **最好**：选价值最高的选项，打平时选第一个。自我对弈有时故意抽另一个，为了学到它会带来什么。
+1. **Options.** The actions the game allows on this screen.
+2. **Afterstates.** Each option is applied, and the position right after it, before anything random happens, is its *afterstate*. In SL the option is played in the real game on a copy of the current room; where the game then shows another screen of the same room, for example a shop after a purchase or the next page of an event, the search goes on through it.
+3. **One value.** V reads an afterstate and returns one number. The same V scores every option of every screen, so a card, a relic, an upgrade, a heal and a path on the map are compared on one scale, without exchange rates written by hand.
+4. **Best.** Take the option with the highest value, the first one on a tie. Self-play sometimes draws another on purpose, to learn what it would have led to.
 
-## 这些决策难在哪
+Potions are valued with one rule of the game in mind: a potion can be thrown away at any time for nothing. So V is asked about the belt as the best of the potions it could keep, and holding a potion is never worth less than an empty slot.
 
-这些决策的共同点是：选项少、影响远、执行便宜、难以估值。一个战斗回合可能有上千种打法；这里一个决策只有寥寥几个选项，每个都能在克隆里试一遍。
+## What makes these decisions hard
 
-难的是，一个选择的效果要过很多层才显现出来。第 2 层拿的一张牌，到第 3 幕 Boss 时还在牌组里。第 43 层为了多打一场怪物战而跳过的休息处，可能决定这一局能不能到达第 48 层。
+What these decisions have in common: few options, a long reach, cheap to carry out, hard to value. A combat turn can have thousands of lines; here a decision has a handful of options, and each can be tried on the copy.
 
-本书的示例对局里，这种决策有 186 个，它们全都共用同一个结果：这一局赢了。
+The hard part is that the effect of a choice shows up only many floors later. A card taken on floor 2 is still in the deck at the act 3 boss. A rest site skipped on floor 43 to fight one more monster may decide whether the run reaches floor 48.
 
-## 为什么估打完之后的局面
+The book's example run has 193 of these decisions, and they all share one result: the run was won.
 
-拿牌、买东西、选路，都是先发生一件确定的事：牌进了牌组、金币付了、地图点选定了。之后才轮到随机的事，例如下一场战斗遇到谁。确定的部分做完、随机的部分还没开始，这个局面就是后状态。
+## Why value the position after the play
 
-估后状态而不估选项本身，有三个好处：
+Taking a card, buying something and choosing a path all begin with something certain: the card enters the deck, the gold is paid, the map point is chosen. Only then come the random things, such as who the next combat is against. The position where the certain part is done and the random part has not begun is the afterstate.
 
-- **一个函数就够。** 选项在每个画面上意思都不同：一张牌、一个地图点、一个货位。局面却总是同一种东西：一局的现状。
-- **殊途同归只学一次。** 从奖励拿一张牌、在商店买同一张、从事件得到它，打完都是同一个局面，V 只要学一次它值多少。
-- **每个决策都是训练数据。** 不管来自哪个画面，记下来的局面都拿去教同一个 V。
+Valuing the afterstate and not the option itself has three benefits:
 
-## 一把尺子
+- **One function is enough.** An option means something different on every screen: a card, a map point, a shop slot. A position is always the same kind of thing: the current state of a run.
+- **Different roads to the same place are learned once.** Taking a card from a reward, buying the same card in a shop and getting it from an event all end in the same position, so V has to learn what it is worth only once.
+- **Every decision is training data.** Whatever screen it came from, a recorded position goes to teach the same V.
 
-V 的单位是赢下这一局的概率。两个选项相差 0.02，意思是 V 认为选其中一个，获胜概率高 2 个百分点。各个画面问的事差很多，最后都归到这个数字：
+## One ruler
 
-- **休息处**：回血，还是升级一张牌。V 比的是生命多的一局和牌组好的一局。
-- **卡牌奖励**：三张牌，或者都不拿。一张牌的价值可能比不拿还低：牌组多了一张弱牌，抽到好牌的次数就少了。
-- **地图**：Boss 前几层，走怪物战还是走休息处。战斗给金币和一张牌，却要花生命。
+V's unit is the chance of winning the run. If two options differ by 0.02, V judges that choosing one of them raises the chance of winning by 2 percentage points. The screens ask very different questions, and all of them come down to this number:
 
-下图是示例对局第 23 层的地图。眼前有两个点可以走：V 给通往敌人房的那一步 97.57%，通往精英房的 97.43%，所以走敌人房。紫线是它打算一路走到 Boss 的路线。
+- **Rest site**: heal, or upgrade a card. V compares a run with more HP against a run with a better deck.
+- **Card reward**: three cards, or none. A card can be worth less than taking nothing: with one more weak card in the deck, the good cards are drawn less often.
+- **Map**: a few floors before the boss, a monster combat or a rest site. The combat gives gold and a card but costs HP.
 
-<MapRoute client:visible lang="zh-CN" />
+The figure below is the map on floor 14 of the example run, with 50/70 HP. Two points are open: V gives the move to the elite room 97.95% and the move to the enemy room 97.00%, so the AI takes on the elite, which also gives a relic. The purple line is the route it intends to follow all the way to the boss.
 
-有人会想把它拆成两个网络，一个管牌组，一个管路线。但两者之间没有界线：遗物来自精英和商店，它值多少却要看牌组；休息处拿生命换升级；商店用同一袋金币卖牌、遗物和删牌。拆开之后，两个分数之间的换算率只能由人来写，而那就是手写的策略。
+<MapRoute client:visible lang="en" />
 
-## 在克隆上把整个房间走完
+It is tempting to split V into two networks, one for the deck and one for the route. But there is no line between the two. Relics come from elites and shops, yet what a relic is worth depends on the deck. A rest site trades HP for an upgrade. A shop sells cards, relics and card removal for the same purse of gold. After a split, a person would have to write the exchange rate between the two scores, and that is hand-written strategy.
 
-很多房间不是一个决策，而是一串。商店是几次购买再离开，奖励画面是几次领取，事件可能有好几页。只估第一步，等于在不知道剩下的金币还够不够删一张牌的情况下，决定要不要买一件遗物。
+## Playing the whole room through on the copy
 
-所以在 SL 里，搜索在克隆上一路往下走。每走一步，只留下 V 最高的 16 个局面继续走；一个决策最多试 1,024 次。走到离开房间、开始战斗或这一局结束为止。停下的地方由 V 估值；要是选项引出一场战斗，就先让战斗网络估这场战斗会怎么收场。
+Many rooms are not one decision but a string of them. A shop is several purchases and then leaving, a rewards screen is several claims, and an event may have several pages. Valuing only the first move means deciding whether to buy a relic without knowing whether the gold left over still pays for removing a card.
 
-克隆上打出来的是真的结果：事件实际给了什么，变化变出哪张牌，买完之后商店还剩什么。
+So in SL, search keeps going on the copy. After each move it keeps only the 16 positions with the highest V and goes on from those, and one decision gets at most 1,024 tries. It goes on until it leaves the room, a combat starts or the run ends. V values the place where it stops. If an option leads into a combat, the combat net first estimates how that combat will end.
 
-选路是例外。走到下一个点就离开了这个房间，而克隆只到房间的出口。所以地图上的选择只能预测：把那个点加进路线，让 V 读前面的地图。
+What is played out on the copy is the real result: what the event really gave, which card a transform produced, what the shop still holds after a purchase.
 
-## 没有克隆的时候
+Choosing a path is the exception. Moving to the next point leaves the room, and the copy goes only as far as the room's exit. So a choice on the map can only be predicted: the point is added to the route, and V reads the map ahead.
 
-在 NoSL 里没有克隆，只能照画面上写的推算：加上这张牌，扣掉金币，加上回复的生命。画面没写的就看不到，例如事件选项真正的代价，或变化会变出什么。所以同一个 V，在 NoSL 里做这些决策比较粗。
+## When there is no copy
+
+NoSL has no copy, so the AI can only work out the result from what the screen says: add the card, subtract the gold, add the HP healed. What the screen does not say stays hidden, such as the true cost of an event option or what a transform will produce. So the same V makes these decisions more roughly in NoSL.

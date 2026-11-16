@@ -1,48 +1,48 @@
 ---
-title: 想法
-description: AI 做任何一个决策用的都是同一招：把选项真的试一遍，再问一个学出来的函数哪个结果最好。
+title: The idea
+description: 'The AI makes every decision with the same method: really try each option, then ask a learned function which result is best.'
 ---
 
-AI 做每一个决策，用的都是同一招：把每个选项在游戏的克隆里真的试一遍，看试完之后的局面，问一个学出来的函数「这个局面有多大机会赢下整局」，然后选机会最大的。没有任何一条「这种情况该出这张牌」的规则是人写的。
+The AI makes every decision with the same method. It really tries each option in a copy of the game, looks at the position after the try, asks a learned function what chance that position has of winning the whole run, and picks the option with the highest chance. No person wrote a single rule of the kind "in this situation, play this card".
 
 ```mermaid
 flowchart LR
-  D["眼前的决策"] --> T["每个选项<br/>试一遍"]
-  T --> S["试完的局面"]
-  S --> V["V：赢下整局<br/>的概率"]
-  V --> B["选最高的"]
+  D["The decision at hand"] --> T["Try each<br/>option"]
+  T --> S["The position after the try"]
+  S --> V["V: the chance to win<br/>the whole run"]
+  V --> B["Pick the highest"]
 ```
 
-## 试：让游戏自己说结果
+## Try: let the game give the result
 
-AI 不需要懂每张牌的效果。它手上有游戏本身：同一套程序，不开画面地跑。想知道打出一张牌会怎样，就真的打出去看。所以游戏的规则一条都不用重写，也就不会写错。
+The AI does not need to understand what each card does. It has the game itself: the same program, running with no screen. To learn what playing a card will do, it plays the card and looks. So not one rule of the game has to be rewritten, and none can be rewritten wrong.
 
-战斗里，一个回合有上万种打法，试不完，所以要**搜索**：有系统地试，记住走过的局面，只沿着有希望的方向往下。战斗之外，选项通常只有几个，每个都试得起。
+In combat, one turn has more than ten thousand lines, too many to try them all. So the AI needs **search**: it tries in an organised way, remembers the positions it has reached, and goes deeper only where things look promising. Outside combat there are usually only a few options, and it can afford to try each one.
 
-## 问：一把尺子量所有的事
+## Ask: one ruler measures everything
 
-试完之后的局面好不好，由 **V** 回答。V 读一局的现状：牌组、遗物、药水、生命、金币、前面的地图。它只回答一个数字：这一局最后赢下来的概率。
+**V** answers how good the position after a try is. V reads the current state of a run: the deck, relics, potions, HP, gold and the map ahead. It answers with a single number: the chance that this run ends in a win.
 
-所有决策都用这一把尺子。多掉 5 点血、多拿一张牌、少一瓶药水、走有精英的那条路，全都换算成同一个数字，可以直接比大小。没有人规定一件遗物值几点血。这个换算是 V 自己学到的。
+Every decision uses this one ruler. Losing 5 more HP, taking one more card, having one potion fewer, taking the path with an elite: all of these turn into the same kind of number and can be compared directly. Nobody sets how many HP a relic is worth. V learned that exchange by itself.
 
-战斗中途还有第二个网络帮忙。**战斗网络**读一场战斗的现状，预测它会怎么收场：死，或是赢下来、掉多少血。每一种收场再交给 V 估价。
+In the middle of a combat a second network helps. The **combat net** reads the current state of a combat and predicts its ending: death, or a win and how much HP it costs. V then prices each ending.
 
-## 学：从自己打的对局里学
+## Learn: from its own runs
 
-V 和战斗网络一开始什么都不会。AI 用手上的网络自己打上万局，记下每个决策之后的局面。等一局打完，再给这一局的每个局面标上实际的结局：死在第几层，或是赢了。网络从这些标好的局面学习，学完打得更好，再用新的网络打下一批。这叫**自我对弈**。
+At the start, V and the combat net know nothing. The AI plays more than ten thousand runs by itself with the networks it has, and records the position after every decision. When a run is over, the AI labels each of its positions with the real outcome: the floor it died on, or a win. The networks learn from these labelled positions and then play better, and the new networks play the next batch. This is called **self-play**.
 
-新网络要先过**门槛**才能取代旧的：新旧两边打同一批种子，新的赢得够多才算数。
+A new network must pass the **gate** before it replaces the old one. The new and the old play the same seeds, and the new one must win enough to count.
 
-## 为什么两样都要
+## Why it needs both
 
-只靠搜索不够。一局有 48 层，搜索最多看到眼前这个房间结束，之后的事只能估计。
+Search alone is not enough. A run has 48 floors, and search sees at most to the end of the current room. What comes after can only be estimated.
 
-只靠学习也不够。网络的估计总有误差，而眼前这几步真的试过，就不必猜。
+Learning alone is not enough either. A network's estimate always has some error, and the next few moves need no guessing once they have really been tried.
 
-所以近的地方靠试，远的地方靠学。
+So the AI tries what is near and learns what is far.
 
-## 三条不让步的规则
+## Three rules it does not bend
 
-- **策略不写成规则。** 该不该拿一张牌、该不该打精英，都由网络从结果里学。人只写两样东西：怎么和游戏沟通，以及学习的目标。
-- **不问语言模型。** 下决定的只有搜索和这两个网络，所以每一步都能重现、能追查。
-- **不蒙混。** 遇到没有任何一部分负责的决策，这一局就报错停下，绝不随机选一个。随机的一步会悄悄弄脏训练数据和评估结果。
+- **Strategy is not written as rules.** Whether to take a card or fight an elite is for the networks to learn from results. People write how to talk to the game and what the learning aims at. The only exceptions are a few rules about potions, which make up for V rating them too low.
+- **No language model is asked.** Only the search and the two networks decide, so every move can be reproduced and traced.
+- **No bluffing.** When a decision comes up that no part of the AI is responsible for, the run stops with an error. It never picks at random. One random move would quietly spoil the training data and the evaluation results.

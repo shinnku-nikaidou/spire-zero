@@ -1,30 +1,31 @@
 ---
-title: 弱点与还没做的
-description: 这个 AI 现在弱在哪里，以及设计里有、但还没做出来的部分。
+title: Weaknesses and what is not built
+description: Where this AI is weak today, and the parts of the design that are not built yet.
 ---
 
-前面各章只写现在会跑的东西。这一章列出它弱在哪里，以及哪些部分还没做。
+The earlier chapters describe only what runs today. This chapter lists where the AI is weak and which parts are not built yet.
 
-## 弱点
+## Weaknesses
 
-- **NoSL 没有练过。** 两个网络只从 SL 的对局学习。NoSL 没有自己的训练，没有门槛，也没有战绩，网络在那里的估值偏乐观。
-- **进阶 10 还很弱。** 冠军在进阶 10 赢不到两成；愚者 200 局只赢 3 局，亡灵契约师 200 局只赢 14 局。
-- **输的局多半死在 Boss。** 1,021 局败局里有 653 局，其中将近一半在第 3 幕的 Boss。
-- **一局只有一个结局。** 几百个决策共用它，要看出哪个决策造成差别，得打很多局。
-- **标签里混着探索。** 同一个局面，在探索多的对局里标得比较低，而 V 不知道这一局探索了多少。
-- **战斗搜索很窄。** SL 每回合只留 8 个局面，更好的打法可能被挤掉，大多数计划不保证是最好的。
-- **NoSL 的搜索在每个世界里当了先知。** 这个毛病只修正了第一步，剩下的有多大还没量过。
-- **战斗网络只预测生命和药水。** 战斗里其他会变的东西，发生之前都不在估价里。
-- **V 读到的地图没有连线**，也只到这一幕结束。
-- **还有一条手写的规则。** 药水只在药水栏满了、眼前又有新药水可拿时，才考虑丢掉。没有这条，V 会把药水白白丢掉。等 V 自己学会不丢，这条规则就拿掉。
-- **门槛偏宽。** 新的一对只要多赢 3 个种子、而旧的一个都没多赢，就算通过。门槛误放的概率还没有量过。
-- **模拟器和真游戏是否处处一致**，还没有成套的检验。
+- **NoSL has not been trained.** The two networks learn only from SL runs. NoSL has no training of its own, no gate and no results, and the networks' values lean optimistic there.
+- **Ascension 10 is still weak.** The champion wins about a quarter of its runs there. The Fool won 1 of 200, and the Necrobinder 31 of 200.
+- **The networks have not learned the Dread mode.** They read the mode and its dominions, but none of the runs they learned from was played in it, so they value a Dread run as an ordinary one at Ascension 10.
+- **Most lost runs die to a boss.** That is 590 of the 912 lost runs, more than half of them at the act 3 boss.
+- **A run has only one outcome.** Hundreds of decisions share it, and seeing which decision made the difference takes many runs.
+- **Exploration is mixed into the labels.** The same position gets a lower label in runs that explore more, and V does not know how much a run explored.
+- **Combat search is narrow.** SL keeps only 8 positions per turn, so a better line may be pushed out, and most plans are not guaranteed to be the best.
+- **Inside each world, NoSL's search knows the future.** The flaw is corrected only for the first move, and the size of the rest has not been measured.
+- **The combat net predicts only HP and potions.** Other things that change in a combat are not in the price until they happen.
+- **The map V reads has no links**, and it ends with this act.
+- **A few potion rules are written by hand.** They make up for V, which rates many potions below an empty slot. A potion reward is always taken while the belt has room, and a potion is thrown away only when the belt is full and a new potion is there to take. The Foul Potion, which hurts the player too in a fight, is never used in a fight and never thrown away; at a merchant it is thrown first, for the gold he pays, and a move into a shop counts that gold in advance.
+- **The gate is on the loose side.** A new pair passes if it wins as few as 3 seeds that the old pair lost, while the old pair wins none that the new pair lost. How often the gate lets a pair through by mistake has not been measured.
+- **Whether the simulator and the real game agree everywhere** has no full set of tests yet.
 
-## 还没做的
+## Not built yet
 
-- **NoSL 的训练、门槛和战绩。**
-- **看得比当前房间更远的搜索。** 现在两种环境的搜索都停在房间的出口。
-- **更省的战斗搜索。** 从每回合留 1 个开始，一轮一轮加宽，容易的战斗早停，难的战斗多花。
-- **用搜索的结果当标签。** 现在的标签只有对局真实的结局。
-- **没人在场时自己打完整局。** 现在代打要玩家在场启动。
-- **解说。** 告诉玩家为什么选这一步。
+- **Training, a gate and results for NoSL.**
+- **Search that looks past the current room.** Today search stops at the room's exit in both environments.
+- **A cheaper combat search.** Start by keeping 1 position per turn and widen round by round, so that easy combats stop early and hard ones get more.
+- **Search results as labels.** Today the only labels are the real outcomes of runs.
+- **Playing a whole run alone with nobody present.** Today the player has to be present to start the AI playing for them.
+- **Explanations.** Telling the player why a move was chosen.

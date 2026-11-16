@@ -1,10 +1,11 @@
 # Docs site
 
-The book on the system's design, for a reader who wants to understand it: thirteen short chapters in Traditional
-Chinese (`/zh-tw/`), Simplified Chinese (site root) and English (`/en/`), built with [Astro](https://astro.build) +
-[Starlight](https://starlight.astro.build). Pages live in `src/content/docs/zh-tw/` (Traditional Chinese),
-`src/content/docs/` (Simplified Chinese) and `src/content/docs/en/` (English), one file per chapter, the same file
-names in each.
+The book on the system's design, for a reader who wants to understand it: thirteen short chapters in English (the
+default, at the site's root), Simplified Chinese (`/zh-cn/`) and Traditional Chinese (`/zh-tw/`), built with
+[Astro](https://astro.build) + [Starlight](https://starlight.astro.build). Pages live in `src/content/docs/` (English),
+`src/content/docs/zh-cn/` (Simplified Chinese) and `src/content/docs/zh-tw/` (Traditional Chinese), one file per
+chapter, the same file names in each. Links under `/en/` go to the same page at the root (`public/_redirects`, which
+Cloudflare serves).
 
 ```bash
 pnpm install        # once
@@ -37,10 +38,10 @@ fields, commands, files and classes are the code's to document, and the code doe
 - **A fixed, small vocabulary**, each term said in plain words where a chapter first uses it: a run, a floor, a
   room, a seed, SL and NoSL, the copy, a world, search, a position, a line, an afterstate, the value V, the combat
   net, the value net, self-play, exploration, the champion, the gate.
-- **Each language is written as that language.** The Traditional Chinese text is the reference: a change is written
-  there first, then carried to the other two with the same headings, paragraphs, figures and numbers. Traditional
-  Chinese uses Taiwan wording and the game's own names (Boss = 頭目, Elite = 菁英, Ascension = 晉階); Simplified
-  Chinese uses Mainland wording and the game's Simplified names. Mermaid labels are in the page's language.
+- **Each language is written as that language.** The English text is the reference: a change is written there
+  first, then carried to the other two with the same headings, paragraphs, figures and numbers. Traditional Chinese
+  uses Taiwan wording and the game's own names (Boss = 頭目, Elite = 菁英, Ascension = 晉階); Simplified Chinese uses
+  Mainland wording and the game's Simplified names. Mermaid labels are in the page's language.
 
 ## Maintaining it
 

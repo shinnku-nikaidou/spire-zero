@@ -1,71 +1,73 @@
 ---
-title: 战斗
-description: 房间里的一切都知道时，AI 怎么打一场战斗：先在克隆上试出结局最好的打法，再照着打。
+title: Combat
+description: 'How the AI fights a combat when it knows everything in the room: it first finds the line with the best outcome on the copy, then plays it.'
 ---
 import PlanTimeline from '../../components/combat/PlanTimeline.svelte';
 import TurnTree from '../../components/combat/TurnTree.svelte';
 import BeamStepper from '../../components/combat/BeamStepper.svelte';
 
-在 SL 里，也就是允许存档读档的那个环境，AI 手上有一份眼前这个房间的**克隆**：一场一模一样的战斗，连接下来会抽到哪张牌、敌人下回合出什么招都一样。所以它不必猜。开打之前，它先在克隆上把这场战斗试打很多遍，找出结局最好的一条打法，然后在真的战斗里照着打。
+In SL, the environment that allows saving and loading, the AI holds a **copy** of the current room: an identical combat, down to which card is drawn next and what each enemy does next turn. So it does not have to guess. Before the fight starts, it plays the combat through many times on the copy, finds the line with the best outcome, and then follows that line in the real combat.
 
-下面是本书示例对局的第 17 层：第 1 幕的 Boss 仪式兽，玩家有 53/70 点生命。AI 在第一个决策想了 1 秒，得到一条 19 个回合、73 个动作的打法，之后一路照打，没有再想第二次。战斗结束时，生命剩 30。
+Below is floor 17 of the book's example run: Ceremonial Beast, the act 1 boss, with the player at 52/70 HP. The AI thought for half a second at the first decision and got a line of 9 turns and 33 actions. It then followed the line all the way and never thought a second time. It ended the combat at 52 HP, without losing any.
 
-<PlanTimeline client:visible lang="zh-CN" />
+<PlanTimeline client:visible lang="en" />
 
-## 克隆：为什么可以先试再打
+## The copy: why it can try before it plays
 
-游戏里每个随机结果都由种子决定。进房间时存一次档，再把之后做过的每个动作重放一遍，就会回到眼前这一刻，连随机数走到哪里都分毫不差。这就是克隆。在克隆上，同样的动作一定得到同样的结果。
+The seed decides every random result in the game. Save once on entering the room, replay every action taken since, and the game is back at the present moment, exact down to where its random numbers stand. That is the copy. On the copy, the same actions always give the same results.
 
-自我对弈时，搜索用的是把这场战斗抄进战斗引擎的一份。引擎是从游戏自己的代码逐句翻译出来的，局面可以直接复制，不必一再重放；它和游戏每一步都比对过，结果相同。
+Search uses a copy of this combat taken into the combat engine, in self-play and in your game alike. The engine is translated statement by statement from the game's own code, so a position can be duplicated directly instead of replayed again and again; it has been compared with the game move by move, with the same results.
 
-克隆只到离开这个房间为止。下一个房间有什么、接下来的问号房会变成什么，克隆不让看。这条界线就是 SL 的规则。
+The copy goes only as far as leaving this room. What the next room holds, or what the next "?" room turns into, the copy does not show. This boundary is the rule of SL.
 
-于是一场战斗不再是赌运气，而是找路：从现在出发，有很多条打法能打到战斗结束，要找出最好的那一条。
+So a combat is no longer a gamble but a search for a path: many lines lead from here to the end of the combat, and the task is to find the best one.
 
-## 什么叫最好
+## What best means
 
-一条打法打完，会留下一局：剩多少生命、药水还在不在、牌组有没有变。这一局值多少，由 **V** 回答。V 是一个学出来的函数，它读一局的现状，估计最后赢下整局的概率。战斗输了，这一局就结束，值 0。
+When a line has been played out, it leaves a run behind: how much HP remains, whether the potions are still there, whether the deck has changed. **V** says what that run is worth. V is a learned function that reads the current state of a run and estimates the chance of winning the whole run in the end. If the combat is lost, the run is over and worth 0.
 
-所以最好的打法，是打完之后 V 最高的那一条。它不一定掉血最少，也不一定杀得最快：为了留住一瓶药水而多掉几点血，只要 V 认为划算，就是更好的打法。上面那场 Boss 战的计划值 0.95，意思是照它打完之后，V 认为这一局有 95% 的机会赢到最后。
+So the best line is the one with the highest V once it is played out. It need not lose the least HP or kill the fastest: losing a few more HP to keep a potion is the better line whenever V judges the trade worth it. The plan for the boss fight above is worth 0.98, meaning that after playing it out, V gives the run a 98% chance of winning to the end.
 
-搜索到一半、战斗还没打完的局面，也要有估值才能互相比较。这个估值来自战斗网络：它预测这场战斗会怎么收场，再用同一个 V 换算成赢下整局的概率。
+**A potion kept is never worth less than none.** The game lets a potion be thrown away at any time for nothing, so a position that still holds potions is worth at least as much as the same position with some of them gone. A potion drunk for no gain therefore never beats keeping it.
 
-## 一个回合：把能打的都试一遍
+Positions in the middle of the search, where the combat is not over, also need a value before they can be compared. That value comes from the combat net: it predicts how the combat will end, and the same V turns that into a chance of winning the whole run.
 
-一个回合是一串动作：打牌、用药水，最后结束回合。搜索从回合开始的局面出发，把每个能做的动作都试一遍，再从每个新局面继续试下去。
+## One turn: try everything that can be played
 
-1. **每一步都可以结束回合。** 所以一条打法可以在打出任意几张牌之后停下，不必把能量用完。
-2. **走到见过的局面就不再算。** 先打击再防御，和先防御再打击，常常走到同一个局面。搜索把见过的局面记下来，第二次走到就停，否则大部分力气会花在重复上。
-3. **看不见的部分也一样，才算同一个局面。** 两种出牌顺序可能看起来结果相同，其中一种却多用了一次随机数，之后抽到的牌就不一样。把它们当成两个局面，搜索自然会比出哪种顺序让后面的牌更好。这样安排随机数，正是存档读档的玩家做得到的事。
-4. **要选牌时，每种选法都是一条岔路。** 例如一张牌要你弃一张手牌，弃哪一张各试一次。
-5. **敌人的回合照游戏真的打完。** 所以一个回合的结局，是下一回合开始时的局面：敌人已经出过招，新的手牌也抽好了。
+A turn is a string of actions: playing cards, using potions and, last, ending the turn. Search starts from the position at the start of the turn, tries every action it can take, and then keeps trying from each new position.
 
-一个回合最多试 300 步。这 300 步平均分给回合开头的每个动作，前面没用完的留给后面，免得全花在第一张牌底下。
+1. **The turn can end at any move.** So a line can stop after any number of cards and does not have to spend all its Energy.
+2. **A position seen before is not worked out again.** Strike then Defend and Defend then Strike often reach the same position. Search records the positions it has seen and stops when it reaches one a second time. Otherwise most of its effort would go into repeats.
+3. **Two positions are the same only if the hidden parts match too.** Two orders of play may look as if they give the same result, yet one of them used one more random number, so the cards drawn afterwards differ. Treating them as two positions lets search find by itself which order leads to better cards later. Arranging the random numbers this way is exactly what a player who saves and loads can do.
+4. **When cards must be chosen, each choice is a branch.** For example, when a card makes you discard a card from your hand, search tries each discard once.
+5. **The game really plays out the enemies' turn.** So a turn's result is the position at the start of the next turn: the enemies have made their moves and the new hand is drawn.
 
-下图是一个小到能整个画出来的虚构回合：两点能量、四张牌、一个敌人。每一行是搜索试的一步。
+Search tries at most 300 moves in a turn. It splits the 300 evenly among the actions that can open the turn, and what an earlier action leaves unused passes to the later ones, so that the budget is not all spent under the first card.
 
-<TurnTree client:visible lang="zh-CN" />
+The figure below is a made-up turn small enough to draw in full: two Energy, four cards, one enemy. Each row is one move that search tries.
 
-有些牌会回到手上，或互相抽到，一个回合可以没完没了地打下去。搜索发现手牌原样回来、局面却有进展时，不会一步一步跟进去，而是把这个循环当成一个整体：重复 1、2、4、8……次，看重复几次的结局最好。
+<TurnTree client:visible lang="en" />
 
-## 一场战斗：每回合只留最好的八个
+Some cards return to the hand or draw each other, so a turn can go on without end. When search finds that the hand has come back unchanged while the position has moved forward, it does not follow the loop move by move. It treats the loop as one unit: it repeats it 1, 2, 4, 8 … times and sees which number of repeats ends best.
 
-一个回合有很多种结局，一场战斗又有好几个回合。每种结局都往下试，数量很快就大到试不完。所以每个回合结束时，搜索只留下估值最高的 8 个局面，下一个回合只从这 8 个出发。这种做法叫束搜索（beam search）。
+## One combat: keep only the best eight each turn
 
-**不提前放弃。** 搜索不会因为某个局面看来赢不过目前最好的打法，就丢掉它。战斗途中还可能让这一局变得更好，例如拿到最大生命或金币、让一张牌成长，所以中途的估值不能当作上限。唯一的取舍就是那个 8。
+A turn can end in many ways, and a combat has several turns. If search went on from every one of them, the number would soon be too large to try. So at the end of each turn, search keeps only the 8 positions with the highest value, and the next turn starts from those 8 alone. This method is called beam search.
 
-**先打一条到底。** 正式搜索之前，先每回合只留 1 个局面，一路打到战斗结束，手上立刻有一条能打的打法。如果这条已经赢了，接下来要找的只是赢得更好的打法，每回合留 4 个就够。如果输了，就用足 8 个，找找看到底能不能赢。
+**Nothing is given up early.** Search does not drop a position because it seems unable to beat the best line so far. A combat can still make the run better along the way, for example by gaining max HP or gold or by growing a card, so a value from the middle of the combat cannot serve as an upper limit. The only cut is that 8.
 
-**挑出计划。** 所有打到战斗结束的打法里，V 最高的那条就是计划。如果每条都会输，就挑死前撑得最好的那条：万一搜索漏了什么，这条最有机会出现转机。
+**First, one line played to the end.** Before the main search, a first pass keeps only 1 position per turn and plays straight through to the end of the combat, so there is a playable line at once. If that line already wins, all that is left is to find a line that wins better, and keeping 4 per turn is enough. If it loses, search uses the full 8 to find out whether a win is possible at all.
 
-下图在一场虚构的战斗上走一遍这个过程。虚线是先打到底的那一条，空心圆是没留下的局面。
+**Choosing the plan.** Among all the lines played to the end of the combat, the one with the highest V is the plan; of lines worth exactly the same, the one that drinks fewer potions, then the one that ends fewer turns. If every line loses, search picks the one that holds out best before dying: if search has missed something, this line has the best chance of a turnaround.
 
-<BeamStepper client:visible lang="zh-CN" />
+The figure below walks through this process on a made-up combat. The dashed line is the line played to the end first, and the hollow circles are positions that were not kept.
 
-只留 8 个，是这个做法最大的近似。被挤掉的局面里可能藏着更好的打法，所以大多数计划只是找到的打法里最好的，不保证是所有打法里最好的。
+<BeamStepper client:visible lang="en" />
 
-## 照着计划打
+Keeping only 8 is the biggest approximation in this method. A better line may hide among the positions that were pushed out, so most plans are only the best of the lines found, with no guarantee that they are the best of all lines.
 
-计划是一串动作，每个动作还记着打它之前应该看到的局面。真的战斗里，只要眼前的局面和计划记的一样，AI 就直接打下一步，不再搜索。克隆跑的是游戏自己的规则，种子也一样，所以每一步都该对得上。万一对不上，就从眼前的局面重新规划。
+## Following the plan
 
-**会输的计划另外处理。** 计划预期会输、搜索又没有把所有打法看完时，可能只是漏掉了能赢的那一条。这时 AI 只照计划打一个回合，然后重新规划：战斗剩下的部分短了一截，同样的搜索就能看得更深。同一场战斗最多连续这样三次，第三个计划直接打到底，免得一场注定要输的战斗每个回合都重想一遍。
+A plan is a string of actions, and each action also records the position the AI should see before playing it. In the real combat, as long as the current position matches the one the plan recorded, the AI plays the next move directly and does not search again. The copy runs the game's own rules with the same seed, so every move should match. If one does not, the AI plans again from the current position.
+
+**A losing plan is handled differently.** When the plan expects to lose and search has not looked at every line, it may simply have missed the line that wins. In that case the AI follows the plan for one turn only and then plans again: the rest of the combat is now shorter, so the same search can see deeper. It does this at most three times in a row in one combat, and it plays the third plan to the end, so that a combat bound to be lost is not thought through again every turn.

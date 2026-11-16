@@ -1,0 +1,5 @@
+# Cloudflare serves these. The English book is at the root; links under /en/, such as the Workshop listing's, go to
+# the same page there.
+/en /  301
+/en/ / 301
+/en/* /:splat 301

@@ -1,26 +1,26 @@
 ---
-title: 前言
-description: 一个从零学会玩杀戮尖塔 2 的 AI：它是什么、打得多好，以及这本书怎么读。
+title: Preface
+description: 'An AI that learned to play Slay the Spire 2 from zero: what it is, how well it plays, and how to read this book.'
 ---
 
-这本书讲一个会玩《杀戮尖塔 2》的 AI 是怎么设计的。它是游戏里的一个 Mod：你打的时候，它告诉你它会怎么打、每个选项有多大机会赢；你也可以让它替你打。它的打法没有一条是人写的，全是从自己打的对局里学来的。
+This book explains the design of an AI that plays Slay the Spire 2. It is a mod inside the game, published on the Steam Workshop as Spire Zero. While you play, it tells you how it would play and what chance each option has of winning. You can also let it play for you. Apart from a few rules about potions, nobody wrote how it plays: it learned it from runs it played itself.
 
-## 它打得多好
+## How well it plays
 
-在允许存档读档的 SL 环境、最难的进阶 10，它在测试种子上每个角色各打 200 局：铁甲战士赢 71 局，静默猎手 41 局，故障机器人 33 局，储君 17 局，亡灵契约师 14 局，愚者 3 局。
+In the SL environment, which allows saving and loading, at Ascension 10, the highest level, it played the test seeds. Of 200 runs with each character, it won 83 with the Ironclad, 68 with the Defect, 61 with the Silent, 44 with the Regent, 31 with the Necrobinder and 1 with the Fool.
 
-只用玩家看得到的信息时打得如何，还没有量过。
+How well it plays with only what a player can see has not been measured yet.
 
-## 一句话的设计
+## The design in one sentence
 
-每一个决策，它都把选项在游戏的克隆里真的试一遍，再问一个学出来的函数：试完之后的局面，有多大机会赢下整局。
+For every decision, it really tries each option in a copy of the game, then asks a learned function what chance the position after the try has of winning the whole run.
 
-## 怎么读
+## How to read it
 
-各章照顺序读最顺，每一章也都能单独读。
+The chapters read best in order, and each one also stands on its own.
 
-- 没玩过这个游戏，先读[游戏](/game/)。
-- 只想知道核心想法，读[想法](/idea/)就够了。
-- 想知道它现在弱在哪里，读[弱点与还没做的](/limits/)。
+- If you have never played the game, read [The game](/game/) first.
+- If you only want the core idea, [The idea](/idea/) is enough.
+- If you want to know where it is weak today, read [Weaknesses and what is not built](/limits/).
 
-这本书只讲设计。字段、命令和文件这些细节，代码自己说得最清楚。
+This book covers only the design. For details such as fields, commands and files, the code itself is the clearest source.

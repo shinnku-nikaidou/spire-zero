@@ -44,9 +44,9 @@ PLAY = {
 # The decisions the figures show, by decision_id in the plays' logs; each is checked where it matters. After a promotion
 # the plays differ: pick them again with the same intent.
 PLAN_FIGHT = 17  # PlanTimeline: the floor of the SL fight, the act 1 boss (one enemy, as the figure's bars expect)
-PANEL_SL = 652  # PanelMock: the first decision of an SL fight with two first actions kept, both won (no boss fight keeps two)
-PANEL_NOSL = 833  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
-PANEL_MAP = 467  # PanelMock and MapRoute: an SL map decision of two options, an enemy or an elite
+PANEL_SL = 456  # PanelMock: the first decision of an SL fight with two first actions kept, both won (no boss fight keeps two)
+PANEL_NOSL = 693  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
+PANEL_MAP = 236  # PanelMock and MapRoute: an SL map decision of two options, an enemy or an elite
 LOG_LINES = {"combat": 4, "card prompt": 1, "rest": 67}  # DecisionLog: one line of each kind
 
 
@@ -158,8 +158,10 @@ class Play:
         return self.log[self.by_id[decision]]
 
     def macro(self, e: dict) -> bool:
-        """A decision the panel keeps V's chance of: outside combat (a card prompt there too)."""
-        return e["surface"] != "combat" and not e["brain"] == self.prompts()
+        """A decision the panel keeps V's chance of: outside combat (a card prompt there too). A card prompt in a fight
+        is the fight's: the combat brain or the champion's combat prompts answer it."""
+        fight = next(x["brain"] for x in self.log if x["surface"] == "combat")
+        return e["surface"] != "combat" and e["brain"] not in (self.prompts(), fight)
 
     def prompts(self) -> str:
         """The brain of the combat's card prompts, as the champion names it."""
@@ -294,6 +296,10 @@ def macro_action(lang: str, play: Play, k: int) -> str:
             return T(lang, "proceed" if e["legal"] == 1 else "skip the rest, proceed")
         case ("shop", "leave"):
             return T(lang, "leave the shop")
+        case ("rewards", _) if play.log[k + 1]["surface"] == "card_reward":
+            # Describe.Reward: a card reward is named with the card the brain takes in it.
+            taken = gained(play.view(k + 2)["deck"], after["deck"])
+            return T(lang, "open the card reward") + (f" → {card(lang, taken[0])}" if taken else "")
         case ("shop", "remove"):
             return T(lang, "remove a card ({0} gold)", view["gold"] - after["gold"])
         case ("rewards", _) if after["gold"] > view["gold"]:
