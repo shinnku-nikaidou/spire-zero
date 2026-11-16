@@ -40,8 +40,8 @@ namespace Sts2Ai.SimWorker.Simulation;
 ///
 /// The player's arrows are placed as shown: those held, and those stuck in each enemy (<see cref="Arrows"/>). The melodies
 /// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>), and with them what they
-/// alone decide (Lullaby's block given this turn). So do the plays a power's number counts (<see cref="Plays"/>), and a
-/// counter inside a power is set where the hand's costs show it (<see cref="HandCosts"/>).
+/// alone decide (Lullaby's block given this turn). So do the plays a power's or a relic's number counts
+/// (<see cref="Plays"/>), and a counter inside a power is set where the hand's costs show it (<see cref="HandCosts"/>).
 ///
 /// Not reproduced, because the observation doesn't show it: the rest of this turn's history (which cards were played,
 /// damage taken, ...), counters kept inside powers and monsters that nothing shown depends on (Void Form's free plays
@@ -106,7 +106,7 @@ internal static class CombatBuilder
 
         // After powers, relics and this turn's melodies, whose global modifiers show in card costs and keywords.
         Melodies(st, player, obs.Player.Melodies ?? []);
-        Plays(st, player, obs.Player.Powers);
+        Plays(st, player, obs.Player.Powers, obs.Relics);
         Cards(st, player, obs);
         HandCosts(player, obs.Hand);
         NumberCards(pcs, [.. obs.Hand.Select(c => c.Uid ?? throw new ArgumentException($"card {c.Id} in hand has no uid"))]);
@@ -466,15 +466,17 @@ internal static class CombatBuilder
     private static readonly FieldInfo HistoryEntries = typeof(CombatHistory).GetField("_entries", Private)!;
 
     /// <summary>
-    /// The cards played this turn that a power's number counts, which the game reads from the combat's history: Pale Blue
-    /// Dot shows how many more it waits for. Each comes back as the play of a card with no tag (so of no melody), the
-    /// player's and outside every pile, while that brings the powers' numbers closer to those shown; a play that does
-    /// not is taken out of the history again.
+    /// The cards played this turn that a power's or a relic's number counts, which the game reads from the combat's
+    /// history: Pale Blue Dot shows how many more it waits for, Velvet Choker how many were played. Each comes back as
+    /// the play of a card with no tag (so of no melody), the player's and outside every pile, while that brings the
+    /// powers' and relics' numbers closer to those shown; a play that does not is taken out of the history again.
     /// </summary>
-    private static void Plays(CombatState st, Player player, IReadOnlyList<PowerView> views)
+    private static void Plays(CombatState st, Player player, IReadOnlyList<PowerView> views, IReadOnlyList<RelicView> relicViews)
     {
         var shown = player.Creature.Powers.Where(p => p.IsVisible).Zip(views).Where(p => p.First.Id.Entry == p.Second.Id).ToList();
-        int Off() => shown.Sum(p => Math.Abs(p.First.DisplayAmount - p.Second.Amount));
+        var counted = player.Relics.Zip(relicViews).Where(r => r.First.Id.Entry == r.Second.Id && r.Second.Counter is int).ToList();
+        int Off() => shown.Sum(p => Math.Abs(p.First.DisplayAmount - p.Second.Amount))
+            + counted.Sum(r => Math.Abs(r.First.DisplayAmount - r.Second.Counter!.Value));
         var history = CombatManager.Instance.History;
         var entries = (System.Collections.IList)HistoryEntries.GetValue(history)!;
         var model = ModelDb.AllCards.OrderBy(c => c.Id.Entry, StringComparer.Ordinal).First(c => !c.Tags.Any());
