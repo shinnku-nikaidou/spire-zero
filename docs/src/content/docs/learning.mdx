@@ -1,9 +1,9 @@
 ---
 title: Learning
-description: 'How the two networks learn from zero: the champion plays whole runs by itself, explores on purpose and labels every position with the real outcome, and new networks take over only after passing the gate.'
+description: 'How the two networks learn from zero: the champion plays whole runs by itself, explores on purpose and labels every position with what happened next, and new networks take over only after passing the gate.'
 ---
 
-Both networks learn by self-play. The champion plays whole runs in the simulator with the current networks, deliberately replaces some of its decisions with random draws, and records every decision and the outcome of every combat. Each recorded position is labelled with what really happened afterwards. A new pair of networks continues from the champion's, learns from these runs and replaces the champion only after passing the gate. The whole process uses no human runs, no hand-written strategy and no language model.
+Both networks learn by self-play. The champion plays whole runs in the simulator with the current networks, deliberately replaces some of its decisions with random draws, and records every decision and the outcome of every combat. Each recorded position is labelled with what really happened next: for V, over the next four floors, and past them with the estimate of a V that never saw the run. A new pair of networks continues from the champion's, learns from these runs and replaces the champion only after passing the gate. The whole process uses no human runs, no hand-written strategy and no language model.
 
 ```mermaid
 flowchart LR
@@ -34,18 +34,19 @@ At every decision outside combat, with probability ε the AI draws one option ev
 
 There is no exploration in combat: the AI plays whatever search finds.
 
-## Labels: what really happened afterwards
+## Labels: what happened next
 
-- **V's labels**: each decision outside combat is labelled with the floor where its run really ended, or with a win.
+- **V's labels**: each decision outside combat is labelled with its next four floors as they really went, and from there with where a V that never saw the run expects it to end, judged at the run's position four floors later. A decision less than four floors before the run's end is labelled with the floor where the run really ended, or with a win.
 - **The combat net's labels**: the start of each turn is labelled with how that combat really ended.
 
-Both use real outcomes only. A network's own estimates never come back as labels.
+The V that labels a run must never have seen it. A V learns its training runs' outcomes within one pass, so its estimate at a later position of such a run would hand the outcome back. So the training runs are split in two halves, a V that never sees the other half is trained on each, and each half is labelled by the other half's V. The runs held back for checking keep their real outcomes.
 
 ## Hundreds of decisions, one outcome
 
-The example run has 193 decisions outside combat, and they share one outcome. Labels like this have no bias but a lot of noise: from one run alone, nobody can say which decision caused the win or the loss. The project does four things about this at present:
+The example run has 193 decisions outside combat, and they share one outcome. Labels like this have no bias but a lot of noise: from one run alone, nobody can say which decision caused the win or the loss. The project does five things about this at present:
 
 - **Labels are given by floor.** Every floor survived is information, not just the final win or loss.
+- **Four floors of what happened, then an estimate.** The luck after a decision's next four floors stays out of its label, so decisions four floors apart share little of their noise: a run gives about 9.6 independent labels, where its outcome alone gives about 1.2. The price is that, past four floors, a label is only as right as the V that gives it.
 - **One run, one vote.** Each sample is weighted by 1 divided by the number of samples in its run.
 - **One more target for practice.** During training V also has to predict how much HP each of the next six combats costs, which gives it more places in a run where it can check its answers.
 - **Combat is left to search.** About three quarters of a run's decisions are in combat, and search settles those. Only the small part outside combat still has to be credited or blamed by the outcome.

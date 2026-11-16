@@ -11,8 +11,8 @@ The earlier chapters describe only what runs today. This chapter lists where the
 - **Ascension 10 is still weak.** The champion wins about a quarter of its runs there. The Fool won 1 of 200, and the Necrobinder 31 of 200.
 - **The networks have not learned the Dread mode.** They read the mode and its dominions, but none of the runs they learned from was played in it, so they value a Dread run as an ordinary one at Ascension 10.
 - **Most lost runs die to a boss.** That is 590 of the 912 lost runs, more than half of them at the act 3 boss.
-- **A run has only one outcome.** Hundreds of decisions share it, and seeing which decision made the difference takes many runs.
-- **Exploration is mixed into the labels.** The same position gets a lower label in runs that explore more, and V does not know how much a run explored.
+- **What a decision does more than four floors later comes through another V.** That V learns from whole runs, where hundreds of decisions share one outcome, so a slow consequence it does not see, V does not learn either.
+- **Exploration is mixed into the labels.** A random draw in a decision's next four floors lowers its label, the V that labels the rest learned from runs that explore, and V does not know how much a run explored.
 - **Combat search is narrow.** SL keeps only 8 positions per turn, so a better line may be pushed out, and most plans are not guaranteed to be the best.
 - **Inside each world, NoSL's search knows the future.** The flaw is corrected only for the first move, and the size of the rest has not been measured.
 - **The combat net predicts only HP and potions.** Other things that change in a combat are not in the price until they happen.
@@ -26,6 +26,6 @@ The earlier chapters describe only what runs today. This chapter lists where the
 - **Training, a gate and results for NoSL.**
 - **Search that looks past the current room.** Today search stops at the room's exit in both environments.
 - **A cheaper combat search.** Start by keeping 1 position per turn and widen round by round, so that easy combats stop early and hard ones get more.
-- **Search results as labels.** Today the only labels are the real outcomes of runs.
+- **Search results as labels.** Today the labels are the real outcomes of runs and, for V past four floors, the estimate of another V.
 - **Playing a whole run alone with nobody present.** Today the player has to be present to start the AI playing for them.
 - **Explanations.** Telling the player why a move was chosen.

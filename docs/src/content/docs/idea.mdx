@@ -29,7 +29,7 @@ In the middle of a combat a second network helps. The **combat net** reads the c
 
 ## Learn: from its own runs
 
-At the start, V and the combat net know nothing. The AI plays more than ten thousand runs by itself with the networks it has, and records the position after every decision. When a run is over, the AI labels each of its positions with the real outcome: the floor it died on, or a win. The networks learn from these labelled positions and then play better, and the new networks play the next batch. This is called **self-play**.
+At the start, V and the combat net know nothing. The AI plays more than ten thousand runs by itself with the networks it has, and records the position after every decision. When a run is over, the AI labels each of its positions with what really happened next: for V, the next four floors, and past them the estimate of a V that never saw this run; for the combat net, how each combat ended. The networks learn from these labelled positions and then play better, and the new networks play the next batch. This is called **self-play**.
 
 A new network must pass the **gate** before it replaces the old one. The new and the old play the same seeds, and the new one must win enough to count.
 

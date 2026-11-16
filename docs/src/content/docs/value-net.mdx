@@ -56,19 +56,21 @@ This is easier to learn than outputting the chance of winning directly. Every fl
 
 It also works better than predicting which floor the run will reach. With the floor as the target, V would favour play that reaches the late floors safely and yet never wins.
 
-The figure below takes one real position through the whole network: the Fool at Ascension 3 on floor 8, with 34/89 HP and a rest site ahead. V gives it a 56% chance of reaching the act 1 boss but only a 9% chance of beating it, and the chance of winning the whole run in the end is 0.04%.
+The figure below takes one real position through the whole network: the Fool at Ascension 3 on floor 8, with 34/89 HP and a rest site ahead. V gives it a 58% chance of reaching the act 1 boss but only an 8% chance of beating it, and the chance of winning the whole run in the end is 0.05%.
 
 <NetWalk client:visible lang="en" />
 
 ## How it learns
 
-Each recorded decision is one sample, and its label is where the run really ended: floors survived are labelled 0, the floor of death is labelled 1, and in a won run every floor is 0. The labels use only real outcomes, never the network's own estimates.
+Each recorded decision is one sample, labelled floor by floor. The floors before the run's position four floors on are labelled 0, since the run lived through them. From that floor on, each floor is labelled with the risk that a V which never saw this run gives it at that later position, weighed by that V's chance that the run is still alive there. A decision less than four floors before the end keeps where the run really ended: survived floors 0, the floor of death 1, and every floor 0 in a won run.
+
+This is the real-ending label averaged over where that V expects the run to end: a V certain of the real ending would give back exactly the real label. The V that labels a run never saw it, or its estimate would hand the run's outcome back. Four floors balances two errors: fewer floors leave more of each label to that V's mistakes, and more floors leave more luck in it.
 
 The decisions of one run share one outcome, so each sample is weighted by 1 divided by the number of samples in its run, and each run counts as one vote.
 
 During training the network predicts one more thing: how much HP each of the next six combats will cost. This only gives the network more places in a run where it can check its answers. It is not written into the network file and takes no part in decisions.
 
-The champion's V learned from about 69,000 runs and about 10.6 million samples. On the runs held back for checking, the error of its predicted chance of winning is 0.084, against 0.144 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
+The champion's V learned from about 69,000 runs and about 10.6 million samples. On the runs held back for checking, which keep their real outcomes, the error of its predicted chance of winning is 0.083, against 0.144 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
 
 ## What it cannot express
 
