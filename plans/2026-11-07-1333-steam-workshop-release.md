@@ -357,5 +357,5 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   好了一起裝", no upload): auto-play stops at the run's end by RunManager.HasRunEnded (4d37eebd: a death Fairy in a
   Bottle or Lizard Tail prevents sits at 0 HP until the heal); the AI orb closes the combat marks and map route with
   the card (a61228ff). Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire,
-  49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.17 when the game closes (it
-  was running). Not uploaded.
+  49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.17 at 20:30, once the game
+  had closed. Not uploaded.
