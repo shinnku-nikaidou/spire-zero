@@ -57,8 +57,9 @@ a net's name is used once, so every machine plays the same thing.
 
 A self-play dataset is one file, `eval/datasets/NAME.toml` (`eval/datasets/example.toml` shows every key): the block of
 seeds, the characters, the champion file it plays, the exploration tiers (each a uniform draw's chance ε and a softmax
-temperature τ on log V), the games (which acts win their plain monster fights at their start, and a fight's effort by
-its room: monster, elite, boss), and rows of runs, each a game, ascensions and counts, for every character or for the
+temperature τ on log V), the games (which acts win their plain monster fights at their start, a fight's effort by
+its room: monster, elite, boss, and the game mode: `mode = "dread"` for the Dread mode, played at ascension 10 only, or
+none for the standard game), and rows of runs, each a game, ascensions and counts, for every character or for the
 ones it names.
 
 ```bash

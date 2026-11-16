@@ -15,12 +15,18 @@ workers = 4                         # search workers per run
 explore = [{ epsilon = 0.3 }, { epsilon = 0.1, tau = 0.05 }, { epsilon = 0.02, tau = 0.05 }]
 
 # A game: the acts (1 to 3) whose plain monster fights, an event's included, are won at their start with their rewards,
-# and a fight's effort by its room (low, medium, high, max).
+# a fight's effort by its room (low, medium, high, max), and its mode: "dread" for the Dread mode, which the game plays at
+# ascension 10 only, or none for the standard game.
 [games.gauntlet]
 auto_win = [1, 2]
 effort = { monster = "medium", elite = "medium", boss = "high" }
 
 [games.full]
+auto_win = []
+effort = { monster = "medium", elite = "medium", boss = "high" }
+
+[games.dread]
+mode = "dread"
 auto_win = []
 effort = { monster = "medium", elite = "medium", boss = "high" }
 
@@ -32,6 +38,11 @@ n = 4000
 
 [[runs]]
 game = "full"
+asc = 10
+n = 1000
+
+[[runs]]
+game = "dread"
 asc = 10
 n = 1000
 

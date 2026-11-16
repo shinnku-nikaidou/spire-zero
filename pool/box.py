@@ -537,10 +537,12 @@ def dataset_jobs(spec: dict, path: str, champion: dict) -> list[dict]:
     for game, g in spec["games"].items():
         if not re.fullmatch(r"[a-z0-9]+", game):
             raise Refused(f"{path}: game {game}'s name is lower-case letters and digits")
-        if set(g) != {"auto_win", "effort"} or set(g["effort"]) != set(ROOMS):
-            raise Refused(f"{path}: game {game} has auto_win = [acts] and effort = {{ monster, elite, boss }}")
+        if set(g) - {"mode"} != {"auto_win", "effort"} or set(g["effort"]) != set(ROOMS):
+            raise Refused(f"{path}: game {game} has auto_win = [acts] and effort = {{ monster, elite, boss }}, and may have mode")
         if any(a not in (1, 2, 3) for a in g["auto_win"]) or any(e not in EFFORTS for e in g["effort"].values()):
             raise Refused(f"{path}: game {game}: auto_win's acts are 1 to 3, an effort one of {', '.join(EFFORTS)}")
+        if g.get("mode", "dread") != "dread":
+            raise Refused(f"{path}: game {game}: mode is dread (the Dread mode) or left out (the standard game)")
         games[game] = g
     tiers = [tier(t, f"{path}: explore") for t in spec.get("explore", [])]
     workers = spec.get("workers")
@@ -565,6 +567,8 @@ def dataset_jobs(spec: dict, path: str, champion: dict) -> list[dict]:
         if not row_tiers:
             raise Refused(f"{where}: no exploration tier, in the row or the file")
         g = games[row["game"]]
+        if g.get("mode") and any(a != 10 for a in ascs):
+            raise Refused(f"{where}: game {row['game']} is the Dread mode, which the game plays at ascension 10 only")
         for character in mine:
             for asc, n in zip(ascs, ns):
                 for j, (eps, tau) in enumerate(row_tiers):
@@ -577,6 +581,7 @@ def dataset_jobs(spec: dict, path: str, champion: dict) -> list[dict]:
                     options |= {"explore": f"{eps:g}"} if eps else {}
                     options |= {"macro-explore": f"{tau:g}"} if tau else {}
                     options |= {"auto-win": ",".join(map(str, sorted(g["auto_win"])))} if g["auto_win"] else {}
+                    options |= {"mode": g["mode"]} if g.get("mode") else {}
                     start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + used[character]
                     used[character] += count
                     jobs.append({"job": job, "character": character, "asc": asc, "game": row["game"], "eps": eps, "tau": tau,

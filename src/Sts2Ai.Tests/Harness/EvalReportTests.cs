@@ -8,6 +8,18 @@ public class EvalReportTests
     private static readonly string[] Seeds = ["A", "B", "C"];
 
     [Fact]
+    public void ADreadReportIsRankedApartFromTheStandardGames()
+    {
+        var standard = EvalReport.Of([Fixtures.Run("A", 10)], "set", ["A"], "d");
+        var dread = EvalReport.Of([Fixtures.Run("A", 10, config: Fixtures.Config with { Mode = "Dread" })], "set", ["A"], "d");
+        Assert.Throws<ArgumentException>(() => EvalReport.Of([Fixtures.Run("A", 10), Fixtures.Run("B", 10, config: Fixtures.Config with { Mode = "Dread" })], "set", ["A", "B"], "d"));
+        var boards = Leaderboard.Markdown([standard, dread], []);
+        Assert.Contains("## SILENT, ascension 0: set", boards);
+        Assert.Contains("## SILENT, ascension 0, Dread: set", boards);
+        Assert.Contains("SILENT A0 Dread |", dread.Markdown());
+    }
+
+    [Fact]
     public void SortsTheRunsInTheSetsOrder()
     {
         var report = EvalReport.Of([Fixtures.Run("C", 10), Fixtures.Run("A", 20)], "set", Seeds, "2026-10-27");

@@ -43,6 +43,17 @@ public class GateTests
     }
 
     [Fact]
+    public void PairsOnlyRunsOfTheChampionsGameMode()
+    {
+        var dread = Challenger with { Mode = "Dread" };
+        var standard = EvalReport.Of([Fixtures.Run("A", 10)], "set", ["A"], "d");
+        Assert.Contains("Dread", Assert.Throws<ArgumentException>(() => Gate.Pairs(standard, [Fixtures.Run("A", 12, config: dread)])).Message);
+        var champion = EvalReport.Of([Fixtures.Run("A", 10, config: Fixtures.Config with { Mode = "Dread" })], "set", ["A"], "d");
+        Assert.Single(Gate.Pairs(champion, [Fixtures.Run("A", 12, config: dread)]));
+        Assert.Throws<ArgumentException>(() => Gate.Pairs(champion, [Fixtures.Run("A", 12, config: Challenger)]));
+    }
+
+    [Fact]
     public void NoReportOrGateTakesARunPlayedByTheAutoWinRule()
     {
         var ruled = Fixtures.Run("A", 12, config: Challenger with { AutoWin = [0, 1] });

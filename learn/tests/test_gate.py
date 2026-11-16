@@ -74,3 +74,10 @@ def test_a_run_that_won_plain_monster_fights_at_their_start_is_never_judged(tmp_
     recs.write_text(json.dumps(run("a", "S1", 30, "lost", []) | {"config": {"auto_win": [0, 1]}}) + "\n")
     result = CliRunner().invoke(gate.script, ["--records", str(recs)])
     assert isinstance(result.exception, gate.LearnError) and "--auto-win" in str(result.exception)
+
+
+def test_runs_of_two_game_modes_are_never_read_together(tmp_path):
+    recs = tmp_path / "r.jsonl"
+    recs.write_text(json.dumps(run("a", "S1", 30, "lost", [])) + "\n" + json.dumps(run("b", "S2", 30, "lost", []) | {"config": {"mode": "Dread"}}) + "\n")
+    with pytest.raises(gate.LearnError, match="one game mode"):
+        gate.read_records(str(recs))
