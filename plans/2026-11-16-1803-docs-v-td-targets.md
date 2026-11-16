@@ -189,3 +189,25 @@ A 和 B 可以分兩次 commit。A 先上的話，書描述的是新的訓練方
 - 18:12 A 部分：learning、value-net、idea、limits 照第 3 節改完，英文、zh-cn、zh-tw 都改了。
   B 部分裡不用等報告的 `v-walk.py` 也先做了：`v-walk.json` 改用 v11-0-td4，NetWalk 那句改成 58 %、8 %、0.05 %（原本 56 %、9 %、0.04 %）。
   `pnpm check` 剩 106 個問題，全是 `plans/` 的舊引用（第 6 節第 3 點）。
+- 18:14 用戶選 (b)：「在 HEAD 重打報告，用high」。主 session 提醒：high 的報告，它的冠軍字串和 `sl.json` 的 medium 字串不同，
+  放進 `reports` 的話，`sim gate`、`sim promote` 和排行榜會拿冠軍沒打過的報告去配對。所以 `sl.json` 不動，報告只放在
+  `eval/CHAR/reports/`，`book-data.py` 改成從命令列取每個角色的報告（`book-data.py DIR REPORT.json...`）。
+- 18:15 step `report-v11-0-td4-c11-0` 上池子（priority 1，沒有 deadline）：v11-0-td4 + c11-0，`--effort high`，每個角色 A10 200 局，
+  promotion-1-200。範例局在本機重打（SL、NoSL）。
+- 18:2x 用戶：「升級之後分別200局A0, A10, A10恐懼，作為新的gate, high+ v11-td4-0+c11-0」。同一個 step 加了每個角色的 A0 200 局、
+  A10 Dread 200 局，共 18 個工作、3,600 局。這些要不要當冠軍檔的 gate 報告（也就是冠軍檔改成 high），等用戶決定；冠軍檔歸主 session。
+  書的評估一章裡 gate 的形狀（A10 每角色 200、A0 主角色 200 加其他 50、medium）要看那個決定再改。
+- 18:3x 用戶回答「Yes, move to high」：報告回來之後，`eval/champions/sl.json` 改成 `effort` high、`champion` 用報告的字串、`reports` 放
+  六份 A10 報告（每個角色一份；A0 和 Dread 的報告放在 `eval/CHAR/reports/`，Dread 的檔名帶 `dread`）。`nosl.json` 不動
+  （PIMC 沒有 effort 選項）。主 session 同意，並請這個 session 自己寫 `sl.json`。
+  書要跟著改：評估一章 gate 的形狀（A0、A10、A10 Dread，每個角色各 200，high）；learning 的「Who plays」說自我對弈和評估用同樣的
+  搜尋力道，現在自我對弈是 medium、gate 是 high，這句要改成事實。
+- 主 session 轉達：用戶問到之後的測試是跟這些 high 局配對、還是重打冠軍時，說「肯定在新版程式上打」。所以每次測試都在挑戰者的 rev 上重打冠軍；
+  這 3,600 局只是冠軍的紀錄和書的數字，不當之後挑戰者的對手。評估一章本來就寫「Both sides play again, on the same version of the code」，這句不用改。
+- 20:43 報告的 3,600 局打完（rev 1324d2b1），18 份報告做好（還沒 commit）。勝場 A10 / A0 / A10 Dread：SILENT 151 / 198 / 28、
+  IRONCLAD 168 / 200 / 70、DEFECT 146 / 198 / 44（199 局）、REGENT 116 / 199 / 25、NECROBINDER 104 / 195 / 21、愚者 25 / 173 / 3。
+  兩個問題，報告因此還不能用：
+  - IRONCLAD 的三份作廢：6 局記了遊戲錯誤「Tried to pop action GenericHookGameAction ... didn't find it in any queue」
+    （A10 3 局、A0 2 局、Dread 1 局；同一個種子在 A10 和 A0 都出現）。
+  - DEFECT Dread 少一局：引擎 `loop_power.rs:44` 越界，局失敗。
+  兩個修正都提成各自的 session。修好之後，重打受影響的工作，再寫 `sl.json` 和書。
