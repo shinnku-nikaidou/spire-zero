@@ -373,3 +373,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   asks the room set first, as the game does. Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won,
   identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed when the game closes
   (it was running). Not uploaded: a new profile's run is to be tried in the real game first.
+- 2026-11-16 21:58: 0.3.20 at 38042c90 (the same code as 38bf5dc2, plans only between), three platforms (3:25; the VM
+  started and shut down again), for an upload on the user's word ("mod可以新版本了，包括docs部署"): 0.3.19's new-profile
+  fix and the mod off for a run that started without Neow. Its Linux brain on `run --check` (IRONCLAD A10, low, seed
+  1138): won, identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors; the nets are
+  `weights/all/`'s byte for byte. The listing opens with multiplayer support coming and an invitation to subscribe and
+  favorite the mod now (the user: "mod描述在最前面加上多人之後會支持，可以先關注訂閱加上這個mod"), all 17 languages.
+  Upload waits for the game to close here (it was running).
