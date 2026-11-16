@@ -40,6 +40,7 @@ T = {}
 T["eng"] = dict(
     steam="english", docs="",
     title="Spire Zero: AI Strategist for Slay the Spire 2",
+    multi="[b]Multiplayer support is coming.[/b] Subscribe and add it to your favorites now, and you will have it as soon as it is out.",
     intro="An AI inside the game, for single-player runs:",
     advice="[b]Advice[/b]: at every decision it shows what it would do, and each option's chance to win the run.",
     autoplay="[b]Auto-play[/b]: on request it plays a step, the rest of a turn or a room, or keeps going until you pause it.",
@@ -63,6 +64,7 @@ T["eng"] = dict(
 T["zht"] = dict(
     steam="tchinese", docs="zh-tw/",
     title="Spire Zero：殺戮尖塔 2 AI 軍師",
+    multi="[b]之後會支援多人遊戲。[/b]現在就可以先訂閱、加入最愛，推出時馬上就能用。",
     intro="一個放在遊戲裡的 AI，用在單人遊戲：",
     advice="[b]建議[/b]：每個決策它都告訴你它會怎麼選，以及每個選項有多大機會贏下這一局。",
     autoplay="[b]自動遊玩[/b]：你可以讓它替你打一步、打完這回合或這個房間，或一直打到你按暫停。",
@@ -86,6 +88,7 @@ T["zht"] = dict(
 T["zhs"] = dict(
     steam="schinese", docs="zh-cn/",
     title="Spire Zero：杀戮尖塔 2 AI 军师",
+    multi="[b]之后会支持多人游戏。[/b]现在就可以先订阅、加入收藏，推出时马上就能用。",
     intro="一个放在游戏里的 AI，用于单人游戏：",
     advice="[b]建议[/b]：每个决策它都告诉你它会怎么选，以及每个选项有多大机会赢下这一局。",
     autoplay="[b]自动游玩[/b]：你可以让它替你打一步、打完这回合或这个房间，或一直打到你按暂停。",
@@ -109,6 +112,7 @@ T["zhs"] = dict(
 T["deu"] = dict(
     steam="german", docs="",
     title="Spire Zero: KI-Stratege für Slay the Spire 2",
+    multi="[b]Mehrspieler-Unterstützung kommt.[/b] Jetzt abonnieren und zu den Favoriten hinzufügen, dann ist sie sofort da, sobald sie erscheint.",
     intro="Eine KI im Spiel, für Einzelspieler-Runs:",
     advice="[b]Ratschläge[/b]: Bei jeder Entscheidung zeigt sie, was sie tun würde, und wie gut die Siegchance des Runs mit jeder Option ist.",
     autoplay="[b]Automatisches Spielen[/b]: Auf Wunsch spielt sie einen Schritt, den Rest eines Zuges oder eines Raums, oder spielt weiter, bis du sie pausierst.",
@@ -132,6 +136,7 @@ T["deu"] = dict(
 T["fra"] = dict(
     steam="french", docs="",
     title="Spire Zero : stratège IA pour Slay the Spire 2",
+    multi="[b]Le multijoueur arrive bientôt.[/b] Abonnez-vous et ajoutez le mod à vos favoris dès maintenant pour l'avoir dès sa sortie.",
     intro="Une IA dans le jeu, pour les parties en solo :",
     advice="[b]Conseils[/b] : à chaque décision, elle montre ce qu'elle ferait et les chances de gagner la partie avec chaque option.",
     autoplay="[b]Jeu automatique[/b] : à la demande, elle joue une action, la fin d'un tour ou d'une salle, ou continue jusqu'à ce que vous la mettiez en pause.",
@@ -154,6 +159,7 @@ T["fra"] = dict(
 )
 spa = dict(
     title="Spire Zero: estratega IA para Slay the Spire 2",
+    multi="[b]El multijugador llegará pronto.[/b] Suscríbete y añade el mod a favoritos ahora para tenerlo en cuanto salga.",
     intro="Una IA dentro del juego, para partidas de un jugador:",
     advice="[b]Consejos[/b]: en cada decisión muestra lo que haría y la probabilidad de ganar la partida con cada opción.",
     autoplay="[b]Juego automático[/b]: si se lo pides, juega un paso, el resto de un turno o de una sala, o sigue hasta que la pauses.",
@@ -180,6 +186,7 @@ T["esp"] = dict(spa, steam="latam", docs="", modes_h="Dos modos (en la configura
 T["ita"] = dict(
     steam="italian", docs="",
     title="Spire Zero: stratega IA per Slay the Spire 2",
+    multi="[b]Il multigiocatore arriverà presto.[/b] Iscriviti e aggiungi la mod ai preferiti ora: lo avrai appena esce.",
     intro="Un'IA dentro il gioco, per le partite in singolo:",
     advice="[b]Consigli[/b]: a ogni decisione mostra cosa farebbe e la probabilità di vincere la partita con ciascuna opzione.",
     autoplay="[b]Gioco automatico[/b]: su richiesta gioca un passo, il resto di un turno o di una stanza, oppure continua finché non la metti in pausa.",
@@ -203,6 +210,7 @@ T["ita"] = dict(
 T["ptb"] = dict(
     steam="brazilian", docs="",
     title="Spire Zero: estrategista IA para Slay the Spire 2",
+    multi="[b]O multijogador chega em breve.[/b] Inscreva-se e adicione o mod aos favoritos agora para tê-lo assim que sair.",
     intro="Uma IA dentro do jogo, para partidas solo:",
     advice="[b]Conselhos[/b]: em cada decisão, ela mostra o que faria e a chance de vencer a partida com cada opção.",
     autoplay="[b]Jogo automático[/b]: quando você pedir, ela joga um passo, o resto de um turno ou de uma sala, ou continua até você pausar.",
@@ -226,6 +234,7 @@ T["ptb"] = dict(
 T["pol"] = dict(
     steam="polish", docs="",
     title="Spire Zero: strateg SI do Slay the Spire 2",
+    multi="[b]Tryb wieloosobowy jest w drodze.[/b] Zasubskrybuj i dodaj mod do ulubionych już teraz, a dostaniesz go, gdy tylko się pojawi.",
     intro="SI w grze, do rozgrywek jednoosobowych:",
     advice="[b]Podpowiedzi[/b]: przy każdej decyzji pokazuje, co by zrobiła, i jaką szansę na wygranie runu daje każda opcja.",
     autoplay="[b]Automatyczna gra[/b]: na żądanie rozgrywa jeden krok, resztę tury lub pomieszczenia albo gra dalej, aż ją zatrzymasz.",
@@ -249,6 +258,7 @@ T["pol"] = dict(
 T["rus"] = dict(
     steam="russian", docs="",
     title="Spire Zero: ИИ-стратег для Slay the Spire 2",
+    multi="[b]Скоро появится поддержка мультиплеера.[/b] Подпишитесь и добавьте мод в избранное уже сейчас, чтобы получить её сразу после выхода.",
     intro="ИИ прямо в игре, для одиночных забегов:",
     advice="[b]Подсказки[/b]: при каждом решении показывает, что выбрал бы сам, и шанс выиграть забег с каждым вариантом.",
     autoplay="[b]Автоигра[/b]: по запросу делает один шаг, доигрывает ход или комнату или играет дальше, пока вы не поставите паузу.",
@@ -272,6 +282,7 @@ T["rus"] = dict(
 T["tur"] = dict(
     steam="turkish", docs="",
     title="Spire Zero: Slay the Spire 2 için yapay zekâ stratejisti",
+    multi="[b]Çok oyunculu destek yakında geliyor.[/b] Şimdiden abone olun ve favorilerinize ekleyin, çıkar çıkmaz elinizde olsun.",
     intro="Oyunun içinde, tek oyunculu oyunlar için bir yapay zekâ:",
     advice="[b]Tavsiye[/b]: her kararda ne yapacağını ve her seçeneğin oyunu kazanma şansını gösterir.",
     autoplay="[b]Otomatik oynama[/b]: istersen bir adımı, turun ya da odanın geri kalanını oynar veya sen duraklatana kadar devam eder.",
@@ -295,6 +306,7 @@ T["tur"] = dict(
 T["jpn"] = dict(
     steam="japanese", docs="",
     title="Spire Zero：Slay the Spire 2 の AI 軍師",
+    multi="[b]マルチプレイにも今後対応します。[/b]今のうちにサブスクライブしてお気に入りに追加しておけば、対応しだいすぐに使えます。",
     intro="ゲーム内で動く、シングルプレイ用の AI です。",
     advice="[b]アドバイス[/b]：あらゆる選択で、AI ならどうするかと、各選択肢でランに勝てる確率を表示します。",
     autoplay="[b]オートプレイ[/b]：頼めば 1 手だけ、ターンや部屋の残りを、または一時停止するまでずっとプレイします。",
@@ -318,6 +330,7 @@ T["jpn"] = dict(
 T["kor"] = dict(
     steam="koreana", docs="",
     title="Spire Zero: Slay the Spire 2의 AI 책사",
+    multi="[b]멀티플레이도 곧 지원합니다.[/b] 지금 구독하고 즐겨찾기에 추가해 두면 나오는 즉시 사용할 수 있습니다.",
     intro="게임 안에서 작동하는 싱글 플레이용 AI입니다.",
     advice="[b]조언[/b]: 모든 선택에서 AI라면 무엇을 할지, 그리고 각 선택지로 런을 이길 확률을 보여 줍니다.",
     autoplay="[b]자동 플레이[/b]: 원하면 한 단계, 턴이나 방의 나머지를 플레이하거나, 일시 정지할 때까지 계속 플레이합니다.",
@@ -341,6 +354,7 @@ T["kor"] = dict(
 T["ind"] = dict(
     steam="indonesian", docs="",
     title="Spire Zero: ahli strategi AI untuk Slay the Spire 2",
+    multi="[b]Dukungan multipemain segera hadir.[/b] Berlangganan dan tambahkan ke favorit sekarang agar bisa langsung dipakai begitu tersedia.",
     intro="AI di dalam game, untuk permainan pemain tunggal:",
     advice="[b]Saran[/b]: di setiap keputusan, AI menunjukkan apa yang akan dipilihnya dan peluang tiap pilihan untuk memenangkan run.",
     autoplay="[b]Main otomatis[/b]: jika diminta, AI memainkan satu langkah, sisa giliran atau ruangan, atau terus bermain sampai kamu menjedanya.",
@@ -364,6 +378,7 @@ T["ind"] = dict(
 T["tha"] = dict(
     steam="thai", docs="",
     title="Spire Zero: กุนซือ AI สำหรับ Slay the Spire 2",
+    multi="[b]เร็ว ๆ นี้จะรองรับโหมดผู้เล่นหลายคน[/b] สมัครรับและเพิ่มในรายการโปรดไว้ก่อนได้เลย จะได้ใช้ทันทีที่ออก",
     intro="AI ในเกม สำหรับการเล่นคนเดียว:",
     advice="[b]คำแนะนำ[/b]: ทุกการตัดสินใจ AI จะบอกว่ามันจะเลือกอะไร และแต่ละตัวเลือกมีโอกาสชนะรันนี้เท่าไร",
     autoplay="[b]เล่นอัตโนมัติ[/b]: เมื่อสั่ง มันจะเล่นหนึ่งก้าว เล่นจนจบเทิร์นหรือจบห้อง หรือเล่นต่อไปเรื่อย ๆ จนกว่าคุณจะกดหยุด",
@@ -387,6 +402,7 @@ T["tha"] = dict(
 T["ara"] = dict(
     steam="arabic", docs="",
     title="Spire Zero: استراتيجي بالذكاء الاصطناعي للعبة Slay the Spire 2",
+    multi="[b]دعم اللعب الجماعي قادم قريبًا.[/b] اشترك وأضفه إلى المفضلة الآن لتحصل عليه فور صدوره.",
     intro="ذكاء اصطناعي داخل اللعبة، للعب الفردي:",
     advice="[b]النصائح[/b]: في كل قرار يعرض ما كان سيفعله، وفرصة الفوز بالجولة مع كل خيار.",
     autoplay="[b]اللعب التلقائي[/b]: عند الطلب يلعب خطوة واحدة، أو بقية الدور أو الغرفة، أو يواصل اللعب حتى توقفه مؤقتًا.",
@@ -435,6 +451,8 @@ for lang, t in T.items():
         rows.append(f"[tr][td]{name(lang, c)}[/td][td]{pct(a0w, a0n, lang)}[/td][td]{pct(a10w, a10n, lang)}[/td][td]{pct(dw, dn, lang)}[/td][/tr]")
     # The title on the first line, the description after the blank line (src/Sts2Ai.Workshop reads them so).
     text = f"""{t['title']}
+
+{t['multi']}
 
 {t['intro']}
 [list]
