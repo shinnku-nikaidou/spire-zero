@@ -353,3 +353,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   100 % where one run of about 100 was lost too; no run counts shown (the user: "簡介註明「每格約 100 局」 不需要").
   Uploads with the content timed out at their commit four more times, and only the English texts went through; `upload`
   now leaves the content out without `--content` (d130525e), and the 17 languages' texts went up that way at once.
+- 2026-11-16 20:29: 0.3.18 at ff0413d6, Linux only, asked by the Fairy-in-a-Bottle session for the user's game ("等 orb
+  好了一起裝", no upload): auto-play stops at the run's end by RunManager.HasRunEnded (4d37eebd: a death Fairy in a
+  Bottle or Lizard Tail prevents sits at 0 HP until the heal); the AI orb closes the combat marks and map route with
+  the card (a61228ff). Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire,
+  49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.17 when the game closes (it
+  was running). Not uploaded.
