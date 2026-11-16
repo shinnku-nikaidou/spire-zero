@@ -235,6 +235,15 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             panel.Show(champion, L10n.T("off"), null, L10n.T("Off in multiplayer"));
             return;
         }
+        // A run that started without Neow (a new profile's first, before the timeline reveals Neow's epoch) is one
+        // self-play never plays: no ancient and none of its gifts. The nets value it badly (a won fight dragged out for
+        // less HP), so the player plays it alone.
+        if (!run.ExtraFields.StartedWithNeow)
+        {
+            panel.Show(champion, L10n.T("off for this run"), null, L10n.T("Off in a run without Neow"),
+                L10n.T("a new profile's first run · play it yourself"));
+            return;
+        }
         if (_run == null)
         {
             (_run, _champion, _failure, _next, _sentNode) = (id, null, null, 0, -1);

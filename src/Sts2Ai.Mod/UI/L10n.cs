@@ -31,6 +31,8 @@ internal static class L10n
         ["Start or continue a run"] = ["Lancez ou reprenez une partie", "Empieza o continúa una partida", "开始或继续一局", "開始或繼續一局", "ランを開始または再開してください"],
         ["single-player only"] = ["solo uniquement", "solo un jugador", "仅限单人", "僅限單人", "シングルプレイのみ"],
         ["Off in multiplayer"] = ["Désactivé en multijoueur", "Desactivado en multijugador", "多人模式下关闭", "多人模式下關閉", "マルチプレイではオフ"],
+        ["Off in a run without Neow"] = ["Désactivé dans une partie sans Neow", "Desactivado en una partida sin Neow", "没有涅奥的一局里关闭", "沒有涅奧的一局裡關閉", "ネオーのいないランではオフ"],
+        ["a new profile's first run · play it yourself"] = ["la première partie d'un nouveau profil · jouez-la vous-même", "la primera partida de un perfil nuevo · juégala tú", "新存档的第一局 · 请自己打", "新存檔的第一局 · 請自己打", "新しいプロフィールの最初のラン · ご自身でプレイしてください"],
         ["Brain error"] = ["Erreur du cerveau", "Error del cerebro", "大脑出错", "大腦出錯", "ブレインのエラー"],
         ["{0} · back on at the next run"] = ["{0} · de retour à la prochaine partie", "{0} · vuelve en la próxima partida", "{0} · 下一局恢复", "{0} · 下一局恢復", "{0} · 次のランで再開"],
         ["Waiting for the brain"] = ["En attente du cerveau", "Esperando al cerebro", "等待大脑", "等待大腦", "ブレインを待っています"],
