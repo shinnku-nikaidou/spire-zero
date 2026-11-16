@@ -32,7 +32,9 @@ public abstract record WireMessage
 /// <param name="Role">"mod" or "worker".</param>
 /// <param name="Effort">The SL planner's effort the host asks for, fixed for the run: "low", "medium", "high" or
 /// "max"; null for the brain's own.</param>
-public sealed record Hello(string GameVersion, string Env, string Role, RunHeader Run, string? Effort = null) : WireMessage;
+/// <param name="TurnDecay">Whether the SL planner takes a little off a line for each turn it ended, so a fight is not
+/// drawn out for nothing, fixed for the run: the mod's option for a player. Self-play does not ask for it.</param>
+public sealed record Hello(string GameVersion, string Env, string Role, RunHeader Run, string? Effort = null, bool TurnDecay = false) : WireMessage;
 
 /// <param name="RunId">The run's id (<see cref="IdOf"/>).</param>
 public sealed record RunHeader(string RunId, string Character, int Ascension)

@@ -121,6 +121,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
 
     private PlayEnvironment _env = Settings.Current.Env;
     private SearchEffort _effort = Settings.Current.Effort;
+    private bool _turnDecay = Settings.Current.TurnDecay;
 
     /// <summary>The player switched the environment: the brain gets a new run from here.</summary>
     private void Switch(PlayEnvironment env)
@@ -135,6 +136,14 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     {
         _effort = effort;
         ModLog.Info("settings", $"effort {effort}");
+        if (_run != null) End("aborted");
+    }
+
+    /// <summary>The player switched the turn decay: the brain gets a new run from here, with or without it.</summary>
+    private void Switch(bool turnDecay)
+    {
+        _turnDecay = turnDecay;
+        ModLog.Info("settings", $"turn decay {(turnDecay ? "on" : "off")}");
         if (_run != null) End("aborted");
     }
 
@@ -182,6 +191,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         var settings = Settings.Current;
         if (settings.Env != _env) Switch(settings.Env);
         if (settings.Effort != _effort) Switch(settings.Effort);
+        if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
 
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
@@ -228,8 +238,8 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (_run == null)
         {
             (_run, _champion, _failure, _next, _sentNode) = (id, null, null, 0, -1);
-            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName));
-            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName ?? "the brain's"}");
+            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName, settings.TurnDecay));
+            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName ?? "the brain's"}, turn decay {(settings.TurnDecay ? "on" : "off")}");
         }
         _last = (run.IsGameOver, run.IsGameOver && run.CurrentRoom?.IsVictoryRoom == true, run.TotalFloor);
         if (run.IsGameOver && _goal != Goal.Off) Stop(L10n.T("the run is over"));

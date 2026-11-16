@@ -65,7 +65,9 @@ public sealed class SlRoute(Budget budget)
 /// Every loss is worth the same, so among losing lines the one that died from the turn
 /// start the leaf valued highest is the pick. Among wins worth exactly the same, the one that drinks the fewest potions
 /// is, then the one with the fewest turns ended: a combat no line loses HP in has many, and the dive, which goes first,
-/// often finds a slow one.
+/// often finds a slow one. A turn costs nothing in the game, so a win worth less is never taken for being sooner, unless
+/// the budget has a turn decay (<see cref="Budget.TurnDecay"/>, <see cref="PlayerTurnDecay"/>): then the pick compares each
+/// line's value times the decay to the number of turns it ended.
 ///
 /// A potion is not drunk where not drinking it loses no more HP (the user, 2026-11-16). The game lets a potion be thrown
 /// away at any time for nothing, so a belt is never worth less than the belt with fewer potions: V prices a win so
@@ -86,6 +88,16 @@ public sealed class SlPlanner(ICombatLeaf leaf)
 {
     /// <summary>How many turns a plan may look ahead; a line still going after them ends there, and is planned again.</summary>
     public const int MaxTurns = 40;
+
+    /// <summary>
+    /// The turn decay of a plan made for a player (<see cref="Hello.TurnDecay"/>, the mod's option; the user, 2026-11-16);
+    /// self-play has none. A fight of a Silent with Nunchaku was planned for 35 turns where 8 won with the same HP: the
+    /// slow win played one attack fewer, and V valued the run with the relic's counter at 7 above the one with it at 8 by
+    /// 0.25 %. With this a turn takes 0.1 % of a line's value; 1 HP was worth 1.3 % of V there, so a line still waits
+    /// about 13 turns for it. Times, not less: a loss stays 0 below every win, and the cost is the same share of V
+    /// wherever V stands.
+    /// </summary>
+    public const double PlayerTurnDecay = 0.999;
 
     /// <summary>Plans the rest of the combat in <paramref name="world"/>, the SL world at the decision, searching here.</summary>
     public SlPlan Plan(ICombatWorld world, Budget budget, IReadOnlyList<EnemyTurns>? history = null)
@@ -108,19 +120,19 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     /// </summary>
     public static SlPlan Search(Budget budget, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
     {
-        var beam = new Beam(budget.NodesPerWorld, history, search);
+        var beam = new Beam(budget.NodesPerWorld, budget.TurnDecay, history, search);
         if (budget.Beam > 1) beam.Run(1);
         if (!beam.Proved) beam.Run(beam.Wins && budget.EasyBeam > 0 ? budget.EasyBeam : budget.Beam);
         return beam.Result(budget.Replan);
     }
 
-    private sealed class Beam(int nodesPerState, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
+    private sealed class Beam(int nodesPerState, double decay, IReadOnlyList<EnemyTurns> history, TurnSearcher search)
     {
         /// <summary>The dive's turns, each searched in full (every end), by the path to the turn's state.</summary>
         private readonly Dictionary<string, TurnSearch> _searched = [];
         private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
-        private double _bestFrom = double.NegativeInfinity;
+        private double _bestWorth, _bestFrom = double.NegativeInfinity;
         /// <summary>The best win's potions drunk and turns ended, which a win worth exactly the same is compared by.</summary>
         private (int Drunk, int Turns) _bestEnds;
         private List<TurnEnd> _left = [];
@@ -155,15 +167,15 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                             next.Add(line);
                             continue;
                         }
-                        Note(_byFirst, line);
+                        Note(line);
                         // A loss is 0 however it comes: then the turn start it came from decides. Wins worth exactly the
                         // same: the one with fewer turns ended.
-                        double from = states[i].Value;
+                        double worth = Worth(line), from = states[i].Value;
                         var ends = (Drunk: line.Actions.Count(a => a.Kind == CombatActionKind.UsePotion),
                             Turns: line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn));
-                        if (_best == null || line.Value > _best.Value || (line.Value == _best.Value && (line.Status == CombatStatus.Lost
+                        if (_best == null || worth > _bestWorth || (worth == _bestWorth && (line.Status == CombatStatus.Lost
                                 ? from > _bestFrom : line.Status == CombatStatus.Won && ends.CompareTo(_bestEnds) < 0)))
-                            (_best, _bestFrom, _bestEnds) = (line, from, ends);
+                            (_best, _bestWorth, _bestFrom, _bestEnds) = (line, worth, from, ends);
                     }
                 }
                 var seen = new HashSet<ulong>();
@@ -215,9 +227,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// <param name="replan">The turns of an unproved losing line played before planning again; 0 plays it to its end.</param>
         public SlPlan Result(int replan)
         {
-            foreach (var state in _left) Note(_byFirst, state);
-            // The best end of the combat, unless the search stopped first at a state the leaf values higher.
-            var pick = (_left.Count > 0 && (_best == null || _left[0].Value > _best.Value) ? _left[0] : _best)
+            foreach (var state in _left) Note(state);
+            // The best end of the combat, unless the search stopped first at a state worth more.
+            var pick = (_left.Count > 0 && (_best == null || Worth(_left[0]) > _bestWorth) ? _left[0] : _best)
                 ?? throw new InvalidOperationException("the planner found no line");
             var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value.Value)
                 .Select(kv => new Candidate(kv.Key.ToString(), kv.Value.Value, 0, 1, [Math.Round(kv.Value.Value, 4)],
@@ -235,12 +247,16 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 [.. pick.Hashes.Take(played).Skip(1)], Nodes: _nodes, Turns: _turns);
             return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
         }
-    }
 
-    /// <summary>Keeps the best of the lines that start with each first action, for the candidates.</summary>
-    private static void Note(Dictionary<CombatAction, TurnEnd> byFirst, TurnEnd line)
-    {
-        if (!byFirst.TryGetValue(line.Actions[0], out var best) || line.Value > best.Value) byFirst[line.Actions[0]] = line;
+        /// <summary>What a line is worth to the pick: its value, times the budget's turn decay for each turn it ended
+        /// (<see cref="Budget.TurnDecay"/>; at 1, its value).</summary>
+        private double Worth(TurnEnd line) => line.Value * Math.Pow(decay, line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn));
+
+        /// <summary>Keeps the best of the lines that start with each first action, for the candidates.</summary>
+        private void Note(TurnEnd line)
+        {
+            if (!_byFirst.TryGetValue(line.Actions[0], out var best) || Worth(line) > Worth(best)) _byFirst[line.Actions[0]] = line;
+        }
     }
 
     /// <summary>

@@ -14,14 +14,16 @@ namespace Sts2Ai.Brain.Combat;
 /// <paramref name="Beam"/>.</param>
 /// <param name="Elite">An elite fight's budget, where it differs (<see cref="For"/>); null: this one.</param>
 /// <param name="Boss">A boss fight's budget, where it differs; null: this one.</param>
+/// <param name="TurnDecay">What a line of the SL planner keeps of its end's value for each turn it ended, when the plan
+/// is picked (<see cref="SlPlanner"/>); 1: all of it, as self-play and the tests plan. It is this budget's in every room.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0,
-    Budget? Elite = null, Budget? Boss = null)
+    Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1)
 {
     /// <summary>The budget of a fight in a room of this type (<see cref="CombatObservation.Room"/>: Monster, Elite or Boss).</summary>
     public Budget For(string? room) => room switch
     {
-        "Elite" when Elite != null => Elite,
-        "Boss" when Boss != null => Boss,
+        "Elite" when Elite != null => Elite with { TurnDecay = TurnDecay },
+        "Boss" when Boss != null => Boss with { TurnDecay = TurnDecay },
         _ => Elite == null && Boss == null ? this : this with { Elite = null, Boss = null },
     };
 
@@ -41,9 +43,10 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
 
     /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the planner's easy beam,
-    /// replan when not 1 and loss plans when limited; then an elite's and a boss's budget where they differ.</summary>
+    /// replan when not 1, loss plans when limited and the turn decay when not 1; then an elite's and a boss's budget
+    /// where they differ.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}") +
+        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}") +
         (Elite != null ? $" elite ({Elite})" : "") + (Boss != null ? $" boss ({Boss})" : "");
 }
 

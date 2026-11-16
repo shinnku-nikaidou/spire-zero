@@ -166,6 +166,13 @@ internal static class L10n
             "cuánto busca el planificador SL en cada combate; al cambiarlo, el cerebro empieza la partida de nuevo desde ahí",
             "SL 规划每场战斗搜得多深；切换后大脑从这里重新开始这一局", "SL 規劃每場戰鬥搜得多深；切換後大腦從這裡重新開始這一局",
             "SLプランナーが各戦闘をどこまで探索するか。変更するとブレインはここからランをやり直す"],
+        ["Finish fights sooner"] = ["Finir les combats plus tôt", "Terminar antes los combates", "不拖延战斗", "不拖延戰鬥", "戦闘を引き延ばさない"],
+        ["each extra turn costs the SL plan a sliver of its value, so it does not draw a fight out for nothing; a change starts the run anew for the brain"] = [
+            "chaque tour de plus coûte un rien au plan SL, qui ne fait donc pas traîner un combat pour rien ; un changement fait repartir la partie pour le cerveau",
+            "cada turno de más le cuesta una pizca al plan SL, así no alarga un combate por nada; al cambiarlo, el cerebro empieza la partida de nuevo desde ahí",
+            "每多一回合，SL 规划的分数扣一点点，不会为了一点点差别拖回合；切换后大脑从这里重新开始这一局",
+            "每多一回合，SL 規劃的分數扣一點點，不會為了一點點差別拖回合；切換後大腦從這裡重新開始這一局",
+            "ターンが増えるごとにSLプランの評価をわずかに下げ、戦闘を無駄に引き延ばさない。変更するとブレインはここからランをやり直す"],
         ["Auto-play"] = ["Jeu automatique", "Juego automático", "自动打", "自動打", "オートプレイ"],
         ["Speed of auto-play"] = ["Vitesse du jeu automatique", "Velocidad del juego automático", "自动打的速度", "自動打的速度", "オートプレイの速度"],
         ["the pause before each of the AI's actions"] = ["la pause avant chaque action de l'IA", "la pausa antes de cada acción de la IA", "AI 每个动作前停多久", "AI 每個動作前停多久", "AIの各操作の前の間"],

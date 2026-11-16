@@ -402,12 +402,15 @@ public class SlPlannerTests
 
     /// <summary>
     /// The dive follows play:1, the start the leaf values higher, to a win after two turns; play:2's win comes after one,
-    /// worth <paramref name="below"/> less. Only a win worth exactly the same takes the place of the slower one.
+    /// worth <paramref name="below"/> less. Without a turn decay only a win worth exactly the same takes the place of the
+    /// slower one; with one, a win worth less by no more than the turn takes does too. The plan's value is its end's.
     /// </summary>
     [Theory]
-    [InlineData(0.0, "play:2")]
-    [InlineData(1e-12, "play:1")]
-    public void OfWinsWorthExactlyTheSameTheFewestTurnsIsThePick(double below, string pick)
+    [InlineData(1, 0.0, "play:2")]
+    [InlineData(1, 1e-12, "play:1")]
+    [InlineData(SlPlanner.PlayerTurnDecay, 0.0005, "play:2")]
+    [InlineData(SlPlanner.PlayerTurnDecay, 0.002, "play:1")]
+    public void ASoonerWinIsThePickOnAnExactTieOrWithinTheTurnDecay(double decay, double below, string pick)
     {
         TurnEnd End(CombatStatus status, double value, ulong key, params CombatAction[] actions) =>
             new([.. actions], [.. actions.Select(_ => key)], status, value, key, []);
@@ -419,12 +422,24 @@ public class SlPlannerTests
             ["play:1 end_turn end_turn"] = new([End(CombatStatus.Won, 0.9, 0, CombatAction.Play(1))], 1, false),
             ["play:2 end_turn"] = new([End(CombatStatus.Won, 0.9 - below, 0, CombatAction.Play(2))], 1, false),
         };
-        var plan = SlPlanner.Search(new Budget(Beam: 2), [], (jobs, nodes, keep) =>
+        var plan = SlPlanner.Search(new Budget(Beam: 2, TurnDecay: decay), [], (jobs, nodes, keep) =>
             [.. jobs.Select(job => SlPlanner.Narrow(turns[string.Join(" ", job.Path)], keep))]);
 
         Assert.Equal(CombatStatus.Won, plan.End);
         Assert.Equal(pick, plan.Result.First.ToString());
         Assert.Equal(pick == "play:2" ? 0.9 - below : 0.9, plan.Value);
+        Assert.Equal(plan.Value, plan.Result.Candidates[0].Value);
+    }
+
+    [Fact]
+    public void TheTurnDecayIsTheBudgetsInEveryRoom()
+    {
+        var budget = Budget.Effort("medium") with { Elite = Budget.Effort("max"), TurnDecay = SlPlanner.PlayerTurnDecay };
+        Assert.Equal(Budget.Effort("max") with { TurnDecay = SlPlanner.PlayerTurnDecay }, budget.For("Elite"));
+        Assert.Equal(SlPlanner.PlayerTurnDecay, budget.For("Monster").TurnDecay);
+        Assert.Equal("beam 8x300 easy 4 loss plans 3 turn decay 0.999 elite (beam 16x300)", budget.ToString());
+        // Self-play's budgets have none.
+        Assert.All(Budget.Efforts, level => Assert.Equal(1, Budget.Effort(level).TurnDecay));
     }
 
     /// <summary>A leaf that values each potion held below an empty slot while the combat goes on, as a combat net can; a

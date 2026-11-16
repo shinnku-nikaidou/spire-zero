@@ -422,7 +422,7 @@ internal sealed class Panel
         var key = (what, Settings.Current with
             {
                 Env = default, Assist = default, Panel = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
-                StopOnDrop = default, Effort = default,
+                StopOnDrop = default, Effort = default, TurnDecay = default,
             },
             L10n.T("Next"));
         if (Equals(key, _built)) return;
