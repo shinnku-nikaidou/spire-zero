@@ -6,14 +6,14 @@ namespace Sts2Ai.Harness;
 
 /// <summary>
 /// The brain's end of the wire. Each run on a connection gets its own Harness from
-/// <paramref name="harness"/>, made at hello (it refuses the run by throwing); each decision is routed through it and
+/// <paramref name="harness"/>, made at hello with the champion as a player sees it (<see cref="Ready.Shown"/>; it refuses the run by throwing); each decision is routed through it and
 /// answered with a recommendation, in order. A decision it cannot answer (an illegal pick, an uncovered surface, an
 /// observation that does not match its hash) gets an error instead, and the host ends the run. An SL checkpoint gets
 /// no answer: one that Harness refuses fails the run's next decision; each SL decision brings the steps since it. <paramref name="ended"/> gets each run's Harness at
 /// run_end; <paramref name="received"/> every message a host sends; <paramref name="answered"/> the run's Harness after
 /// each answer is sent, so its decision log can be written as it grows.
 /// </summary>
-public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
+public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
     Action<WireMessage>? received = null, Action<Dispatcher>? answered = null)
 {
     /// <summary>A Unix socket listening at the abstract name <paramref name="path"/> (a leading NUL: no file), for a host in the same process.</summary>
@@ -47,8 +47,8 @@ public sealed class BrainServer(Func<Hello, Dispatcher> harness, Action<Hello, D
                     (hello, run, last, refused) = (next, null, -1, null);
                     try
                     {
-                        run = harness(next);
-                        wire.Send(new Ready(run.Champion));
+                        (run, var shown) = harness(next);
+                        wire.Send(new Ready(run.Champion, shown));
                     }
                     catch (Exception e)
                     {

@@ -75,7 +75,7 @@ internal static class RunCommand
         // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose
         // decision log is compared too.
         Dispatcher? served = null;
-        using var checkWire = check ? BrainConnection.InProcess(new BrainServer(hello => served = harness(hello))) : null;
+        using var checkWire = check ? BrainConnection.InProcess(new BrainServer(hello => (served = harness(hello), champion.Shown))) : null;
         Func<Hello, IRunBrain> firstBrain = hello => new LocalBrain(harness(hello));
         IRunBrain secondBrain(Hello hello) => WireBrain.Start(checkWire!.Wire, hello);
         string character = Loadout.Character(r);

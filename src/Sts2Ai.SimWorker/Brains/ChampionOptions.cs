@@ -81,6 +81,18 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         }
     }
 
+    /// <summary>The champion as a player sees it on the mod's panel (<see cref="Ready.Shown"/>): its V and combat net,
+    /// then the size of the combat search (<see cref="Budget.Size"/>).</summary>
+    public string Shown
+    {
+        get
+        {
+            string size = Searches ? $" {Budget.Size}" : "";
+            string[] nets = [.. new[] { Value?.Name, Leaf.Net?.Name }.OfType<string>()];
+            return nets.Length > 0 ? $"net {string.Join(" + ", nets)}{size}" : $"{Combat}{size}";
+        }
+    }
+
     public override string ToString() =>
         $"policy {Combat}{(Searches ? $" budget {Budget} on {Workers} workers" : "")}{(Engine ? " in the engine" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
 }

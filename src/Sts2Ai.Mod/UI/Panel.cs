@@ -110,7 +110,8 @@ internal sealed class Panel
         cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
         cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
         cardStyle.ShadowSize = 12;
-        _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(340, 0) });
+        // Wide enough for the champion's name in the head ("net v11-0-td4 + c11-0 beam 16x300") beside the switch.
+        _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(380, 0) });
         _card.AddThemeStyleboxOverride("panel", cardStyle);
         var column = Column(10);
         _card.AddChild(column);
@@ -129,7 +130,7 @@ internal sealed class Panel
         head.MouseFilter = Control.MouseFilterEnum.Stop;
         head.MouseDefaultCursorShape = Control.CursorShape.Move;
         head.GuiInput += e => Drag(e, toggle: false);
-        // A champion's name can be a whole line of options: it takes the head's free width and is cut there.
+        // The champion's name (its nets and search size) takes the head's free width and is cut there.
         var names = Column(0);
         names.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         names.AddChild(_champion = Clipped(Text("", 13, Fg)));

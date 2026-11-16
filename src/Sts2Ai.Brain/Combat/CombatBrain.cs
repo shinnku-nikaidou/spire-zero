@@ -42,11 +42,15 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     /// <summary>The effort levels, cheapest first.</summary>
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
 
-    /// <summary>As the champion's name shows it: 8x300 (beam 16x300 for the planner), then the planner's easy beam,
+    /// <summary>The search's size: pimc's worlds by their nodes (8x300), the planner's beam by its nodes per state and
+    /// turn (beam 16x300).</summary>
+    public string Size => FormattableString.Invariant($"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}");
+
+    /// <summary>As the champion's name shows it: the size (<see cref="Size"/>), then the planner's easy beam,
     /// replan when not 1, loss plans when limited and the turn decay when not 1; then an elite's and a boss's budget
     /// where they differ.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{NodesPerWorld}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}") +
+        $"{Size}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}") +
         (Elite != null ? $" elite ({Elite})" : "") + (Boss != null ? $" boss ({Boss})" : "");
 }
 

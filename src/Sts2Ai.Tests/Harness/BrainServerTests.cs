@@ -34,7 +34,7 @@ public class BrainServerTests
             return new(CombatAction.EndTurn, [], []);
         });
         var macro = new Fixed();
-        var server = new BrainServer(hello => new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro)));
+        var server = new BrainServer(hello => (new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro)), "test"));
 
         using var toBrain = new AnonymousPipeServerStream(PipeDirection.Out);
         using var brainIn = new AnonymousPipeClientStream(PipeDirection.In, toBrain.ClientSafePipeHandle);
@@ -70,7 +70,7 @@ public class BrainServerTests
         var combat = new CombatRoute("test", (_, _, _, _) => new(CombatAction.EndTurn, [], []));
         var macro = new Fixed();
         var logged = new List<int>();
-        var server = new BrainServer(hello => new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro), log: true),
+        var server = new BrainServer(hello => (new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro), log: true), "test"),
             answered: run => logged.Add(run.Log.Count));
 
         using var toBrain = new AnonymousPipeServerStream(PipeDirection.Out);

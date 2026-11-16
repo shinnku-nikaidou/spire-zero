@@ -486,7 +486,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 Forget();
                 break;
             case Received { Message: Ready ready }:
-                _champion = ready.Champion;
+                _champion = ready.Shown;
                 ModLog.Write("brain", $"ready: {ready.Champion}");
                 break;
             case Received { Message: Recommendation answer }:

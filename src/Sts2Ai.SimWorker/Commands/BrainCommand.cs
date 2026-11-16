@@ -42,9 +42,10 @@ internal static class BrainCommand
         // Added to: the mod starts a brain again in the same game session when one ends, with the same files.
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath, append: true) { AutoFlush = true } : null;
         using var wireFile = r.GetValue(Wire) is { } wirePath ? new StreamWriter(wirePath, append: true) { AutoFlush = true } : null;
-        // One Harness maker per environment, effort and turn decay asked for, made at the first run that asks.
-        var harnesses = new Dictionary<(string Env, string? Effort, bool TurnDecay), Func<Hello, Dispatcher>>();
-        Func<Hello, Dispatcher> HarnessFor(Hello hello)
+        // One Harness maker per environment, effort and turn decay asked for, made at the first run that asks, with the
+        // champion as the host shows it.
+        var harnesses = new Dictionary<(string Env, string? Effort, bool TurnDecay), (Func<Hello, Dispatcher> Make, string Shown)>();
+        (Func<Hello, Dispatcher> Make, string Shown) HarnessFor(Hello hello)
         {
             var key = (hello.Env, hello.Effort, hello.TurnDecay);
             if (harnesses.TryGetValue(key, out var made)) return made;
@@ -52,7 +53,7 @@ internal static class BrainCommand
             // An effort is the SL planner's budget, and the turn decay is its too; another combat brain plays as it is.
             if (hello.Effort is { } effort && options.Policy == "plan") options = options with { Budget = Budget.Effort(effort) };
             if (hello.TurnDecay && options.Policy == "plan") options = options with { Budget = options.Budget with { TurnDecay = SlPlanner.PlayerTurnDecay } };
-            return harnesses[key] = options.Harness(workerPool, logFile != null, explain: true);
+            return harnesses[key] = (options.Harness(workerPool, logFile != null, explain: true), options.Shown);
         }
         // Each decision is written as it is answered, so a game that crashes or is closed mid-run keeps every decision
         // made so far. A connection serves its runs one after another, each with its own Harness.
@@ -63,7 +64,11 @@ internal static class BrainCommand
             if (!ReferenceEquals(run, logged.Run)) logged = (run, 0);
             for (; logged.Written < run.Log.Count; logged.Written++) logFile.WriteLine(ProtocolJson.Serialize(run.Log[logged.Written]));
         }
-        var server = new BrainServer(hello => HarnessFor(hello)(hello),
+        var server = new BrainServer(hello =>
+            {
+                var (make, shown) = HarnessFor(hello);
+                return (make(hello), shown);
+            },
             received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
             answered: WriteLog,
             ended: (hello, harness, end) =>
