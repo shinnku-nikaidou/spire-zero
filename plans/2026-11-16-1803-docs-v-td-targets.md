@@ -214,3 +214,9 @@ A 和 B 可以分兩次 commit。A 先上的話，書描述的是新的訓練方
 - 用戶（經 session「Mod升級 v11td4-0 + c11-0」轉達）：序言的勝場卡片「等修好再更新」。重打完之後，把 IRONCLAD 三份和 DEFECT Dread 的
   最終勝場告訴那個 session（Workshop 頁面用的數字由它改）。
 - 用戶：修好之後「Only the 4 affected」，只重打 IRONCLAD 的 A10、A0、Dread 和 DEFECT 的 Dread，在修好的 rev 上；其他 14 份報告留在 1324d2b1。
+- 21:35 兩個修正 session 回報：
+  - IRONCLAD 的遊戲錯誤 a827eb07 已經修好（報告的 rev 1324d2b1 早它兩個 commit），HEAD 上 6 個種子 0 個錯誤。
+  - DEFECT Dread 那一局是遊戲本身 Loop 的 bug，replay world 同樣丟出，所以照規則丟掉，那份報告維持 199 局，不重打。
+  IRONCLAD 的三個工作在 800111d7 重打（step `report-v11-0-td4-c11-0-ironclad`，600 局）。
+  注意：1324d2b1 到 800111d7 之間有改變打法的 commit：49ac513d（寶箱的遺物一定拿）、f6df7313（決策算已決定的時機）。
+  所以 IRONCLAD 的報告和其他 14 份的打法不完全一樣。
