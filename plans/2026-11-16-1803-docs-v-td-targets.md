@@ -211,3 +211,5 @@ A 和 B 可以分兩次 commit。A 先上的話，書描述的是新的訓練方
     （A10 3 局、A0 2 局、Dread 1 局；同一個種子在 A10 和 A0 都出現）。
   - DEFECT Dread 少一局：引擎 `loop_power.rs:44` 越界，局失敗。
   兩個修正都提成各自的 session。修好之後，重打受影響的工作，再寫 `sl.json` 和書。
+- 用戶（經 session「Mod升級 v11td4-0 + c11-0」轉達）：序言的勝場卡片「等修好再更新」。重打完之後，把 IRONCLAD 三份和 DEFECT Dread 的
+  最終勝場告訴那個 session（Workshop 頁面用的數字由它改）。
