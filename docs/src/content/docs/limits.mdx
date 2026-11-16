@@ -8,9 +8,9 @@ The earlier chapters describe only what runs today. This chapter lists where the
 ## Weaknesses
 
 - **NoSL has not been trained.** The two networks learn only from SL runs. NoSL has no training of its own, no gate and no results, and the networks' values lean optimistic there.
-- **Ascension 10 is still weak.** The champion wins about a quarter of its runs there. The Fool won 1 of 200, and the Necrobinder 31 of 200.
-- **The networks have not learned the Dread mode.** They read the mode and its dominions, but none of the runs they learned from was played in it, so they value a Dread run as an ordinary one at Ascension 10.
-- **Most lost runs die to a boss.** That is 590 of the 912 lost runs, more than half of them at the act 3 boss.
+- **Ascension 10 is uneven.** The champion wins three runs in five there, but the Fool won only 25 of 200, and the Necrobinder 104 of 200.
+- **The networks have not learned the Dread mode.** They read the mode and its dominions, but none of the runs they learned from was played in it, so they value a Dread run as an ordinary one at Ascension 10. The champion won 197 of its 1,199 Dread runs.
+- **Most lost runs die to a boss.** At Ascension 10 that is 373 of the 486 lost runs, two thirds of them at the act 3 boss.
 - **What a decision does more than four floors later comes through another V.** That V learns from whole runs, where hundreds of decisions share one outcome, so a slow consequence it does not see, V does not learn either.
 - **Exploration is mixed into the labels.** A random draw in a decision's next four floors lowers its label, the V that labels the rest learned from runs that explore, and V does not know how much a run explored.
 - **Combat search is narrow.** SL keeps only 8 positions per turn, so a better line may be pushed out, and most plans are not guaranteed to be the best.

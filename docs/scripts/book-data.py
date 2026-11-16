@@ -7,7 +7,11 @@ The plays, with the champion files (the Silent, seed 0SSL7NS01MU6, the 13th seed
         --start 12 --n 1 --records DIR/sl-records.jsonl --log DIR/sl-log.jsonl
     run --champion eval/champions/nosl.json --env NoSL --character SILENT --seeds eval/seeds/promotion-1-100.txt \
         --start 12 --n 1 --records DIR/nosl-records.jsonl --log DIR/nosl-log.jsonl
-    uv run --project learn python docs/scripts/book-data.py DIR
+    uv run --project learn python docs/scripts/book-data.py DIR REPORT.json...
+
+The REPORTs are the champion's report of each character, the runs the book's numbers of strength come from: the reports
+of eval/champions/sl.json, or reports its nets played at another effort (which a gate cannot pair with, so they stay out
+of the champion file).
 
 V's values are the champion's V on the logged run views (learn/v, read by the encoder: learn/common.py's Encoder,
 src/Sts2Ai.Encode built here), as the brain computes them: a map move's option is its afterstate (`entered`); any other option of the SL macro brain is played on the node's clone, and what the
@@ -636,9 +640,12 @@ def combat_examples(play: Play) -> dict:
 # --- reports ---------------------------------------------------------------------------------------------------------
 
 
-def report(character: str) -> tuple[str, dict]:
-    path = SL_CHAMPION["reports"][character]
-    return path, json.loads((ROOT / path).read_text())
+REPORTS: dict[str, Path] = {}  # the champion's report of each character, from the command line
+
+
+def report(character: str) -> tuple[Path, dict]:
+    path = REPORTS[character]
+    return path, json.loads(path.read_text())
 
 
 def surface_counts(play: Play) -> dict:
@@ -649,7 +656,7 @@ def surface_counts(play: Play) -> dict:
     rec = play.record
     return {
         "source": {
-            "report": "the champion's Silent report (eval/champions/sl.json's reports.SILENT)",
+            "report": "the champion's Silent report",
             "what": "each run's surfaces counts, summed over the report's runs; the example is the SL play of seed "
             f"{SEED} ({PLAY['SL']}); card prompts outside combat are the card prompts less those of the combat "
             "prompts' brain",
@@ -676,7 +683,7 @@ def surface_counts(play: Play) -> dict:
 def champion_wins() -> dict:
     """Per character, the runs of the champion's report and how many it won, best first (the first page's cards)."""
     rows = []
-    for character in SL_CHAMPION["reports"]:
+    for character in REPORTS:
         _, r = report(character)
         (ascension,) = {x["ascension"] for x in r["runs"]}
         won = sum(x["outcome"] == "won" for x in r["runs"])
@@ -684,7 +691,7 @@ def champion_wins() -> dict:
     return {
         "source": {
             "what": "per character: the runs of the champion's report and how many it won",
-            "report": "the champion's reports (eval/champions/sl.json's reports)",
+            "report": "the champion's reports",
         },
         "env": SL_CHAMPION["env"],
         "characters": sorted(rows, key=lambda row: -row["won"] / row["runs"]),
@@ -712,7 +719,7 @@ def eval_reports() -> dict:
     return {
         "source": {
             "what": "one report: per floor, where its lost runs died",
-            "report": "the champion's Necrobinder report (eval/champions/sl.json's reports.NECROBINDER)",
+            "report": "the champion's Necrobinder report",
         },
         "report": {
             "env": r["config"]["env"],
@@ -736,9 +743,13 @@ DTYPES = {1: "float", 7: "int64", 11: "double", 9: "bool"}
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 3:
         raise SystemExit(__doc__)
     folder = Path(sys.argv[1])
+    for name in sys.argv[2:]:
+        path = Path(name)
+        (character,) = {x["character"] for x in json.loads(path.read_text())["runs"]}
+        REPORTS[character] = path
     check_v()
     sl = Play("SL", lines(folder / "sl-log.jsonl"), lines(folder / "sl-records.jsonl")[0], SL_CHAMPION)
     nosl = Play("NoSL", lines(folder / "nosl-log.jsonl"), lines(folder / "nosl-records.jsonl")[0], NOSL_CHAMPION)

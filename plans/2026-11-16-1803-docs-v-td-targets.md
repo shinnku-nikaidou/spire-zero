@@ -220,3 +220,14 @@ A 和 B 可以分兩次 commit。A 先上的話，書描述的是新的訓練方
   IRONCLAD 的三個工作在 800111d7 重打（step `report-v11-0-td4-c11-0-ironclad`，600 局）。
   注意：1324d2b1 到 800111d7 之間有改變打法的 commit：49ac513d（寶箱的遺物一定拿）、f6df7313（決策算已決定的時機）。
   所以 IRONCLAD 的報告和其他 14 份的打法不完全一樣。
+- 21:47 用戶（經「進度如何 v11g0」轉達）：「自我對局換成high啊」。v11g0-td4（medium）停了，換成 v11g0-td4-high（每個房間 high）。
+  所以 learning「Who plays」那句「和評估同樣的搜尋力道」照樣對，不用改。
+- 22:0x session「mod 新版本与 docs 部署」：用戶（22:00「好，你部署」）把這次部署交給它。B 部分全部進 HEAD 之後，在這裡記一行「B 部分已進 HEAD」，
+  並告訴那個 session；這個 session 不部署。
+- 22:26 用戶：「就改封面就好了，別跑了，最快速度改最需要的地方」。所以這次只改：
+  - 封面卡片（`champion-wins.json`，從六份 A10 報告直接寫）。
+  - 序言、environments、evaluation（表、合計、區間的例子、死因、gate 的形狀：A0、A10、恐懼模式各 200，合計 7,200 局）、limits 的數字，三種語言。
+  - `sl.json` 改成 high、報告的冠軍字串和六份 A10 報告；18 份報告進 git。
+  沒做：範例局和圖的決策（4.2）、`eval-reports.json`（縛亡者每層死亡圖還是舊報告）、`surface-counts.json`、範例局的句子（4.3）。
+  範例局在 high 重打過（SL、NoSL 都贏，tmp/docs-report/plays），但沒有跑 `book-data.py`。
+  B 部分（封面和數字）已進 HEAD。`pnpm check` 只剩 `plans/` 的 106 個舊引用，主機名掃描 0。
