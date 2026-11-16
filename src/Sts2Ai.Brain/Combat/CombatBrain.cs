@@ -182,13 +182,22 @@ public sealed class PimcBrain(ICombatLeaf leaf)
     /// The actions search tries at <paramref name="obs"/>, in its order: ending the turn first (the fallback a spent budget
     /// leaves), then cards in hand order, then potions. Of the actions that are the same,
     /// only the first: the same card, by <see cref="ProtocolJson.CardKey"/>, or the same potion, at the same target.
+    ///
+    /// The Foul Potion is never thrown in a fight (<see cref="Foul"/>): the user's rule (2026-11-16). In a fight it hits
+    /// every creature but pets for 12, the player too; at a merchant it is worth 100 gold (MacroBrain.Offered throws it
+    /// there first). V rated it below an empty slot everywhere, so the planner threw it in the next fight: in v10g1's A0-A9
+    /// runs 285 times, 98 % of those held at a fight's start, 94 % with no card played after it.
     /// </summary>
     public static List<CombatAction> Ordered(IReadOnlyList<CombatAction> legal, CombatObservation obs)
     {
         var seen = new HashSet<string>();
         return [.. legal.OrderBy(a => a.Kind switch { CombatActionKind.EndTurn => 0, CombatActionKind.PlayCard => 1, _ => 2 })
+            .Where(a => !(a.Kind == CombatActionKind.UsePotion && obs.Potions[a.PotionSlot!.Value] == Foul))
             .Where(a => seen.Add(Same(a, obs)))];
     }
+
+    /// <summary>The Foul Potion's id.</summary>
+    public const string Foul = "FOUL_POTION";
 
     /// <summary>What makes an action the one it is to search: its card's key or its potion's id, and its target.</summary>
     private static string Same(CombatAction action, CombatObservation obs) => action.Kind switch

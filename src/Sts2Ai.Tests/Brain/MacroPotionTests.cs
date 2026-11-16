@@ -63,6 +63,21 @@ public class MacroPotionTests
             a => a == MacroAction.RewardsDone);
     }
 
+    [Fact]
+    public void AtAMerchantAFoulPotionIsThrownFirst()
+    {
+        var shop = new ShopScreen { Entries = [new() { Slot = 0, Kind = "card", Cost = 50 }] };
+        var foul = Holding("BLOCK_POTION", "FOUL_POTION", null);
+        Assert.Equal(Fixtures.Acts("potion:1"), MacroBrain.Offered(foul, shop, Fixtures.Acts("buy:0", "leave", "potion:1", "discard_potion:0", "discard_potion:1")));
+        Assert.Equal("potion:1", new MacroBrain(new Belt(1)).Choose(new MacroDecision(Surfaces.Shop, Fixtures.Acts("buy:0", "leave", "potion:1"),
+            () => new Observation { Run = foul, Screen = shop })).Action.ToString());
+        // With the merchant's inventory open the game lists no throw: the shop's options as before.
+        Assert.Equal(Fixtures.Acts("buy:0", "leave"), MacroBrain.Offered(foul, shop, Fixtures.Acts("buy:0", "leave", "discard_potion:0", "discard_potion:1")));
+        // The Fake Merchant is an event: throwing starts its fight, which is V's to weigh.
+        var fake = new EventScreen { Id = "FAKE_MERCHANT", Options = [new() { Index = 0, Key = "LEAVE" }], Finished = false };
+        Assert.Equal(Fixtures.Acts("event:0", "potion:1"), MacroBrain.Offered(foul, fake, Fixtures.Acts("event:0", "potion:1", "discard_potion:1")));
+    }
+
     private static readonly IReadOnlyList<MacroAction> MapLegal = Fixtures.Acts("map:3,1", "map:4,1", "potion:0");
 
     private static MacroDecision Map(RunView run, IMacroClone? clone = null) => new(Surfaces.Map, MapLegal,

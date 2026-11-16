@@ -20,6 +20,15 @@ public class SameCardsTests
     }
 
     [Fact]
+    public void AFoulPotionIsNeverThrownInAFight()
+    {
+        var obs = Fixtures.Slugs() with { Hand = [Card("STRIKE", 1)], Potions = ["FOUL_POTION", "FIRE_POTION", null] };
+        CombatAction[] legal = [CombatAction.Play(1, 7), CombatAction.Potion(0), CombatAction.Potion(1, 7), CombatAction.EndTurn];
+
+        Assert.Equal([CombatAction.EndTurn, CombatAction.Play(1, 7), CombatAction.Potion(1, 7)], PimcBrain.Ordered(legal, obs));
+    }
+
+    [Fact]
     public void TheSameCardsInAnotherOrderOrCopyAreOneState()
     {
         var start = Fixtures.Slugs();
