@@ -76,7 +76,9 @@ public static class Observe
             Visited = [.. run.VisitedMapCoords.Select(Coord)],
             Boss = run.Act.BossEncounter.Id.Entry,
             SecondBoss = map.SecondBossMapPoint != null ? run.Act.SecondBossEncounter?.Id.Entry : null,
-            Ancient = run.Act.Ancient?.Id.Entry,
+            // An act has no ancient when none is unlocked (the first act's one, Neow, waits for its epoch on a new
+            // profile), and then its getter throws: the game asks the room set first, so this does too.
+            Ancient = run.Act.GetRoomsDebug().HasAncient ? run.Act.Ancient.Id.Entry : null,
         };
     }
 
