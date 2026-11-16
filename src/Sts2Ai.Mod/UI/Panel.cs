@@ -41,8 +41,8 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
 /// why there is none. It also owns the marks the answer draws on the game's own nodes (<see cref="MapMark"/>,
 /// <see cref="CombatMark"/>). F8 hides and shows all of it; the settings (<see cref="Settings"/>) pick which parts show.
-/// A small orb opens and closes the card, which opens under it; the orb or the card's head drags both (kept where they
-/// were let go), and a button in the head steps the card's opacity down.
+/// A small orb opens and closes the card, which opens under it, and the marks with it; the orb or the card's head drags
+/// both (kept where they were let go), and a button in the head steps the card's opacity down.
 /// The card's content is built again only when what it shows changes, not every frame.
 /// </summary>
 internal sealed class Panel
@@ -413,8 +413,10 @@ internal sealed class Panel
     private void Marks(MapRoute? route, CombatPlan? plan)
     {
         var settings = Settings.Current;
-        _map.Show(settings.Route == RouteMode.Off ? null : route, !_hidden, settings.Route == RouteMode.Whole);
-        _combat.Show(plan, !_hidden);
+        // The orb closes the marks with the card.
+        bool visible = !_hidden && settings.Panel;
+        _map.Show(settings.Route == RouteMode.Off ? null : route, visible, settings.Route == RouteMode.Whole);
+        _combat.Show(plan, visible);
     }
 
     /// <summary>Builds the body again when what it shows, or the settings it is drawn with, changed.</summary>
