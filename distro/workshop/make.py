@@ -2,9 +2,8 @@
 # The characters', the ascension's and the Dread mode's names are the game's own (tmp/workshop/names.json, from the pck
 # by names.mjs);
 # the numbers are v11-0-td4 + c11-0's SL runs on test seeds at the high effort (the report report-v11-0-td4-c11-0 on
-# promotion-1-200: A0, A10 and the Dread mode, which is played at A10), the runs finished by 2026-11-16 11:27 UTC, about
-# 100 of each 200, as the user chose; shown as whole percents rounded up, also the user's choice (100 % where one run of
-# about 100 was lost, too).
+# promotion-1-200: A0, A10 and the Dread mode, which is played at A10), 200 runs of each, the Defect's Dread 199 (one
+# failed run left out); shown with the run counts, as the user chose.
 import json
 import pathlib
 
@@ -12,27 +11,29 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = json.loads((ROOT / "tmp/workshop/names.json").read_text())
 CHARS = ["IRONCLAD", "SILENT", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
 WINS = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
-    "IRONCLAD": (101, 101, 95, 107, 37, 107),
-    "SILENT": (106, 107, 84, 106, 16, 106),
-    "DEFECT": (104, 105, 75, 105, 20, 108),
-    "REGENT": (102, 103, 64, 106, 12, 107),
-    "NECROBINDER": (98, 100, 53, 104, 13, 106),
-    "FOOL": (93, 104, 18, 108, 2, 108),
+    "IRONCLAD": (200, 200, 168, 200, 70, 200),
+    "SILENT": (198, 200, 151, 200, 28, 200),
+    "DEFECT": (198, 200, 146, 200, 44, 199),
+    "REGENT": (199, 200, 116, 200, 25, 200),
+    "NECROBINDER": (195, 200, 104, 200, 21, 200),
+    "FOOL": (173, 200, 25, 200, 3, 200),
 }
 REPO = "https://github.com/shinnku-nikaidou/spire-zero"
 DOCS = "https://sts2-docs.shinnkunikaidou.workers.dev/"
+COMMA = {"deu", "fra", "spa", "esp", "ita", "ptb", "pol", "rus", "tur", "ind"}
 
 
 def pct(won, runs, lang):
-    # The share as a whole percent rounded up.
-    p = str(-(-100 * won // runs))
+    p = f"{100 * won / runs:.1f}".rstrip("0").rstrip(".")
+    if lang in COMMA:
+        p = p.replace(".", ",")
     if lang == "tur":
         p = "%" + p
     elif lang in ("deu", "fra", "spa", "esp"):
         p += " %"
     else:
         p += "%"
-    return p
+    return f"{p} ({won}/{runs})"
 
 
 T = {}
