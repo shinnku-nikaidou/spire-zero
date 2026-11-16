@@ -3,7 +3,8 @@
 # by names.mjs);
 # the numbers are v11-0-td4 + c11-0's SL runs on test seeds at the high effort (the report report-v11-0-td4-c11-0 on
 # promotion-1-200: A0, A10 and the Dread mode, which is played at A10), 200 runs of each, the Defect's Dread 199 (one
-# failed run left out); shown with the run counts, as the user chose.
+# failed run left out), the Ironclad's played again at 800111d7 once a hook action's game error was fixed (the step
+# report-v11-0-td4-c11-0-ironclad); shown with the run counts, as the user chose.
 import json
 import pathlib
 
@@ -11,7 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = json.loads((ROOT / "tmp/workshop/names.json").read_text())
 CHARS = ["IRONCLAD", "SILENT", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
 WINS = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
-    "IRONCLAD": (200, 200, 168, 200, 70, 200),
+    "IRONCLAD": (199, 200, 172, 200, 76, 200),
     "SILENT": (198, 200, 151, 200, 28, 200),
     "DEFECT": (198, 200, 146, 200, 44, 199),
     "REGENT": (199, 200, 116, 200, 25, 200),
