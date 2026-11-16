@@ -327,3 +327,15 @@
   - 驗證：新測試重現「process has exited」，修後通過；C# 測試 166 + 61 全過。遊戲寫檔和 `SaveManager.ToJson` 用同一個 JsonTypeInfo，
     讀回再存這條路遊戲自己在每次繼續遊戲時就走（`IncrementNumReloads`）。存檔事件這一半沒法不開遊戲驗：下一次真遊戲的 mod.log
     檢查點數應該等於 godot.log 裡 current_run.save 的寫入數。交給發版本號的 session 建置。
+- 11:06–11:13（11-16）0.3.14 的真遊戲：存檔事件的檢查點正常（19 次存檔、19 個檢查點），但第 39 層戰鬥的卡牌提示大腦出錯
+  「search gave pick:0 where no card prompt waits」：`PlayerCmd.EndTurn` 上的 prefix 在第 30 次之後不再被呼叫，第 2 回合的結束回合沒記到。
+  - **根本原因（11:30 找到）**：.NET 分層編譯在一個被 patch 的方法被呼叫 30 次後，在背景執行緒（「.NET Tiered Compilation」）重新編譯它；
+    Harmony 內的 MonoMod 掛著 JIT，要把跳轉寫進新的機器碼，`LinuxSystem.ProtectRWX` 呼叫 mprotect 時被這台 Fedora 的 SELinux
+    （Enforcing）以 `execheap` 拒絕（EACCES）。MonoMod 只寫進它自己的除錯日誌，新的機器碼沒有跳轉，prefix 從此不再被呼叫。
+  - 證據：`sudo ausearch -m avc` 今天遊戲程序各一次 execheap 拒絕，時間正好是早上第 30 次存檔（10:34:15，之後商店壞掉）和這次第 30 次
+    結束回合（11:12:48）。無頭重現在 `tmp/prefix-loss/`（真 sts2.dll、遊戲自帶的 .NET 9.0.7、`bench`、`DOTNET_TC_CallCountingDelayMs=0`
+    讓呼叫計數不被一直延後）：W^X 開 8 次每次 7–13 個 EACCES、3 次 EndTurn prefix 失效、模擬器自己的 patch 掉了讓 0–121 場戰鬥失敗；
+    失效後堆疊上是原本的 `PlayerCmd.EndTurn`（不是內聯），從方法入口直接呼叫 prefix 也不跑；MonoMod 日誌（`MONOMOD_LogToFile`）
+    是「Error executing OnMethodCompiled event: Win32Exception (13): Permission denied at LinuxSystem.ProtectRWX」。
+    `DOTNET_EnableWriteXorExecute=0` 跑 8 次：0 個 EACCES、0 次失效、0 場失敗。DamageMeter、Godot、.NET 版本都不是原因。
+  - 這也解釋了以前的失效（0.3.8 的 `GameAction.Execute`、0.3.11 的出牌和存檔）和模擬器關掉分層編譯的原因；哪一個 patch 掉是隨機的。
