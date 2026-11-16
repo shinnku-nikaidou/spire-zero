@@ -274,3 +274,7 @@ weight[f2:] = torch.cat([torch.ones(1), torch.cumprod(1 - q[f2:-1], 0)])
     是兩個 rev 之間的程式，不是網路。所以這次的勝率不能和上一次直接比，只有同一個 rev 的配對算數。
   - 判讀：S1 的差（−0.0137）比以前「留出損失和勝場對不上」的例子小，勝場的差卻很大；S3 沒動。贏在哪裡還不知道。
     用不用，用戶決定。
+- 2026-11-16 18:09 那 33 局失敗修好了（b6c3430f，用戶：「Do this task here」）：遊戲的 `GetHookActionForId` 用沒有排程器的
+  `ContinueWith` 把 hook 動作移出清單，在執行緒池上和單執行緒的模擬器搶那個清單；da26190b 之後戰鬥裡每個問選擇的 hook
+  都會走到這裡。`HeadlessPatches.HookActionStartedOnTheGamesThread` 把它掛回 pump。檢查：step `check-hook-actions`，
+  v11-0 + c11-0 在 b6c3430f 上 IRONCLAD、DEFECT A10 各 300 局，0 局失敗（照 12c59596 的失敗率約 10 局）。
