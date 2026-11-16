@@ -137,6 +137,7 @@ internal static partial class SelfTest
         BuildsAGrownEruption(pump, Check);
         RollingBoulder(pump, pool, act, Check);
         ThornsKillDuringSlyPlay(pump, pool, act, Check);
+        HookChoiceAtATurnsStart(pump, pool, act, Check);
         FightCapLoses(pump, pool, act, Check);
         DropsAtAnEnemysPrompt(pump, Check);
         DropsAtATurnEndsPrompt(pump, Check);

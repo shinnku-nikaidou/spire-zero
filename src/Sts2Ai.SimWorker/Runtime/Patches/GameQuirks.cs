@@ -1,3 +1,4 @@
+using System.Reflection.Emit;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -64,6 +65,48 @@ internal static partial class HeadlessPatches
             Skipped++;
             __result = Task.FromResult(default(CardPileAddResult));
             return false;
+        }
+    }
+
+    /// <summary>
+    /// A hook that asks the player in combat (Tools of the Trade's discard at a turn's start) becomes an action of its
+    /// own, which the game lists until it starts: <c>GetHookActionForId</c> takes it off that list in a continuation of
+    /// its start, attached with no scheduler, so that it runs on a thread-pool thread beside the game. There it races the
+    /// game's own use of the list (an ArgumentOutOfRangeException, then a turn loop that dies and a combat that never
+    /// settles) and an export of the combat walking it ("Collection was modified"): the two errors of the 33 failed runs
+    /// of 3,300 in test-v11-0-td4-c11-0, on every host, since the simulator asks in combat as the game asks a player
+    /// (da26190b). The continuation runs on the thread that attached it, the game's, as the game's awaits do (checked by
+    /// selftest).
+    /// </summary>
+    [HarmonyPatch(typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.GetHookActionForId))]
+    internal static class HookActionStartedOnTheGamesThread
+    {
+        /// <summary>How many of these continuations were attached to the game's thread (checked by selftest).</summary>
+        public static int Attached;
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var continueWith = AccessTools.Method(typeof(Task), nameof(Task.ContinueWith), [typeof(Action<Task>)]);
+            int replaced = 0;
+            foreach (var ins in instructions)
+            {
+                if (ins.Calls(continueWith))
+                {
+                    // Keep the instruction object so labels and exception blocks stay attached.
+                    ins.opcode = OpCodes.Call;
+                    ins.operand = AccessTools.Method(typeof(HookActionStartedOnTheGamesThread), nameof(OnTheGamesThread));
+                    replaced++;
+                }
+                yield return ins;
+            }
+            if (replaced != 1)
+                throw new InvalidOperationException($"headless: {replaced} Task.ContinueWith calls in ActionQueueSynchronizer.GetHookActionForId, not 1; re-audit after the game update");
+        }
+
+        private static Task OnTheGamesThread(Task started, Action<Task> continuation)
+        {
+            Attached++;
+            return started.ContinueWith(continuation, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }
 }

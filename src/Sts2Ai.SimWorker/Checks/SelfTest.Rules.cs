@@ -1,4 +1,6 @@
+using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Encounters;
 using MegaCrit.Sts2.Core.Models.Events;
@@ -94,6 +96,33 @@ internal static partial class SelfTest
         var errors = HeadlessGame.TakeErrors();
         check("a transform that ends the combat leaves the next transform out", asked && built.Outcome == CombatOutcome.Win && skipped == 1 && errors.Count == 0,
             $"asked {asked}, outcome {built.Outcome}, transforms left out {skipped}, build {string.Join("; ", built.BuildDifferences.Take(2))}, " +
+            $"errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
+    /// Tools of the Trade's discard at a turn's start: the hook that asks becomes an action of its own, which the game
+    /// takes off its list of hook actions as it starts, in a continuation that must run on the game's thread
+    /// (<see cref="HeadlessPatches.HookActionStartedOnTheGamesThread"/>): the discard is asked, the continuation attached
+    /// there, the list empty once the turn has started, and no game error.
+    /// </summary>
+    private static void HookChoiceAtATurnsStart(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("STRIKE_SILENT"), 10)]);
+        var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+            obs = session.Observation();
+        obs = obs with { Player = obs.Player with { Block = 999, Powers = [.. obs.Player.Powers, new PowerView("TOOLS_OF_THE_TRADE_POWER", 1)] } };
+        int before = HeadlessPatches.HookActionStartedOnTheGamesThread.Attached;
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance);
+        built.Execute(CombatAction.EndTurn);
+        bool asked = built.Prompt != null;
+        if (asked) built.Execute(CombatAction.Pick([0]));
+        int attached = HeadlessPatches.HookActionStartedOnTheGamesThread.Attached - before;
+        var listed = (System.Collections.IList)AccessTools.Field(typeof(ActionQueueSynchronizer), "_hookActions").GetValue(RunManager.Instance.ActionQueueSynchronizer)!;
+        var errors = HeadlessGame.TakeErrors();
+        check("a turn start's hook action leaves its list on the game's thread", asked && attached > 0 && listed.Count == 0 && errors.Count == 0,
+            $"{pool[0].Id.Entry}: asked {asked}, attached {attached}, hook actions listed {listed.Count}, build {string.Join("; ", built.BuildDifferences.Take(2))}, " +
             $"errors {errors.FirstOrDefault()}");
     }
 
