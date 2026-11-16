@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Entities.Relics;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
@@ -395,6 +396,10 @@ internal static class CombatBuilder
     /// Makes the visible powers the observed ones, in the observed order. A power the fresh combat already has keeps
     /// its own state; a missing one is attached without its on-apply effects, which the observation already shows.
     /// Hidden powers are left alone. A card a power keeps is the player's, outside every pile.
+    ///
+    /// A power's own amount is always shown: apart from the icon's number where the two differ, else as that number. So
+    /// it is set, and what else the icon's number is made of is solved: Hardened Shell's damage taken this turn is 0 where
+    /// the icon shows the whole amount, whatever the fresh combat's start dealt (Festive Popper).
     /// </summary>
     private static void Powers(CombatState st, Player player, Creature c, IReadOnlyList<PowerView> views)
     {
@@ -413,14 +418,14 @@ internal static class CombatBuilder
                 if (power.InstanceType == PowerInstanceType.InstancedPerApplier) power.Applier = player.Creature;
                 power.ApplyInternal(c, (view.Stacks ?? view.Amount) is var amount and not 0 ? amount : 1, silent: true);
             }
-            if (view.Stacks is int stacks) power.SetAmount(stacks, silent: true);
+            power.SetAmount(view.Stacks ?? view.Amount, silent: true);
             if (view.Card is { } held)
             {
                 var card = Create(st, player, new CardSpec(held.Id, held.Up ?? 0, held.Enchant?.Id, held.Enchant?.Amount ?? 0));
                 Modify(card, held, inHand: false);
                 HeldCards.Set(power, card);
             }
-            Solve(() => power.DisplayAmount, view.Amount, Knobs(power, amountKnown: view.Stacks != null));
+            Solve(() => power.DisplayAmount, view.Amount, Knobs(power));
             wanted.Add(power);
         }
         foreach (var power in visible) power.RemoveInternal();
@@ -445,6 +450,9 @@ internal static class CombatBuilder
         var slots = pcs.Arrows;
         for (int i = 0; i < slots.Count; i++) slots[i].Status = i < held ? ArrowStatus.Retrieved : i < shown ? ArrowStatus.Away : ArrowStatus.Destroyed;
         int next = held;
+        // Only the arrows shown: the fresh combat's start can have stuck one already (Whispering Earring plays a Shoot card).
+        foreach (var impaled in st.Enemies.SelectMany(e => e.GetPowerInstances<ImpaledPower>()).Where(p => p.Applier == player.Creature))
+            while (impaled.Arrows.Count > 0) impaled.RemoveFirstArrow();
         foreach (var (enemy, view) in st.Enemies.Zip(obs.Enemies))
         {
             if (view.Arrows is not > 0) continue;
@@ -582,13 +590,9 @@ internal static class CombatBuilder
         }
     }
 
-    /// <summary>
-    /// A power's amount first, unless it is known (shown apart from the icon's number), then its own numbers, then its
-    /// fields and those of its internal data.
-    /// </summary>
-    private static IEnumerable<Knob> Knobs(PowerModel power, bool amountKnown)
+    /// <summary>A power's own numbers, then its fields and those of its internal data: its amount is known (<see cref="Powers"/>).</summary>
+    private static IEnumerable<Knob> Knobs(PowerModel power)
     {
-        if (!amountKnown) yield return new(() => power.Amount, v => power.SetAmount(v, silent: true));
         foreach (var v in power.DynamicVars.Values) yield return new(() => (int)v.BaseValue, x => v.BaseValue = x);
         foreach (var knob in FieldKnobs(power, typeof(PowerModel))) yield return knob;
         // Such as Hardened Shell's damage taken this turn, a decimal, which the amount it shows is net of.
@@ -743,6 +747,9 @@ internal static class CombatBuilder
             // Global modifiers (powers, relics) apply on top of the card's own; leave room for them. The card's own cost
             // may be below 0 under a global increase (Pinpoint after 3 Skills, Entangled: 0 - 3 + 1 shows 0).
             int local = energy - (cost.GetWithModifiers(CostModifiers.All) - cost.GetWithModifiers(CostModifiers.Local));
+            // A global modifier need not add a fixed amount: Coda's melodies take 2 each down to 0 and leave a cost of 0
+            // alone, so under Snecko Eye's random cost the first guess can still show 0. Step by what is still missing.
+            for (int step = 0; step < 8 && Shown(card, local) != energy; step++) local += energy - Shown(card, local);
             if (inHand) cost.SetThisTurnOrUntilPlayed(local);
             else cost.SetThisCombat(local);
         }
@@ -752,4 +759,9 @@ internal static class CombatBuilder
             else card.SetStarCostThisCombat(stars);
         }
     }
+
+    /// <summary>The energy cost a card shows with <paramref name="own"/> as its own cost, as
+    /// <see cref="CardEnergyCost.GetWithModifiers"/> makes it with every modifier.</summary>
+    private static int Shown(CardModel card, int own) =>
+        Math.Max(0, card.CombatState is { } combat ? (int)Hook.ModifyEnergyCostInCombat(combat, card, own) : own);
 }
