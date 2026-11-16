@@ -1,5 +1,5 @@
 // Prints, as JSON, for each language in the game's .pck: the characters' titles and every short string whose key names
-// Ascension in the tables named after the pck (make.py reads tmp/workshop/names.json, written by:
+// Ascension, and the Dread mode's title (DREAD.title), in the tables named after the pck (make.py reads tmp/workshop/names.json, written by:
 //   node distro/workshop/names.mjs PATH/SlayTheSpire2.pck ascension main_menu_ui > tmp/workshop/names.json).
 // With "list" instead of tables, it lists the pck's languages and the English tables.
 import { openSync, readSync } from 'node:fs';
@@ -26,7 +26,7 @@ for (const lang of langs) {
   for (const id of ['IRONCLAD', 'SILENT', 'DEFECT', 'REGENT', 'NECROBINDER', 'FOOL']) row[id] = c[`${id}.title`];
   for (const name of process.argv.slice(3)) {
     const t = json(lang, name) ?? {};
-    for (const [k, v] of Object.entries(t)) if (/ASCENSION/i.test(k) && typeof v === 'string' && v.length < 40) row[`${name}:${k}`] = v;
+    for (const [k, v] of Object.entries(t)) if ((/ASCENSION/i.test(k) || k === "DREAD.title") && typeof v === 'string' && v.length < 40) row[`${name}:${k}`] = v;
   }
   out[lang] = row;
 }

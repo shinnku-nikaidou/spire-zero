@@ -6,7 +6,7 @@ description in each of the game's 17 languages. The game reads a subscribed item
 | file | what |
 | --- | --- |
 | `LANGUAGE.bbcode` | the title on the first line, a blank line, then the description in Steam's BBCode; `LANGUAGE` is Steam's API language code (`english`, `schinese`, `tchinese`, `koreana`, `latam`, ...) |
-| `make.py` | writes every `LANGUAGE.bbcode`: the texts and the win numbers are in it, the characters' and Ascension's names are the game's own |
+| `make.py` | writes every `LANGUAGE.bbcode`: the texts and the win numbers are in it, the characters', Ascension's and the Dread mode's names are the game's own |
 | `names.mjs` | reads those names from the game's `.pck` into `tmp/workshop/names.json`, which `make.py` reads |
 | `item.txt` | the item's id, written once by `workshop create` |
 | `preview.html`, `preview.png` | the item's preview image, 1024 x 1024 (Steam takes up to 1 MB), and the page it is rendered from in a headless Chrome |
