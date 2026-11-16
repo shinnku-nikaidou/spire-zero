@@ -231,3 +231,4 @@ A 和 B 可以分兩次 commit。A 先上的話，書描述的是新的訓練方
   沒做：範例局和圖的決策（4.2）、`eval-reports.json`（縛亡者每層死亡圖還是舊報告）、`surface-counts.json`、範例局的句子（4.3）。
   範例局在 high 重打過（SL、NoSL 都贏，tmp/docs-report/plays），但沒有跑 `book-data.py`。
   B 部分（封面和數字）已進 HEAD。`pnpm check` 只剩 `plans/` 的 106 個舊引用，主機名掃描 0。
+- 22:28 session「mod 新版本与 docs 部署」從 HEAD 部署（用戶 22:00 已交代「好，你部署」）。線上的封面、evaluation、zh-tw 序言都是新數字。
