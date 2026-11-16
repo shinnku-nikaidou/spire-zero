@@ -1,0 +1,42 @@
+# The SL self-play dataset v11g0-td4-high (the user, 2026-11-16: "自我對局換成high啊"): v11g0-td4 at the test's effort,
+# high, by the same champion, v11-0-td4 + c11-0. v11g0-td4 (medium) was stopped for it; its runs and v11g0's count
+# toward the generation's 20,000 a character (the user: "v11g0之前生成的也得帶上啊"), so these rows hold what is left
+# of each row of v11g0-td4.toml after v11g0's and v11g0-td4's finished runs (their means over the six characters):
+# A10 6,500, the Dread mode 6,500, A0-A9 3,216, in all 16,216 a character.
+name = "v11g0-td4-high"
+deadline = "+72h"                   # box.py deadline v11g0-td4-high UNTIL moves it; the user stops the step when the data is enough
+priority = 0
+seeds = 3100000                     # the ledger's blocks 3100000-3699999, one a character (the FOOL's 3600000-3699999)
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
+champion = "eval/champions/sl.json" # v11-0-td4 + c11-0
+workers = 4
+
+# v10g1's five characters' tiers, now every character's: a third of each one's runs a tier, a decision drawn evenly
+# with chance epsilon, the others by a softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at the test's effort (high since 2026-11-16).
+[games.full]
+auto_win = []
+effort = { monster = "high", elite = "high", boss = "high" }
+
+# The Dread mode, which the game plays at ascension 10 only.
+[games.dread]
+mode = "dread"
+auto_win = []
+effort = { monster = "high", elite = "high", boss = "high" }
+
+[[runs]]
+game = "full"
+asc = 10
+n = 6500
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 6500
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [57, 115, 175, 232, 293, 351, 410, 468, 528, 587]
