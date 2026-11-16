@@ -380,3 +380,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `weights/all/`'s byte for byte. The listing opens with multiplayer support coming and an invitation to subscribe and
   favorite the mod now (the user: "mod描述在最前面加上多人之後會支持，可以先關注訂閱加上這個mod"), all 17 languages.
   Upload waits for the game to close here (it was running).
+- 2026-11-16 21:58: 0.3.20 at 38bf5dc2, Linux only, installed in `mods/` once the game had closed: the AI is off for a run
+  that started without Neow (the game's StartedWithNeow, false on a new profile until the timeline reveals Neow's
+  epoch), on the user's word ("照這樣做"): V valued such a run badly (a won floor-1 fight at 2 enemy HP dragged out for
+  44 HP instead of 74, V-td4 not rising with HP there). Its Linux brain on `run --check` (IRONCLAD A10, low, seed
+  1138): won, identical over the wire, 0 game errors. Not uploaded. The listing's IRONCLAD numbers and the Defect's
+  Dread are from reports the docs session voided (game errors in 6 IRONCLAD runs, an engine failure in one Dread run);
+  it sends the re-played numbers once the two fixes run.
