@@ -373,7 +373,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   asks the room set first, as the game does. Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won,
   identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed when the game closes
   (it was running). Not uploaded: a new profile's run is to be tried in the real game first.
-- 2026-11-16 21:58: 0.3.20 at 38042c90 (the same code as 38bf5dc2, plans only between), three platforms (3:25; the VM
+- 2026-11-16 21:56: 0.3.20 at 38042c90 (the same code as 38bf5dc2, plans only between), three platforms (3:25; the VM
   started and shut down again), for an upload on the user's word ("mod可以新版本了，包括docs部署"): 0.3.19's new-profile
   fix and the mod off for a run that started without Neow. Its Linux brain on `run --check` (IRONCLAD A10, low, seed
   1138): won, identical over the wire, 49/49 nodes and 28/28 saves replay exactly, 0 game errors; the nets are
@@ -387,3 +387,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   1138): won, identical over the wire, 0 game errors. Not uploaded. The listing's IRONCLAD numbers and the Defect's
   Dread are from reports the docs session voided (game errors in 6 IRONCLAD runs, an engine failure in one Dread run);
   it sends the re-played numbers once the two fixes run.
+- 2026-11-16 21:58: 0.3.20 (38042c90) uploaded on the user's word ("已關遊戲，上傳"), public, three platforms. The commit
+  timed out, but the content had gone through: the item updated at 13:58:10Z and its change notes carry 0.3.20's. The
+  17 languages' texts (multiplayer coming, at the top) then went up without `--content`, all OK; checked on the public
+  page in English, Traditional Chinese and German. Installed in `mods/` over 0.3.19 with the game closed. The listing's
+  IRONCLAD numbers are still the void reports' (200 / 168 / 70) until its replay at 800111d7 ends.
