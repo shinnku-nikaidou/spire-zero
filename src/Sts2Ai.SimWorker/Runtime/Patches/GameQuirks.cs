@@ -2,7 +2,9 @@ using System.Reflection.Emit;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 
@@ -107,6 +109,49 @@ internal static partial class HeadlessPatches
         {
             Attached++;
             return started.ContinueWith(continuation, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+    }
+
+    /// <summary>
+    /// A combat's end cancels each combat action still in a queue that is not executing
+    /// (<c>ActionQueueSet.CombatEnded</c>), and a finished action is still in its queue for a moment: it completes its
+    /// task first and leaves the queue after (<c>GameAction.Execute</c>, <c>AfterFinished</c>), and what awaited the
+    /// task runs in between. Stampede auto-plays a Headbutt at a turn's end, Headbutt kills the last enemy and asks for a
+    /// card, and the answer lets the turn's end go on to the win check, which ends the combat inside that completion:
+    /// the finished action is canceled and taken off its queue, and its own leaving throws ("Tried to pop action ...,
+    /// but we didn't find it in any queue!"; IRONCLAD A10 seed LM0RY5F0G858, 686 times over the run's searches). The
+    /// combat's end leaves a finished action alone, and it leaves its queue itself (checked by selftest).
+    /// </summary>
+    [HarmonyPatch(typeof(ActionQueueSet), nameof(ActionQueueSet.CombatEnded))]
+    internal static class FinishedActionLeavesItsQueue
+    {
+        /// <summary>How many finished actions a combat's end left alone (checked by selftest).</summary>
+        public static int Kept;
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var state = AccessTools.PropertyGetter(typeof(GameAction), nameof(GameAction.State));
+            var list = instructions.ToList();
+            int replaced = 0;
+            for (int i = 0; i + 1 < list.Count; i++)
+            {
+                // The test that keeps an executing action: its state, then the constant it is compared with.
+                if (!list[i].Calls(state) || !list[i + 1].LoadsConstant((long)GameActionState.Executing)) continue;
+                list[i].opcode = OpCodes.Call;
+                list[i].operand = AccessTools.Method(typeof(FinishedActionLeavesItsQueue), nameof(StateAtTheEnd));
+                replaced++;
+            }
+            if (replaced != 1)
+                throw new InvalidOperationException($"headless: {replaced} tests of an executing action in ActionQueueSet.CombatEnded, not 1; re-audit after the game update");
+            return list;
+        }
+
+        /// <summary>An action's state as the combat's end reads it: a finished one as an executing one, which it keeps.</summary>
+        private static GameActionState StateAtTheEnd(GameAction action)
+        {
+            if (action.State != GameActionState.Finished) return action.State;
+            Kept++;
+            return GameActionState.Executing;
         }
     }
 }

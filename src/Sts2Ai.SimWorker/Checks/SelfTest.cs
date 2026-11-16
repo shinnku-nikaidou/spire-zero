@@ -141,6 +141,7 @@ internal static partial class SelfTest
         FightCapLoses(pump, pool, act, Check);
         DropsAtAnEnemysPrompt(pump, Check);
         DropsAtATurnEndsPrompt(pump, Check);
+        ATurnEndsPromptThatWins(pump, pool, act, Check);
         TransformKillsBeforeTheNextTransform(pump, Check);
         GatheredCardState(pump, pool, act, Check);
         FirstArrowComesWithAShootCard(pump, pool, act, Check);

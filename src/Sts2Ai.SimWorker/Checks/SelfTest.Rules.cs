@@ -127,6 +127,38 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// IRONCLAD A10 seed LM0RY5F0G858's game error: Stampede 2 auto-plays two Headbutts at the turn's end against the
+    /// last enemy at 15 HP. The first asks for a card of the discard pile, the second kills, and the turn's end ends the
+    /// combat while the hook's action has finished but not yet left its queue: the combat must end won with no game
+    /// error, through <see cref="HeadlessPatches.FinishedActionLeavesItsQueue"/>.
+    /// </summary>
+    private static void ATurnEndsPromptThatWins(Pump pump, List<EncounterModel> pool, int act, Action<string, bool, string> check)
+    {
+        var loadout = new Loadout(Deck: [.. Enumerable.Repeat(new CardSpec("HEADBUTT"), 10)]);
+        var setup = new CombatSetup("IRONCLAD", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
+        CombatObservation obs;
+        using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+            obs = session.Observation();
+        obs = obs with
+        {
+            Player = obs.Player with { Block = 999, Powers = [.. obs.Player.Powers, new PowerView("STAMPEDE_POWER", 2)] },
+            Enemies = [obs.Enemies[0] with { Hp = 15, MaxHp = 15, Block = 0 }],
+            Draw = [.. obs.Draw.Skip(3)],
+            Discard = [.. obs.Draw.Take(3)],
+        };
+        int before = HeadlessPatches.FinishedActionLeavesItsQueue.Kept;
+        using var built = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance);
+        built.Execute(CombatAction.EndTurn);
+        bool asked = built.Prompt != null;
+        if (asked) built.Execute(CombatAction.Pick([0]));
+        int kept = HeadlessPatches.FinishedActionLeavesItsQueue.Kept - before;
+        var errors = HeadlessGame.TakeErrors();
+        check("a turn end's prompt that wins leaves its finished action to leave its queue", asked && built.Outcome == CombatOutcome.Win && kept > 0 && errors.Count == 0,
+            $"{pool[0].Id.Entry}: asked {asked}, outcome {built.Outcome}, kept {kept}, build {string.Join("; ", built.BuildDifferences.Take(2))}, " +
+            $"errors {errors.FirstOrDefault()}");
+    }
+
+    /// <summary>
     /// The Knowledge Demon's first move asks the player for a card, in the enemies' turn: the combat's turns wait on the
     /// prompt. A session dropped there must end them, since the game starts a combat's turns only when the turns of the
     /// combat before it have ended (<see cref="PromptSelector.Drop"/>): the next combat must start, and play on through
