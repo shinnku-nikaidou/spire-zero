@@ -359,3 +359,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   the card (a61228ff). Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire,
   49/49 nodes and 28/28 saves replay exactly, 0 game errors. Installed in `mods/` over 0.3.17 at 20:30, once the game
   had closed. Not uploaded.
+- 2026-11-16 20:34: 0.3.18 at 30d20ef5 (the same code as ff0413d6, plans only between) uploaded on the user's word
+  ("打包 mod 上傳 Workshop", in the Fairy-in-a-Bottle session), public, three platforms (the VM started and shut down
+  again). The commit timed out once, but the content had gone through: the item updated at 12:34:46Z and its change
+  notes carry 0.3.18's. The 17 languages' texts then went up without `--content`, all OK.
