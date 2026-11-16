@@ -10,13 +10,14 @@ namespace Sts2Ai.Workshop;
 /// <code>
 ///   workshop check                 what Steam says: logged on, the game's branch, the item and how it stands
 ///   workshop create                a new item, its id written to distro/workshop/item.txt (once)
-///   workshop upload --content DIR [--preview FILE] [--visibility private|friends|unlisted|public]
+///   workshop upload [--content DIR] [--preview FILE] [--visibility private|friends|unlisted|public]
 ///                   [--branches MIN:MAX] [--note TEXT]
 /// </code>
 /// The texts are distro/workshop/LANGUAGE.bbcode, LANGUAGE Steam's API language code: the title on the first line, the
 /// description after the blank line below it. Steam takes one language's title and description an update, so an upload
 /// is one update with the content, the preview, the settings and the English texts, then one update for each other
-/// language.
+/// language. Without --content the item keeps its content and only the rest is sent: the content's commit can time out
+/// even when it went through, and then the other languages are never sent.
 /// </summary>
 internal static class Program
 {
@@ -28,7 +29,7 @@ internal static class Program
     {
         if (args.Length == 0 || args[0] is not ("check" or "create" or "upload"))
         {
-            Console.Error.WriteLine("usage: workshop check | create | upload --content DIR [--preview FILE] [--visibility private|friends|unlisted|public] [--branches MIN:MAX] [--note TEXT]");
+            Console.Error.WriteLine("usage: workshop check | create | upload [--content DIR] [--preview FILE] [--visibility private|friends|unlisted|public] [--branches MIN:MAX] [--note TEXT]");
             return 2;
         }
         // The Steam API takes the app from the process environment when Steam did not start the process. On Unix .NET
@@ -101,8 +102,8 @@ internal static class Program
     private static int Upload(Dictionary<string, string> options)
     {
         var id = Item() ?? throw new WorkshopException($"no item yet ({ItemFile} is missing): workshop create");
-        string content = Path.GetFullPath(options.GetValueOrDefault("content") ?? throw new WorkshopException("upload needs --content DIR"));
-        if (!Directory.Exists(content)) throw new WorkshopException($"no folder {content}");
+        string? content = options.GetValueOrDefault("content") is { } dir ? Path.GetFullPath(dir) : null;
+        if (content != null && !Directory.Exists(content)) throw new WorkshopException($"no folder {content}");
         var texts = Texts();
         bool agreement = false;
         foreach (var (language, title, description) in texts)
@@ -114,7 +115,7 @@ internal static class Program
             Must(SteamUGC.SetItemDescription(update, description), $"the {language} description ({Encoding.UTF8.GetByteCount(description)} bytes)");
             if (first)
             {
-                Must(SteamUGC.SetItemContent(update, content), $"the content {content}");
+                if (content != null) Must(SteamUGC.SetItemContent(update, content), $"the content {content}");
                 if (options.GetValueOrDefault("preview") is { } preview) Must(SteamUGC.SetItemPreview(update, Path.GetFullPath(preview)), $"the preview {preview}");
                 if (options.GetValueOrDefault("visibility") is { } visibility) Must(SteamUGC.SetItemVisibility(update, Visibility(visibility)), $"the visibility {visibility}");
                 if (options.GetValueOrDefault("branches") is { } branches)
@@ -128,7 +129,7 @@ internal static class Program
                 () => first ? Progress(update) : null);
             if (submitted.m_eResult != EResult.k_EResultOK) throw new WorkshopException($"Steam refused the {language} update: {submitted.m_eResult}");
             agreement |= submitted.m_bUserNeedsToAcceptWorkshopLegalAgreement;
-            Console.WriteLine(first ? $"uploaded {content} with the {language} texts" : $"the {language} texts");
+            Console.WriteLine(first && content != null ? $"uploaded {content} with the {language} texts" : $"the {language} texts");
         }
         Console.WriteLine($"item {id}: {Page(id)}");
         Agreement(agreement);

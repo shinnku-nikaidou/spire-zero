@@ -35,10 +35,12 @@ src/Sts2Ai.Workshop/bin/Release/net9.0/workshop upload --content out/Sts2Ai --pr
 - `create` makes the item once and writes its id to `item.txt`.
 - `upload` sends the folder, the preview (`--preview FILE`), the visibility, the game branches it supports and the
   English texts in one update, then each other language's texts in an update of its own (Steam takes one language an
-  update). A new item stays hidden until its owner accepts the Steam Workshop agreement on the website.
+  update). A new item stays hidden until its owner accepts the Steam Workshop agreement on the website. Without
+  `--content` the item keeps its content and only the texts and settings go: for new texts on content already there.
 - Steam allows one machine of an account to run the game at a time, and the tool runs as the game: close the game on
   every machine first, or Steam logs this one off ("Logged In Elsewhere") and the upload fails.
-- The first update that carries new content can end in `k_EResultTimeout` at its commit, with the content already on
-  Steam; the same command again goes through.
+- An update that carries content can end in `k_EResultTimeout` at its commit, with the content already on Steam, and
+  the other languages are then not sent: see whether it went through (`check`'s update time, the item's change notes at
+  `steamcommunity.com/sharedfiles/filedetails/changelog/ID`), then send the texts without `--content`.
 - `--branches public-beta:public-beta`: the mod runs only on the game version it was built for, which is on Steam's
   `public-beta` branch; on another branch the game itself says the item does not support it.
