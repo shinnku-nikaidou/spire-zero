@@ -130,7 +130,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
     /// above, and left 52-61 % of them on the screen (the A10 tests of v10-2 and v10-2-2); the user takes 98 % of them.
     ///
     /// And at a merchant a Foul Potion the belt holds is thrown first, the only option while one is left: 100 gold each
-    /// (the user's rule, 2026-11-16). It is never thrown in a fight (<see cref="PimcBrain.Ordered"/>).
+    /// (the user's rule, 2026-11-16). It is never thrown in a fight (<see cref="PimcBrain.Ordered"/>) and never discarded,
+    /// and a map move into a shop is valued with its gold (<see cref="ScreenAfterstates.Entered"/>).
     /// </summary>
     public static List<MacroAction> Offered(RunView run, ScreenView? screen, IReadOnlyList<MacroAction> legal)
     {
@@ -146,7 +147,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         // lists the throw only while the merchant's inventory is closed (FoulPotion.PassesCustomUsabilityCheck).
         if (screen is ShopScreen && legal.Where(a => a.Verb == MacroAction.Potion && run.Potions[a.Index] == PimcBrain.Foul).Take(1).ToList() is [var foul])
             return [foul];
-        var offered = legal.Where(a => (room || a.Verb != MacroAction.DiscardPotion) && !(potionWaits && a == MacroAction.RewardsDone)).ToList();
+        // A Foul Potion is kept for a merchant: never discarded (the user's rule, 2026-11-16; in their own runs one of 41).
+        var offered = legal.Where(a => (room || a.Verb != MacroAction.DiscardPotion) && !(potionWaits && a == MacroAction.RewardsDone)
+            && !(a.Verb == MacroAction.DiscardPotion && run.Potions[a.Index] == PimcBrain.Foul)).ToList();
         return offered.Count > 0 ? offered : [.. legal];
     }
 

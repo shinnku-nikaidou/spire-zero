@@ -78,6 +78,35 @@ public class MacroPotionTests
         Assert.Equal(Fixtures.Acts("event:0", "potion:1"), MacroBrain.Offered(foul, fake, Fixtures.Acts("event:0", "potion:1", "discard_potion:1")));
     }
 
+    [Fact]
+    public void AFoulPotionIsNeverDiscarded()
+    {
+        var full = Holding("FOUL_POTION", "BLOCK_POTION", "FOUL_POTION");
+        var screen = new RewardsScreen { Rewards = [new RewardView { Index = 0, Kind = "potion", Id = "FIRE_POTION" }] };
+        Assert.Equal(Fixtures.Acts("rewards_done", "discard_potion:1"),
+            MacroBrain.Offered(full, screen, Fixtures.Acts("rewards_done", "discard_potion:0", "discard_potion:1", "discard_potion:2")));
+    }
+
+    [Fact]
+    public void EnteringAShopTheFoulPotionsAreGold()
+    {
+        // The fixture's map has a shop at (4, 2) and monsters at (2, 1) and (5, 1); the run holds 99 gold.
+        var run = Holding("FOUL_POTION", "BLOCK_POTION", "FOUL_POTION");
+        var shop = ScreenAfterstates.Entered(run, new Coord(4, 2));
+        Assert.Equal(run.Gold + 200, shop.Gold);
+        Assert.Equal(["BLOCK_POTION"], shop.Potions.OfType<string>());
+        Assert.True(shop.Map.Entering);
+        Assert.Equal(new Coord(4, 2), shop.Map.Visited[^1]);
+        var monster = ScreenAfterstates.Entered(run, new Coord(2, 1));
+        Assert.Equal(run.Gold, monster.Gold);
+        Assert.Equal(run.Potions, monster.Potions);
+        // The game's gold hooks: Bowler Hat gives 1.25 times, Ectoplasm none (the potions are thrown all the same).
+        var hat = run with { Relics = [.. run.Relics, new RelicView { Id = "BOWLER_HAT" }] };
+        Assert.Equal(run.Gold + 250, ScreenAfterstates.Entered(hat, new Coord(4, 2)).Gold);
+        var ecto = run with { Relics = [.. run.Relics, new RelicView { Id = "ECTOPLASM" }] };
+        Assert.Equal(run.Gold, ScreenAfterstates.Entered(ecto, new Coord(4, 2)).Gold);
+    }
+
     private static readonly IReadOnlyList<MacroAction> MapLegal = Fixtures.Acts("map:3,1", "map:4,1", "potion:0");
 
     private static MacroDecision Map(RunView run, IMacroClone? clone = null) => new(Surfaces.Map, MapLegal,

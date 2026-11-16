@@ -75,9 +75,29 @@ public sealed class ScreenAfterstates(IRunValue value)
     }
 
     /// <summary>The run after a map move to <paramref name="point"/>: the point added to the path and marked as being
-    /// entered, not yet played (<see cref="MapView.Entering"/>). V and its training read a move's afterstate so.</summary>
-    public static RunView Entered(RunView run, Coord point) =>
-        run with { Map = run.Map with { Visited = [.. run.Map.Visited, point], Entering = true } };
+    /// entered, not yet played (<see cref="MapView.Entering"/>). V and its training read a move's afterstate so.
+    /// Entering a shop, the Foul Potions held are thrown at the merchant, as the first thing done there
+    /// (<see cref="MacroBrain.Offered"/>), so the move's afterstate holds their gold and not them (<see cref="FoulThrown"/>).</summary>
+    public static RunView Entered(RunView run, Coord point)
+    {
+        var entered = run with { Map = run.Map with { Visited = [.. run.Map.Visited, point], Entering = true } };
+        return run.Map.Points.FirstOrDefault(p => p.Col == point.Col && p.Row == point.Row)?.Type == "Shop" ? FoulThrown(entered) : entered;
+    }
+
+    /// <summary>The gold a Foul Potion thrown at a merchant gives (FoulPotion's GoldVar).</summary>
+    public const int FoulGold = 100;
+
+    /// <summary>
+    /// The run once its Foul Potions are thrown at a merchant: each gone, and its gold gained as the game's gold hooks
+    /// change it (Ectoplasm: none; Bowler Hat: 1.25 times).
+    /// </summary>
+    public static RunView FoulThrown(RunView run)
+    {
+        int thrown = run.Potions.Count(p => p == Combat.PimcBrain.Foul);
+        if (thrown == 0) return run;
+        int each = run.Relics.Any(r => r.Id == "ECTOPLASM") ? 0 : run.Relics.Any(r => r.Id == "BOWLER_HAT") ? FoulGold * 5 / 4 : FoulGold;
+        return run with { Gold = run.Gold + thrown * each, Potions = [.. run.Potions.Select(p => p == Combat.PimcBrain.Foul ? null : p)] };
+    }
 
     /// <summary>An event option the screen says kills: the run ends there, lost.</summary>
     public static bool Kills(Observation obs, MacroAction action) =>
