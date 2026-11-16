@@ -27,6 +27,9 @@ internal static class Host
 
     /// <summary>Whether the mod is off for <see cref="PatchesUndone"/>, which the launch option fixes.</summary>
     private static bool _offForSeLinux;
+
+    /// <summary>The notice that tells the player the launch option, once the game's language is known.</summary>
+    private static UI.Notice? _notice;
     private static string? _lastError;
 
     public static void Start()
@@ -100,6 +103,12 @@ internal static class Host
             _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
                 assist == null ? null : assist.Press);
             _panel.Poll();
+            // Once, in the game's language, which loads after the mods.
+            if (_offForSeLinux && _notice == null && MegaCrit.Sts2.Core.Localization.LocManager.Instance?.Language != null)
+                _notice = new UI.Notice((SceneTree)Engine.GetMainLoop(), L10n.T("Spire Zero is off"),
+                    L10n.T("SELinux on this computer silently removes the mod's hooks partway through a game, and the AI then stops. " +
+                           "Add this line to the game's launch options in Steam (Properties, Launch Options), then restart the game."),
+                    LaunchOption);
             if (assist == null)
                 _panel.Show("—", L10n.T("off"), null, L10n.T(_off!), _offForSeLinux ? L10n.T("Steam launch options: {0}", LaunchOption) : null,
                     _offForSeLinux ? Tone.Warn : Tone.Plain);

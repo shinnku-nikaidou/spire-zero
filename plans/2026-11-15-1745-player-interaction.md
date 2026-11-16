@@ -342,3 +342,5 @@
   - 處理：這台在 Steam 的啟動選項加 `DOTNET_EnableWriteXorExecute=0 %command%`（環境變數會帶進 sniper 容器，已驗證）。mod 啟動時
     在 Linux、SELinux Enforcing、`selinuxuser_execheap` 關、W^X 沒關時整個關掉，面板寫出要加的啟動選項（`Host.PatchesUndone`），
     和遊戲版本不符時一樣不跑。紀錄不改成讀遊戲事件：按按鈕（Executor）和卡牌提示（ChoiceContexts）也是 patch，只改紀錄 AI 還是會停。
+  - 這種情況 mod 在遊戲語言載入後跳一個提示框（`UI.Notice`）：說明原因，附可選取的啟動選項一行，「複製」按鈕放進剪貼簿。
+    沒在遊戲裡看過：要不帶啟動選項開一次才會出現。
