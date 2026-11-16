@@ -131,7 +131,7 @@ fn every_combat_is_played_through() {
     }
     let _ = std::panic::take_hook();
     let mut by_count: Vec<_> = stopped.iter().collect();
-    by_count.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+    by_count.sort_by_key(|a| std::cmp::Reverse(a.1.0));
     eprintln!("{whole} of {played} combats played through, {steps} actions taken");
     for (message, (count, first)) in by_count {
         eprintln!("x{count}: {message} [first: {first}]");

@@ -20,13 +20,25 @@ pub enum Saved {
 
 impl Saved {
     pub fn of_text(s: Str) -> Saved {
-        if s.is_null() { Saved::Null } else { Saved::Str(s) }
+        if s.is_null() {
+            Saved::Null
+        } else {
+            Saved::Str(s)
+        }
     }
     pub fn of_id(id: ModelId) -> Saved {
-        if is_null(&id) { Saved::Null } else { Saved::ModelId(id) }
+        if is_null(&id) {
+            Saved::Null
+        } else {
+            Saved::ModelId(id)
+        }
     }
     pub fn of_card(card: SerializableCard) -> Saved {
-        if is_null(&card) { Saved::Null } else { Saved::Card(card) }
+        if is_null(&card) {
+            Saved::Null
+        } else {
+            Saved::Card(card)
+        }
     }
     pub fn int(self) -> i32 {
         match self {
@@ -88,7 +100,10 @@ fn should_serialize(prop: &Prop, value: &Saved) -> bool {
         0 => true,
         // SaveIfNotTypeDefault: not the default of the property's type (0, false, null).
         2 => !matches!(value, Saved::Null | Saved::Int(0) | Saved::Bool(false)),
-        other => panic!("{}: the serialization condition {other}, which no property of the game carried", prop.name),
+        other => panic!(
+            "{}: the serialization condition {other}, which no property of the game carried",
+            prop.name
+        ),
     }
 }
 
@@ -111,11 +126,13 @@ pub fn from_internal(model: Obj, _id: ModelId, c: &mut Combat) -> SavedPropertie
             }
             Saved::Ints(value) => {
                 d.int_arrays__set = true;
-                d.int_arrays.push(SavedPropertiesSavedProperty { name, value });
+                d.int_arrays
+                    .push(SavedPropertiesSavedProperty { name, value });
             }
             Saved::ModelId(value) => {
                 d.model_ids__set = true;
-                d.model_ids.push(SavedPropertiesSavedProperty { name, value });
+                d.model_ids
+                    .push(SavedPropertiesSavedProperty { name, value });
             }
             Saved::Bool(value) => {
                 d.bools__set = true;
@@ -131,7 +148,8 @@ pub fn from_internal(model: Obj, _id: ModelId, c: &mut Combat) -> SavedPropertie
             }
             Saved::Cards(value) => {
                 d.card_arrays__set = true;
-                d.card_arrays.push(SavedPropertiesSavedProperty { name, value });
+                d.card_arrays
+                    .push(SavedPropertiesSavedProperty { name, value });
             }
         }
     }

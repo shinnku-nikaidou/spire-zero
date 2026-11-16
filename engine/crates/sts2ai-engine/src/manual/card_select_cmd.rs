@@ -58,9 +58,9 @@ pub fn enter(
         },
         prompt_key: match &prefs {
             Some(prefs) if !prefs.prompt.loc_table.is_null() => Str::concat(&[
-                prefs.prompt.loc_table.clone(),
+                prefs.prompt.loc_table,
                 Str::lit("."),
-                prefs.prompt.loc_entry_key.clone(),
+                prefs.prompt.loc_entry_key,
             ]),
             _ => Str::NULL,
         },
