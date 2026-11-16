@@ -411,10 +411,12 @@ game's objects (`Combat.x`).
   `RunAutoPrePlayPhase` run after the answer, as an action the executor checks the win after. The engine's turn
   start is written by hand for this (`manual/combat_manager.rs`, `start_turn`): the rest runs where the setup pauses.
   Elsewhere a hook's prompt stops the step like any other, and when the step is run again with the answer, the
-  hook's rest runs where the hook stands, before what follows it: the game's other hooks that can pause a listener
-  (`Hook.AfterDeath`, `AfterDiedToDoom`, `BeforeFlush`, `BeforeSideTurnStart`, `BeforeSideTurnEnd`,
-  `AfterSideTurnEnd`, the turn end's `AfterAutoPostPlayPhaseEntered`, `DoTurnEnd` and `FlushPlayerHand`) are known
-  places to look when a difference shows there.
+  hook's rest runs where the hook stands, before what follows it. With one player that is the game's order too: the
+  cards the turn end plays by itself (`AfterAutoPostPlayPhaseEntered`: Stampede, Simpleton, Howl from Beyond) are
+  awaited where they are played, so their prompts come before the turn goes on, and in v0.113.1 no listener of the
+  game's other hooks that can pause (`Hook.AfterDeath`, `AfterDiedToDoom`, `BeforeFlush`, `BeforeSideTurnStart`,
+  `BeforeSideTurnEnd`, `AfterSideTurnEnd`, `DoTurnEnd`, `FlushPlayerHand`) asks the player. A card or relic of a
+  later version that asks from one of those needs the turn start's treatment.
 
 **Events.** An event of the game is a list of delegates, called in the order they subscribed. Nearly all are how
 the game tells its screen that something changed. An event is state when a subscriber is game code: a member of an
