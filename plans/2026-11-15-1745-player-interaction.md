@@ -339,3 +339,6 @@
     是「Error executing OnMethodCompiled event: Win32Exception (13): Permission denied at LinuxSystem.ProtectRWX」。
     `DOTNET_EnableWriteXorExecute=0` 跑 8 次：0 個 EACCES、0 次失效、0 場失敗。DamageMeter、Godot、.NET 版本都不是原因。
   - 這也解釋了以前的失效（0.3.8 的 `GameAction.Execute`、0.3.11 的出牌和存檔）和模擬器關掉分層編譯的原因；哪一個 patch 掉是隨機的。
+  - 處理：這台在 Steam 的啟動選項加 `DOTNET_EnableWriteXorExecute=0 %command%`（環境變數會帶進 sniper 容器，已驗證）。mod 啟動時
+    在 Linux、SELinux Enforcing、`selinuxuser_execheap` 關、W^X 沒關時整個關掉，面板寫出要加的啟動選項（`Host.PatchesUndone`），
+    和遊戲版本不符時一樣不跑。紀錄不改成讀遊戲事件：按按鈕（Executor）和卡牌提示（ChoiceContexts）也是 patch，只改紀錄 AI 還是會停。

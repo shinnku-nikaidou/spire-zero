@@ -12,7 +12,9 @@
     <!--
       No tiered compilation: every method is compiled once, fully optimized.
       - Safety: with tiering, the runtime re-JITs hot methods in the background and a Harmony patch can silently
-        drop off. Seen after a few thousand combats, when RunManager.WriteReplay ran unpatched.
+        drop off. Seen after a few thousand combats, when RunManager.WriteReplay ran unpatched. The cause (2026-11-16):
+        with .NET's W^X on, SELinux in enforcing mode denies MonoMod's rewrite of the patch into the recompiled code
+        (execheap); the mod in the real game meets the same (Host.PatchesUndone).
       - Speed: Harmony's JIT hook makes every extra compile slow, so tiering was 2x slower on short runs.
       Launchers should also set DOTNET_ReadyToRun=0, which can't be set here: framework code is then JIT-compiled
       fully optimized too, about 20% more combats/s.

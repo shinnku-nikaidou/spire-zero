@@ -67,6 +67,8 @@ internal static class L10n
         ["the AI cannot press this: {0}"] = ["l'IA ne peut pas faire ceci : {0}", "la IA no puede hacer esto: {0}", "AI 按不了：{0}", "AI 按不了：{0}", "AIには押せない：{0}"],
         ["the run is over"] = ["la partie est finie", "la partida terminó", "本局结束", "本局結束", "ランが終わった"],
         ["you acted"] = ["vous avez joué", "jugaste tú", "你动手了", "你動手了", "あなたが操作した"],
+        ["SELinux would undo the mod's hooks"] = ["SELinux annulerait les points d'ancrage du mod", "SELinux anularía los enganches del mod", "SELinux 会让 mod 的钩子失效", "SELinux 會讓 mod 的鉤子失效", "SELinuxがmodのフックを無効にします"],
+        ["Steam launch options: {0}"] = ["Options de lancement Steam : {0}", "Opciones de lanzamiento de Steam: {0}", "Steam 启动选项：{0}", "Steam 啟動選項：{0}", "Steamの起動オプション：{0}"],
         ["no SL clone of this room"] = ["pas de copie SL de cette salle", "no hay copia SL de esta sala", "这个房间没有 SL 副本", "這個房間沒有 SL 複本", "この部屋のSLコピーがありません"],
         ["AI stopped: {0}"] = ["L'IA s'est arrêtée : {0}", "La IA se detuvo: {0}", "AI 停下了：{0}", "AI 停下了：{0}", "AIが停止：{0}"],
         ["Speed"] = ["Vitesse", "Velocidad", "速度", "速度", "速度"],

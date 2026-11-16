@@ -17,9 +17,16 @@ internal static class Host
 
     public const string Tag = "[Sts2Ai]";
 
+    /// <summary>What the game's launch options need, where SELinux would undo the mod's patches (<see cref="PatchesUndone"/>).</summary>
+    private const string LaunchOption = "DOTNET_EnableWriteXorExecute=0 %command%";
+
     private static Assist? _assist;
     private static UI.Panel? _panel;
+    /// <summary>Why the mod is off, in English (shown in the game's language), or null.</summary>
     private static string? _off;
+
+    /// <summary>Whether the mod is off for <see cref="PatchesUndone"/>, which the launch option fixes.</summary>
+    private static bool _offForSeLinux;
     private static string? _lastError;
 
     public static void Start()
@@ -35,6 +42,13 @@ internal static class Host
         {
             _off = $"off: game {version}, the mod is for {PinnedVersion}";
             ModLog.Warn("start", _off);
+        }
+        else if (PatchesUndone())
+        {
+            // The game's language loads after the mods: the panel translates it each frame.
+            (_off, _offForSeLinux) = ("SELinux would undo the mod's hooks", true);
+            ModLog.Warn("start", "off: SELinux enforces and denies execheap, and .NET's W^X is on, so a Harmony patch is undone " +
+                                 $"once .NET recompiles its method (after about 30 calls); the game's launch options need {LaunchOption}");
         }
         else
         {
@@ -54,6 +68,23 @@ internal static class Host
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
     }
 
+    /// <summary>
+    /// Whether this machine would undo the mod's Harmony patches. .NET recompiles a method after about 30 calls, and
+    /// Harmony's MonoMod writes the patch into the new code; with .NET's W^X on (its default), SELinux in enforcing mode
+    /// denies that write (execheap, EACCES), unless its boolean allows execheap. MonoMod logs it only to its own debug
+    /// log, and the patch is gone for the rest of the game: in the user's two real games of 2026-11-16 the save's and
+    /// the turn end's prefixes stopped at their 31st call, each at an execheap denial in the audit log. W^X off (an
+    /// environment variable the runtime reads at its start, so only a launch option can set it) leaves no denial.
+    /// </summary>
+    private static bool PatchesUndone()
+    {
+        if (!OperatingSystem.IsLinux()) return false;
+        if ((System.Environment.GetEnvironmentVariable("DOTNET_EnableWriteXorExecute") ?? System.Environment.GetEnvironmentVariable("COMPlus_EnableWriteXorExecute")) == "0")
+            return false;
+        static string? Read(string path) => File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+        return Read("/sys/fs/selinux/enforce") == "1" && Read("/sys/fs/selinux/booleans/selinuxuser_execheap")?.StartsWith('1') != true;
+    }
+
     /// <summary>The version in the mod's manifest beside it.</summary>
     private static string ModVersion(string modDir)
     {
@@ -69,7 +100,9 @@ internal static class Host
             _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
                 assist == null ? null : assist.Press);
             _panel.Poll();
-            if (assist == null) _panel.Show("—", L10n.T("off"), null, _off!);
+            if (assist == null)
+                _panel.Show("—", L10n.T("off"), null, L10n.T(_off!), _offForSeLinux ? L10n.T("Steam launch options: {0}", LaunchOption) : null,
+                    _offForSeLinux ? Tone.Warn : Tone.Plain);
             else assist.Tick(_panel);
             _lastError = null;
         }
