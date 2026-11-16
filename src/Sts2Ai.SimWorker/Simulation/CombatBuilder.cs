@@ -43,6 +43,7 @@ namespace Sts2Ai.SimWorker.Simulation;
 /// played this turn come back as card plays in the combat's history (<see cref="Melodies"/>), and with them what they
 /// alone decide (Lullaby's block given this turn). So do the plays a power's or a relic's number counts
 /// (<see cref="Plays"/>), and a counter inside a power is set where the hand's costs show it (<see cref="HandCosts"/>).
+/// The player's turn number is the round's, or where a relic's counter shows it (<see cref="Relics"/>).
 ///
 /// Not reproduced, because the observation doesn't show it: the rest of this turn's history (which cards were played,
 /// damage taken, ...), counters kept inside powers and monsters that nothing shown depends on (Void Form's free plays
@@ -547,15 +548,20 @@ internal static class CombatBuilder
 
     private static void Relics(Player player, IReadOnlyList<RelicView> views)
     {
+        // The player's turn number, after the relic's own numbers: it runs ahead of the round after an extra turn (Pael's
+        // Eye), and Stone Calendar's counter shows it.
+        var pcs = player.PlayerCombatState!;
+        var turn = new Knob(() => pcs.TurnNumber, v => TurnNumber.SetValue(pcs, v));
         foreach (var (relic, view) in player.Relics.Zip(views))
         {
             if (relic.Id.Entry != view.Id) continue;
             // Pael's Tooth's counter is how many cards it keeps, so they go in first. Their upgrades are hidden, and
             // they come back only after the combat.
             if (relic is PaelsTooth) ToothCards.SetValue(relic, (view.Cards ?? []).Select(id => new CardSpec(id).ToSerializable()).ToList());
-            if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)));
-            // A hidden counter can be one that ran out, such as Silver Crucible's after its third card reward.
-            else Solve(() => relic.ShowCounter ? 1 : 0, 0, FieldKnobs(relic, typeof(RelicModel)));
+            if (view.Counter is int counter) Solve(() => relic.DisplayAmount, counter, FieldKnobs(relic, typeof(RelicModel)).Append(turn));
+            // A hidden counter can be one that ran out, such as Silver Crucible's after its third card reward, or Stone
+            // Calendar's from its turn on.
+            else Solve(() => relic.ShowCounter ? 1 : 0, 0, FieldKnobs(relic, typeof(RelicModel)).Append(turn));
             // After the counter, which can be half of it: Silver Crucible is used up once its counter ran out and a
             // treasure room was entered. A knob that would change the counter doesn't count.
             bool CounterAsObserved() => view.Counter is int c ? relic.ShowCounter && relic.DisplayAmount == c : !relic.ShowCounter;
