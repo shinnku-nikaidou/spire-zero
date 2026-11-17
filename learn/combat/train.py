@@ -87,14 +87,14 @@ def main(
         parts = ([part[k] for k in order[i : i + BATCH]] for i in range(0, len(order), BATCH))
         yield from built(build, parts, device, workers)
 
-    test_batches = list(batches(test, False))
+    # The held-out batches are built again at each look rather than kept (V's trainer says why).
 
     def held_out_loss_of(model, part_batches, n):
         with torch.no_grad():
             return sum(float(loss(model(*b.inputs()), b).sum()) for b in part_batches) / n
 
     def held_out_loss(model):
-        return held_out_loss_of(model, test_batches, len(test))
+        return held_out_loss_of(model, batches(test, False), len(test))
 
     model = Net({t: len(ids) for t, ids in tables.items()}).to(device)
     best, best_state, stale, epochs = math.inf, None, 0, 0
@@ -143,7 +143,7 @@ def main(
         "samples": len(samples),
         "held_out_samples": len(test),
         "vocab": {t: len(ids) for t, ids in tables.items()},
-        **report.summary(model, test, test_batches, train),
+        **report.summary(model, test, batches(test, False), train),
         "held_out_loss_by_env": by_env(test),
     }
     if test_list:

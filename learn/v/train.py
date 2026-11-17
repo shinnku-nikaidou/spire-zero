@@ -142,7 +142,8 @@ def main(
         parts = ([part[k] for k in order[i : i + BATCH]] for i in range(0, len(order), BATCH))
         yield from built(build, parts, device, workers)
 
-    test_batches = list(batches(test, False))
+    # The held-out batches are built again at each look rather than kept: on a list of 125,000 runs they outgrow a 16 G
+    # GPU. Built in order, with no draw, so each look sees the same batches.
     test_weight = sum(s["weight"] for s in test)
 
     # Baseline: per floor, the hazard the training runs show, whatever the state.
@@ -187,7 +188,7 @@ def main(
     def evaluate(model):
         total, aux_total, wins = 0.0, 0.0, []
         with torch.no_grad():
-            for b in test_batches:
+            for b in batches(test, False):
                 if model:
                     logits, aux = model.both(*b.inputs())
                     aux_total += float((aux_loss(aux, b) * b.weight).sum())
