@@ -396,3 +396,12 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   error was fixed (step report-v11-0-td4-c11-0-ironclad, 600 runs, no game error, none failed): A0 199/200, A10 172/200,
   Dread 76/200, in place of the void 200 / 168 / 70; the Defect's Dread stays 44/199 (the game's own failure, per the
   docs plan). Texts sent without `--content`, the 17 languages at once; the item stays 0.3.20.
+- 2026-11-17 16:22: 0.3.21 at b5e176d9, three platforms (4:12; the VM started and shut down again), for an upload on
+  the user's word ("修完之後直接發版新的mod上傳", in the NoSL session; the number taken at HEAD by the switch session,
+  the release session being idle): the panel no longer switches SL/NoSL, the environment is the last setting in
+  Settings → AI under its own header; and what reached main since 0.3.20: NoSL's worlds drawn from the real combat in
+  the engine (the mod sends the live combat in NoSL too), the champion pair carried to v12-0-td4 + c12-0 (the same
+  play). Its Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and
+  28/28 saves replay exactly, 0 game errors; in NoSL (same seed, pimc 8x300): lost on floor 33, identical over the
+  wire, 33/33 nodes and 18/18 saves replay exactly, 0 game errors. The nets are `weights/all/`'s byte for byte. Upload
+  waits for the game to close here (it was running); the Mac's is closed.
