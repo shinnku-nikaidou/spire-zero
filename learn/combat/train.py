@@ -55,6 +55,7 @@ def main(
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
     workers: Annotated[int, typer.Option(help="processes that read the logs, threads that build the batches (0: this one)")] = 8,
+    max_epochs: Annotated[int, typer.Option(help="epochs at most (patience may stop it sooner)")] = EPOCHS,
 ) -> None:
     out_file = out_path(name, out)
     torch.manual_seed(seed)
@@ -104,7 +105,7 @@ def main(
         best, best_state = held_out_loss(model), {k: v.clone() for k, v in model.state_dict().items()}
         logger.info("the file's held-out loss {:.4f}", best)
     opt = torch.optim.AdamW(model.parameters(), lr=LR_INIT if start else LR, weight_decay=WEIGHT_DECAY)
-    for epoch in range(EPOCHS):
+    for epoch in range(max_epochs):
         epochs = epoch + 1
         model.train()
         for b in batches(train, True):
@@ -135,7 +136,7 @@ def main(
         for e in envs:
             mine = [s for s in part if s["env"] == e]
             if mine:
-                out[e] = held_out_loss_of(model, list(batches(mine, False)), len(mine))
+                out[e] = held_out_loss_of(model, batches(mine, False), len(mine))
         return out
 
     fit = {
@@ -150,13 +151,13 @@ def main(
     }
     if test_list:
         medium, _ = data.read(*common.lists(test_list), reader, workers)
-        fit["medium"] = report.summary(model, medium, list(batches(medium, False)), train)
+        fit["medium"] = report.summary(model, medium, batches(medium, False), train)
     reader.close()
     print(json.dumps(fit))
 
     kept = [s for s in test if "obs" in s]
     settings = {
-        "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR_INIT if start else LR, "weight_decay": WEIGHT_DECAY,
+        "epochs": max_epochs, "patience": PATIENCE, "batch": BATCH, "lr": LR_INIT if start else LR, "weight_decay": WEIGHT_DECAY,
         "potion_weight": POTION_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY, "test_list": test_list,
     }  # fmt: skip
     trained = common.trained(list_, start, seed, epochs, settings, reader)

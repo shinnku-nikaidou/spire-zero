@@ -224,8 +224,8 @@ def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(
     runs = write_runs(tmp_path, runs=14)
     args = ["--list", runs, "--name", "first", "--out", str(first), "--encoder", encoder_command(), "--workers", "0"]
     assert CliRunner().invoke(train.script, args).exit_code == 0
-    monkeypatch.setattr(train, "EPOCHS", 0)
-    args = ["--list", runs, "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command(), "--workers", "0"]
+    args = ["--list", runs, "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command(), "--workers", "0",
+            "--max-epochs", "0"]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
