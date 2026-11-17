@@ -82,6 +82,7 @@ def main(
         typer.Option("--bootstrap", help="the frozen V's of folds A and B, FA.json,FB.json, for multi-step targets"),
     ] = None,
     horizon: Annotated[int, typer.Option(help="with --bootstrap: the floors labelled with what happened")] = 0,
+    max_epochs: Annotated[int, typer.Option(help="epochs at most (patience may stop it sooner)")] = EPOCHS,
 ) -> None:
     if fold is not None and fold not in bootstrap.FOLDS:
         raise LearnError(f"--fold is one of {', '.join(bootstrap.FOLDS)}, not {fold}")
@@ -212,7 +213,7 @@ def main(
         logger.info("the file's held-out loss {:.4f}", init_loss)
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, best_state, stale, epochs = math.inf, None, 0, 0
-    for epoch in range(EPOCHS):
+    for epoch in range(max_epochs):
         epochs = epoch + 1
         model.train()
         for b in batches(train, True):
@@ -268,7 +269,7 @@ def main(
     print(json.dumps(report))
 
     settings = {
-        "floors": FLOORS, "epochs": EPOCHS, "patience": PATIENCE, "batch": BATCH, "lr": LR, "weight_decay": WEIGHT_DECAY,
+        "floors": FLOORS, "epochs": max_epochs, "patience": PATIENCE, "batch": BATCH, "lr": LR, "weight_decay": WEIGHT_DECAY,
         "aux_weight": AUX_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY,
     }  # fmt: skip
     trained = common.trained(list_, start, seed, epochs, settings, reader)
