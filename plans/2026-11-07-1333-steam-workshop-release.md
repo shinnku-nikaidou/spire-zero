@@ -405,3 +405,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   28/28 saves replay exactly, 0 game errors; in NoSL (same seed, pimc 8x300): lost on floor 33, identical over the
   wire, 33/33 nodes and 18/18 saves replay exactly, 0 game errors. The nets are `weights/all/`'s byte for byte. Upload
   waits for the game to close here (it was running); the Mac's is closed.
+- 2026-11-17 16:25: 0.3.21 (b5e176d9; since then plans and learn/ only, nothing in the item) uploaded on the user's word
+  once the game had closed here, public, three platforms. The commit timed out, but the content had gone through: the
+  item updated at 08:25:56Z (396.8 MB) and its change notes carry 0.3.21's. The texts were not sent again: none
+  changed since their last upload. Installed in `mods/` over 0.3.20 with the game closed.
