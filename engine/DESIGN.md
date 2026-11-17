@@ -34,11 +34,23 @@ checks. Over the wire an SL host sends the live combat with each combat decision
 real game, `run --check`'s host from its own), so `sim brain` (the mod's brain) and `run --check` plan in the engine
 too; a card prompt is crossed on the node's clone in the search workers, as in `sim run`. A NoSL host sends none.
 
-NoSL's PIMC (`--policy pimc`) searches in the engine too, by the same option and default (`EnginePimc`). Its worlds
-are never the real combat: each is built from the observation and determinized in a search worker as on replay
-(`SimWorlds`, `PimcSampleRequest`), written out there where it begins, and taken in by the host as a NoSL sample
-(`EngineWorld.Sample`), one world per thread. A sample tells its states apart by `HiddenState.Key`, as the replay's
-NoSL world does, and its run keeps the real deck: the built combat's own run holds the combat's piles as its deck.
+NoSL's PIMC (`--policy pimc`) searches only in the engine (`EnginePimc`), in the run's own process, with no search
+workers. Its worlds are drawn from the real combat: the host sends the live combat in NoSL too, the engine takes it in
+once a decision, and each world is that combat with everything the player cannot see drawn again
+(`sz_world_determinize`, `determinize.rs`): every random stream, the run's and the player's seeds, the relic grab
+bag, the order of the draw pile from its public record since the last shuffle (`drawlog.rs`, below), and an enemy's
+queued move where another of its moves shows the same intents, rolled again by the game's own transition. What the
+player can see or remember stays the combat's own: the mode and dominion, the fight's history, every private number of
+the models. A drawn world tells its states apart by `HiddenState.Key`. plans/2026-11-17-1120-nosl-dread-architecture.md
+(option c) has the design and the checks.
+
+The draw pile's record is `DrawPileLog` (`src/Sts2Ai.GameBridge`, Harmony patches in the sim and in the mod): from each
+shuffle, every card put in, moved, taken out or changed in the draw pile, by card key, with where (top, bottom, at
+random, or a place the player does not see). The engine replays it to draw the order: the shuffled cards are hidden
+slots whose cards are summed over, a card put at a known place is a known slot, a card seen there must be the one
+drawn, and a draw is accepted with its chance over a bound on every draw's chance (exact rejection, at most a million
+replays). A card the player did not see go in is one of the hidden slots; what the player cannot tell apart (copies of
+one key) is dealt evenly.
 
 ## Pieces
 
@@ -312,10 +324,10 @@ puts a selector of its own on the selector stack.
 ## The export
 
 `EngineExport` (C#, `src/Sts2Ai.GameBridge`) writes a live combat by reflection along the schema, and the engine reads
-it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 1:
+it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 2:
 
 ```json
-{ "format": 1, "game": "v0.113.1", "schema": "9f2c..", "sim": { "prompts": 0 },
+{ "format": 2, "game": "v0.113.1", "schema": "9f2c..", "sim": { "prompts": 0, "draw_log": [ { "op": "reset", "cards": ["STRIKE_IRONCLAD", ".."] } ] },
   "roots":  { "combat_manager__instance": ["combat_manager", 0], "local_context__net_id": 1 },
   "arenas": { "creature":   [ { "class": "Creature", "Creature": { "_block": 0, "_current_hp": 70 } } ],
               "card_model": [ { "class": "Deflect",
@@ -327,7 +339,11 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
 - **`schema`** is the schema's `hash`. The engine reads no export of another game version or another schema.
 - **`sim`**: what the program around the game holds that later observations depend on and that is no object of the
   game: `prompts`, how many card prompts its selector was asked so far. A prompt's number seeds the order of its
-  options that look the same, so the engine counts on from it.
+  options that look the same, so the engine counts on from it. `draw_log`, the draw pile's public record since its
+  last shuffle (`DrawPileLog`), which only a NoSL world reads: `reset` with the pile's cards as it was shuffled, then
+  `add`, `move` and `take` of a `card` `at` `top`, `bottom`, `random` or `any` (a place the player does not see),
+  `take_top` of several `cards` at once, `relabel` of a `card` changed `to` another, and `broken` with `why` where the
+  record cannot follow the game; cards by their card key.
 - **`roots`**: one member per root of the schema, by its `name`, holding its value.
 - **`arenas`**: one member per arena that holds an object; its value is the arena's objects, and an object's place in
   the list is its index.
@@ -529,6 +545,7 @@ another, so different worlds may be used from different threads. Every function 
 ```c
 uint64_t sz_world_import(const uint8_t *json, size_t len, int32_t sample);   // a live combat as EngineExport wrote it; 0 on error
 uint64_t sz_world_clone(uint64_t world);
+uint64_t sz_world_determinize(uint64_t world, uint64_t seed);       // a NoSL world: a copy with what the player cannot see drawn again; 0 on error
 void     sz_world_free(uint64_t world);
 int32_t  sz_world_apply(uint64_t world, const uint8_t *action, size_t len);   // "play:10:1", "potion:0", "end_turn", "pick:0,2"; 0 ok
 uint64_t sz_world_step(uint64_t world, const uint8_t *action, size_t len, sz_node *node);   // the world after the action; 0 on error
@@ -542,9 +559,12 @@ void     sz_buf_free(sz_buf buf);
 int32_t  sz_last_error(sz_buf *out);                               // this thread's last error
 ```
 
-`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. `sample` is 1 for a NoSL world
-(a combat built from what the player sees and determinized), whose hidden key is `HiddenState.Key`, and 0 for the SL
-world, whose hidden key is `HiddenState.Full`; every world made from it (a clone, a step) is of the same kind.
+`sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. `sample` is 1 for a NoSL world,
+whose hidden key is `HiddenState.Key`, and 0 for the SL world, whose hidden key is `HiddenState.Full`; every world made
+from it (a clone, a step) is of the same kind. `sz_world_determinize` makes a NoSL world of any world standing between
+the player's actions (not at a card prompt): the same combat with every random stream, the run's and the player's
+seeds, the relic grab bag, the draw pile's order (from `sim.draw_log`) and the queued moves that look alike drawn again
+from `seed` (`determinize.rs`); it fails when the draw pile's record cannot be drawn from.
 
 `sz_world_step` is how search makes a node: the world after the action is made of `world`, which stays as it is (what a
 snapshot is to search) and is freed on its own, in either order. It is one copy of the combat where a clone and an
@@ -589,7 +609,11 @@ The crate has the same checks without the game, over a dump of combats the game 
 `STS2AI_ENGINE_FIXTURES`: `cargo test --release --test fixtures` (`import`, `step`, `continued` as above, through the
 C ABI: a world is held against a record by its observation, its legal actions, its status, what it changed of the
 run and its two keys; `sampled`, each export taken in as a NoSL sample has `HiddenState.Key` for its hidden key) and
-`--test world` (every combat is played through by the world alone, no action refused). A
+`--test world` (every combat is played through by the world alone, no action refused), and `--test determinize`
+(`shows_the_record`: each record's world drawn again shows the record's observation and legal actions;
+`forgets_the_first_draw`: a world drawn twice is the world drawn once from the second seed, so nothing of the real
+hidden state survives a draw; and two ignored measurements, `rank_check`, the real draw pile and queued moves ranked
+among 19 drawn worlds, and `leak_probe`, every field of the export that 4 drawn worlds share against the real one). A
 dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
 engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
 observation and what its parts cost, the keys) and what a copy costs arena by arena; its `spin` does one kind of call

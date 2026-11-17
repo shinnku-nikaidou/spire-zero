@@ -48,4 +48,8 @@ pub struct Extra {
     pub asked: Option<crate::prompt::Asked>,
     /// How many card prompts have been asked in this world so far.
     pub prompts: i32,
+    /// The draw pile's public record since its last shuffle, as the export carried it (drawlog.rs); shared by every
+    /// world made of the import, and read only where a NoSL world is drawn from it (determinize.rs). A record the
+    /// engine could not read is kept as what was wrong with it.
+    pub draw_log: Option<std::sync::Arc<Result<crate::drawlog::DrawLog, String>>>,
 }

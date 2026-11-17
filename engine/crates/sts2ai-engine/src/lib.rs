@@ -8,6 +8,8 @@
 
 #[path = "gen/mod.rs"]
 pub mod r#gen;
+pub mod determinize;
+pub mod drawlog;
 pub mod ffi;
 pub mod import;
 pub mod keys;

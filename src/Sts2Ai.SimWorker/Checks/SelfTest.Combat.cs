@@ -36,45 +36,35 @@ internal static partial class SelfTest
     private sealed record Recording(List<CombatSnapshot> Snapshots, List<string> Observations, List<string> Hidden, string Trace, List<string> ProtocolErrors);
 
     /// <summary>
-    /// A few decisions, each searched here, in a pool of <paramref name="workers"/> serve processes, and in the engine on
-    /// the worlds that pool builds, with the same seeds and the same combat net: the candidates, their values and the
-    /// plan must be the same.
+    /// A few decisions of real combats, each searched by pimc in the engine on worlds drawn from the live combat, on one
+    /// thread and on <paramref name="workers"/>: the candidates, their values and the plan must be the same.
     /// </summary>
-    private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
+    private static void PimcThreads(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
-        var brain = new PimcBrain(net.Leaf.In(PlayEnvironment.NoSL));
-        using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
-        var pooled = new PooledPimc(workerPool);
-        var engine = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), workers, workerPool);
+        var alone = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), 1);
+        var threaded = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), workers);
         for (int i = 0; i < 4; i++)
         {
             var setup = combats.Setup(i, GameSeeds.MakeSeed(seed + 2, i));
-            var encounter = setup.Encounter;
+            var rng = new Random(i);
             CombatObservation obs;
             IReadOnlyList<CombatAction> legal;
-            var rng = new Random(i);
+            CombatExport export;
             using (var session = CombatSession.Start(pump, setup, new RandomChoices(rng)))
             {
                 var policy = new PlayPolicy(rng);
                 for (int a = 0; a < i && !CombatSession.IsOver; a++) session.Step(policy);
+                while (session.Prompt != null) session.Step(policy);
                 (obs, legal) = (session.Observation(), session.LegalActions());
+                export = new CombatExport(LiveCombat.Bytes(), Alone(obs));
             }
             ulong decisionSeed = CombatSession.StableHash($"{setup.Seed}:{i}");
-            string buildSeed = GameSeeds.MakeSeed((int)decisionSeed, 0);
             var budget = new Budget(4, 120);
-            CombatDecisionResult here;
-            using (var worlds = SimWorlds.NoSL(pump, obs, buildSeed, Alone(obs)))
-                here = brain.Decide(obs, legal, worlds, budget, decisionSeed, []);
-            var there = pooled.Decide(obs, legal, buildSeed, budget, decisionSeed, [], Alone(obs));
-            check("pooled search matches in-process search",
-                Show(here) == Show(there), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; pooled {Show(there)}");
-            var inEngine = engine.Decide(obs, legal, buildSeed, budget, decisionSeed, [], Alone(obs));
-            check("engine search matches in-process search",
-                Show(here) == Show(inEngine), $"#{i} {encounter.Id.Entry} {budget}: here {Show(here)}; engine {Show(inEngine)}");
-            var errors = workerPool.TakeGameErrors();
-            check("no game errors in workers", errors.Count == 0, $"#{i}: {errors.FirstOrDefault()}");
+            var one = alone.Decide(obs, legal, () => export, budget, decisionSeed, []);
+            var many = threaded.Decide(obs, legal, () => export, budget, decisionSeed, []);
+            check("pimc decides the same on any number of threads",
+                Show(one) == Show(many), $"#{i} {setup.Encounter.Id.Entry} {budget}: 1 thread {Show(one)}; {workers} threads {Show(many)}");
         }
-        check("no worker restarts", workerPool.Restarts == 0, $"{workerPool.Restarts} restarts");
 
         static string Show(CombatDecisionResult r) =>
             $"{r.First} [{string.Join(" ", r.Plan)}] " + string.Join(" ", r.Candidates.Select(c => $"{c.Action}={c.Value:R}")) +
@@ -249,11 +239,13 @@ internal static partial class SelfTest
         var loadout = new Loadout(Deck: [.. deck.Select(id => new CardSpec(id))], Relics: ["TOASTY_MITTENS"], Hp: 999, MaxHp: 999);
         var setup = new CombatSetup("SILENT", pool[0], act, GameSeeds.MakeSeed(0, 0), Loadout: loadout);
         CombatObservation obs;
+        CombatSnapshot start;
         using (var session = CombatSession.Start(pump, setup, new RandomChoices(new Random(0))))
-            obs = session.Observation();
-        using var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs));
-        foreach (var world in worlds.Worlds(6, 1))
+            (obs, start) = (session.Observation(), session.Snapshot());
+        for (ulong k = 0; k < 6; k++)
         {
+            using var worlds = SimWorlds.SL(pump, start with { Trace = [.. start.Trace, new TraceEvent(TraceKind.Determinize, Seed: k)] }, Alone(obs));
+            var world = worlds.Worlds(1, 0)[0];
             var root = world.Snapshot();
             uint survivor = world.Observe().Hand.First(c => c.Id == "SURVIVOR").Uid!.Value;
             world.Execute(world.Legal().First(a => a.Card == survivor));
@@ -295,10 +287,12 @@ internal static partial class SelfTest
             }
             CombatSnapshot root;
             IReadOnlyList<CombatAction> legal;
+            CombatExport export;
             using (var session = CombatSession.Start(pump, CombatBuilder.Setup(obs, setup.Seed), FirstPicks.Instance))
             {
                 root = session.Snapshot();
                 legal = session.LegalActions();
+                export = new CombatExport(LiveCombat.Bytes(), Alone(obs));
             }
             using (var worlds = SimWorlds.SL(pump, root, Alone(obs)))
             {
@@ -315,11 +309,8 @@ internal static partial class SelfTest
                 check($"SL world ends a cycle as planned ({name})", world.Status == plan.End, $"{world.Status}, planned {plan.End}");
             }
             if (prompt) return;
-            using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs)))
-            {
-                var pimc = new PimcBrain(leaf.In(PlayEnvironment.NoSL)).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
-                check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
-            }
+            var pimc = new EnginePimc(leaf.In(PlayEnvironment.NoSL), 2).Decide(obs, legal, () => export, new Budget(Worlds: 2, NodesPerWorld: 300), 1, []);
+            check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
         }
         Case("draws", ["MONOLOGUE", "FLASH_OF_STEEL", "FLASH_OF_STEEL"], []);
         Case("prompt", ["MONOLOGUE", "PARTICLE_WALL", "NEUTRALIZE", "HAZE", "HAZE"], ["TOUCH_OF_INSANITY"], prompt: true);

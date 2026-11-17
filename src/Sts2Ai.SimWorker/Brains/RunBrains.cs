@@ -135,10 +135,11 @@ internal sealed class WireBrain : IRunBrain
     public int Replans => 0;
     public PlanTally? Search => null;
 
-    /// <summary>In SL with the live combat too, as the mod sends it: the brain plans on it in the engine.</summary>
+    /// <summary>With the live combat too, as the mod sends it: the brain searches on it in the engine (SL's plan as it
+    /// is, NoSL's pimc with what the player cannot see drawn again).</summary>
     public CombatAction Choose(CombatDecision decision) => CombatAction.Parse(Ask(Surfaces.Combat,
         decision.RunObservation ?? throw new InvalidOperationException("a combat decision outside a run"), [.. decision.Legal.Select(a => a.ToString())],
-        _sl && decision.Export is { } live ? Convert.ToBase64String(live.Bytes) : null));
+        decision.Export is { } live ? Convert.ToBase64String(live.Bytes) : null));
 
     public ChoiceAnswer Choose(ChoiceDecision decision)
     {

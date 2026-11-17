@@ -114,7 +114,7 @@ internal sealed class CombatSession : IDisposable
     {
         // The answers given while the combat started come first in the trace; the start asks for them again.
         int started = snapshot.Trace.TakeWhile(e => e.Kind == TraceKind.Choice).Count();
-        // The build was checked when the setup was first started (SimWorlds.NoSL); a restore does not check it again.
+        // A built combat was checked when its setup was first started (Start); a restore does not check it again.
         var session = Start(pump, snapshot.Setup, prompts, [.. snapshot.Trace.Take(started).Select(e => e.Picks!)], check: false);
         try
         {
@@ -332,6 +332,8 @@ internal sealed class CombatSession : IDisposable
             (cards[i], cards[j]) = (cards[j], cards[i]);
         }
         foreach (var card in cards) draw.MoveToBottomInternal(card);
+        // The pile's order is a uniform draw nobody saw: its public record starts again.
+        DrawPileLog.Shuffled(draw);
         var db = NetCombatCardDb.Instance;
         CombatBuilder.NumberCards(Pcs, [.. Pcs.Hand.Cards.Select(db.GetCardId)]);
 

@@ -5,8 +5,8 @@ use crate::rt::Combat;
 use crate::rt::import::{Res, field, members, object};
 use serde_json::Value;
 
-/// The format of an export this engine reads.
-pub const FORMAT: u32 = 1;
+/// The format of an export this engine reads. 2: `sim` carries the draw pile's record (`draw_log`).
+pub const FORMAT: u32 = 2;
 
 /// The combat of an export. An export of another game version or made along another schema is refused, and so is one
 /// that reached an object the engine has no class for: there is nothing the engine could do with it but guess.
@@ -44,9 +44,13 @@ pub fn import(json: &str) -> Res<Combat> {
         &mut c.a,
     )?;
     c.s = read_roots(object(o.get("roots").ok_or("no member roots")?)?)?;
-    // What the simulator holds beside the game: how many card prompts its selector was asked so far.
+    // What the program around the game holds beside it: how many card prompts its selector was asked so far, and
+    // the draw pile's public record since its last shuffle (drawlog.rs).
     let sim = object(o.get("sim").ok_or("no member sim")?)?;
-    members(sim, 1)?;
+    members(sim, 2)?;
     c.x.prompts = field(sim, "prompts")?;
+    // Read here, refused only where a NoSL world is drawn from it: an SL world never reads it.
+    let log = crate::drawlog::DrawLog::parse(sim.get("draw_log").ok_or("no member sim.draw_log")?);
+    c.x.draw_log = Some(std::sync::Arc::new(log));
     Ok(c)
 }

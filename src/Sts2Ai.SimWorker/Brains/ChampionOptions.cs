@@ -14,17 +14,18 @@ namespace Sts2Ai.SimWorker.Brains;
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
-/// <param name="Engine">Whether the search runs in the engine (--combat-world engine, run's and brain's default): plan's
-/// (<see cref="EnginePlanner"/>) rather than on the node's clone, pimc's (<see cref="EnginePimc"/>) rather than on its
-/// worlds replayed in the workers. It is the same champion either way, by the same name.</param>
+/// <param name="Engine">Whether plan searches in the engine (--combat-world engine, run's and brain's default,
+/// <see cref="EnginePlanner"/>) rather than on the node's clone. It is the same champion either way, by the same name.
+/// pimc always searches in the engine (<see cref="EnginePimc"/>): its worlds are drawn from the real combat there.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
     LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, bool Engine = false)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
     public bool Explores => Explore > 0 || MacroExplore > 0;
 
-    /// <summary>The search's workers (pimc's, plan's, l0's on the clone). A run holds its process's one live game, so search runs in other processes.</summary>
-    public WorkerPool? Pool() => Searches || OnClone ? new WorkerPool(Program.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
+    /// <summary>The search's workers (plan's, l0's on the clone). A run holds its process's one live game, so search on
+    /// the node's clone runs in other processes; pimc's runs in this one's engine and needs none.</summary>
+    public WorkerPool? Pool() => Policy == "plan" || OnClone ? new WorkerPool(Program.SelfCommand(), Workers, Leaf.WorkerOptions()) : null;
 
     /// <summary>Whether the combat brain searches: pimc, or plan in SL.</summary>
     private bool Searches => Policy is "pimc" or "plan";
@@ -34,9 +35,9 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// Placeholders draw from one generator seeded by the run id, so a run plays the same whatever is logged, in
     /// this process or over the wire; so does the exploring l0, from its own. pimc plays in NoSL; in SL, plan plans the
     /// whole combat on the node's clone, and with --afterstates clone l0 plays each option on it.
-    /// The search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, it runs in the
-    /// engine, in as many threads as the pool has workers: the pool plays the node's clone across a card prompt a plan
-    /// is rooted at, and builds pimc's worlds. With
+    /// plan's search runs in <paramref name="pool"/> (<see cref="Pool"/>); with --combat-world engine, it runs in the
+    /// engine, in as many threads as the pool has workers, and the pool plays the node's clone across a card prompt a
+    /// plan is rooted at. pimc's runs in the engine, in --workers threads. With
     /// <paramref name="explain"/>, for a host that shows the answers (the mod), map options carry their routes (<see cref="Dispatcher"/>),
     /// and l0 counts a state as decided once the host says it played the answer (<see cref="Executed"/>): its player may act instead.
     /// </summary>
@@ -50,12 +51,12 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             throw new NotSupportedException("l0 plays on the node's clone in SL (--afterstates clone): the screen's predicted afterstates are NoSL's");
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
-        // The nets read every state in the run's environment (env:NoSL in NoSL); the workers' leaves are each search's
-        // own environment's (Serve: pimc's NoSL, the planner's SL).
+        // The nets read every state in the run's environment (env:NoSL in NoSL); the workers' leaves are the planner's,
+        // in SL (Serve).
         ICombatLeaf InEnv() => Leaf.Leaf.In(env);
-        var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Policy == "plan" ? Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat)
-            : Engine ? new EnginePimc(InEnv(), Workers, pool).Route(Budget, Combat) : new PooledPimc(pool).Route(Budget, Combat);
+        var combat = Policy == "pimc" ? new EnginePimc(InEnv(), Workers).Route(Budget, Combat)
+            : pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
+            : Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {

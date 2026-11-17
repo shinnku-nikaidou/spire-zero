@@ -34,6 +34,7 @@ internal static partial class HeadlessPatches
         // First: patching compiles each replaced method, which can inline a CardSelectCmd entry not yet patched
         // (SapphireSeed's planting, rewritten by EventPresentation, did).
         ChoiceContexts.Patch(harmony);
+        DrawPileLog.Patch(harmony);
         harmony.PatchAll(typeof(HeadlessPatches).Assembly);
     }
 }

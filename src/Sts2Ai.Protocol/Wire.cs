@@ -39,7 +39,8 @@ public sealed record Hello(string GameVersion, string Env, string Role, RunHeade
 /// <param name="RunId">The run's id (<see cref="IdOf"/>).</param>
 public sealed record RunHeader(string RunId, string Character, int Ascension)
 {
-    /// <summary>A run's id: a hash of its seed, so in NoSL the seed never leaves the host; an SL checkpoint carries it.</summary>
+    /// <summary>A run's id: a hash of its seed, not the seed. An SL checkpoint carries the seed, and so does every combat's
+    /// export; NoSL's engine draws it again before any search reads the combat.</summary>
     public static string IdOf(string seed) => ProtocolJson.Hash(seed).ToString("x16");
 }
 
@@ -55,9 +56,10 @@ public sealed record Ready(string Champion, string Shown) : WireMessage;
 /// </summary>
 /// <param name="DecisionId">From 0, increasing within the run.</param>
 /// <param name="ObsHash"><see cref="ProtocolJson.Hash"/> of <see cref="Obs"/>, in hex.</param>
-/// <param name="Export">SL only, at a combat decision between actions (not at a card prompt): the live combat as the
-/// bridge's <c>EngineExport</c> wrote it, in base64, for the engine to take in. It holds the hidden state, so a NoSL
-/// host never sends it.</param>
+/// <param name="Export">At a combat decision between actions (not at a card prompt): the live combat as the bridge's
+/// <c>EngineExport</c> wrote it, in base64, for the engine to take in. SL's search plays it; NoSL's draws its worlds from
+/// it, with everything the player cannot see drawn again in the engine before any search reads it (the draw pile's
+/// order from the public record the export carries).</param>
 /// <param name="Trace">SL only, and always there: every step taken since the latest <see cref="NodeCheckpoint"/>, in the
 /// order the steps took effect, as "surface action" (a card prompt's picks as the game's own indexes). With the
 /// checkpoint it is the clone this decision is asked on (<see cref="NodeClone"/>). Sent whole each time: a host whose

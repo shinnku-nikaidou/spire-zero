@@ -123,20 +123,28 @@ public sealed class EngineWorldTests(FakeEngine engine)
     }
 
     [Fact]
-    public void ANoSlSampleKeepsTheRunsDeckAndItsKindOfHiddenKey()
+    public void ADrawnWorldIsANoSlSampleOfTheSameCombatAndRun()
     {
-        var deck = new List<CardView> { new() { Id = "NEUTRALIZE" } };
-        using var world = EngineWorld.Sample(Encoding.UTF8.GetBytes("NIBBITS_WEAK"), Around with { Deck = deck });
+        using var real = World();
+        using var world = real.Determinize(5);
         world.Execute(CombatAction.EndTurn);
         using var copy = world.Clone();
         copy.Execute(CombatAction.EndTurn);
         var run = world.Run();
-        // The built combat's run holds its piles as its deck: the sample's run keeps the real one, the rest as the SL world's.
-        Assert.Equal((69, "RING_OF_THE_SNAKE"), (run.Hp, run.Relics.Single().Id));
-        Assert.Same(deck, run.Deck);
-        // The stand-in marks a sample's hidden key: the import's kind goes to every world made of it.
+        // The same run as the real combat's: its deck and relics, with what the combat changed.
+        Assert.Equal((69, "STRIKE_SILENT", "RING_OF_THE_SNAKE"), (run.Hp, run.Deck.Single().Id, run.Relics.Single().Id));
+        // The stand-in marks a sample's hidden key: every world made of a drawn one is a sample too, the real one is not.
         Assert.Equal((1UL << 40) + 1, world.HiddenKey());
         Assert.Equal((1UL << 40) + 2, copy.HiddenKey());
+        Assert.Equal(0UL, real.HiddenKey() >> 40);
+    }
+
+    [Fact]
+    public void AWorldTheEngineCannotDrawSaysWhy()
+    {
+        using var real = EngineWorld.Import(Encoding.UTF8.GetBytes("undrawable"), Around);
+        var e = Assert.Throws<EngineException>(() => real.Determinize(1));
+        Assert.Contains("undrawable", e.Message);
     }
 
     [Theory]

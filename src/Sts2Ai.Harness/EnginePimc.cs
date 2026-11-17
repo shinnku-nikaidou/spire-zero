@@ -6,42 +6,44 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Harness;
 
 /// <summary>
-/// <see cref="PimcBrain"/> in NoSL with its worlds searched in the engine, in threads of this process. Each world is
-/// built from the observation and determinized in a worker of the pool, as <see cref="PooledPimc"/>'s is, so nothing of
-/// the true state leaves the host; it comes back written out where it begins (<see cref="PimcSampleRequest"/>), is taken
-/// in as a NoSL sample (<see cref="EngineWorld.Sample"/>) and is searched in a thread of its own. The worlds' lines are
-/// merged in world order, so a decision is the same on any number of threads, and with the same seeds and leaf it is
-/// <see cref="PooledPimc"/>'s, as long as the engine plays the combat as the game does.
+/// <see cref="PimcBrain"/> in NoSL, its worlds searched in the engine, in threads of this process. Every world is the
+/// real combat as the host wrote it out (<see cref="CombatDecision.Export"/>, the one SL takes in too) with everything
+/// the player cannot see drawn again in the engine (<see cref="EngineWorld.Determinize"/>): the random streams, the
+/// run's seeds, the draw pile's order from its public record, the queued moves that look alike
+/// (plans/2026-11-17-1120-nosl-dread-architecture.md, option c). What the player can see or remember is the combat's
+/// own, so a world holds the game's mode and dominion, the fight's history and every private number of its models,
+/// whatever the observation writes of them. The worlds' lines are merged in world order, so a decision is the same on
+/// any number of threads.
 /// </summary>
 /// <param name="leaf">Prices the lines; asked from every thread at once.</param>
 /// <param name="threads">How many worlds are searched at a time.</param>
-/// <param name="pool">The workers that build the worlds.</param>
-public sealed class EnginePimc(ICombatLeaf leaf, int threads, WorkerPool pool)
+public sealed class EnginePimc(ICombatLeaf leaf, int threads)
 {
     private readonly PimcBrain _brain = new(leaf);
 
-    /// <param name="buildSeed">Seeds the combat built from the observation.</param>
-    /// <param name="seed">Draws the worlds.</param>
+    /// <param name="live">The real combat, written out between the player's actions, and the run around it.</param>
+    /// <param name="seed">Draws the worlds: world k is drawn from <see cref="WorldSeed"/> of it and k.</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
-    /// <param name="run">The run around the combat, for the leaves.</param>
-    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, string buildSeed, Budget budget, ulong seed,
-        IReadOnlyList<EnemyTurns> history, RunView run)
+    public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatExport> live, Budget budget,
+        ulong seed, IReadOnlyList<EnemyTurns> history)
     {
         if (PimcBrain.Unplanned(observation) is { } unplanned) return unplanned;
         if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+        var export = live();
+        using var real = EngineWorld.Import(export.Bytes, export.Run);
         return PimcBrain.Root(PimcBrain.Ordered(legal, observation), budget, (first, nodes) =>
         {
-            var samples = pool.Map([.. Enumerable.Range(0, budget.Worlds)
-                .Select(k => (WorkerRequest)new PimcSampleRequest(k, observation, buildSeed, seed, k, budget.Worlds, history))]);
-            var worlds = new EngineWorld?[samples.Count];
-            var lines = new IReadOnlyList<PlannedLine>[samples.Count];
+            // A native world is used by one thread at a time: each thread draws its world from a copy of its own.
+            var copies = new EngineWorld[budget.Worlds];
+            var worlds = new EngineWorld[budget.Worlds];
+            var lines = new IReadOnlyList<PlannedLine>[budget.Worlds];
             try
             {
-                Parallel.For(0, samples.Count, new ParallelOptions { MaxDegreeOfParallelism = threads }, k =>
+                for (int k = 0; k < copies.Length; k++) copies[k] = real.Clone();
+                Parallel.For(0, worlds.Length, new ParallelOptions { MaxDegreeOfParallelism = threads }, k =>
                 {
-                    var bytes = Convert.FromBase64String(samples[k].Sample ?? throw new InvalidDataException($"request {samples[k].Id}: no sample in the reply"));
-                    var world = worlds[k] = EngineWorld.Sample(bytes, run);
-                    lines[k] = _brain.SearchWorld(world, observation.Round, first, nodes, history);
+                    worlds[k] = copies[k].Determinize(WorldSeed(seed, k));
+                    lines[k] = _brain.SearchWorld(worlds[k], observation.Round, first, nodes, history);
                 });
             }
             catch (AggregateException e)
@@ -51,20 +53,28 @@ public sealed class EnginePimc(ICombatLeaf leaf, int threads, WorkerPool pool)
             }
             finally
             {
-                foreach (var world in worlds) world?.Dispose();
+                foreach (var world in copies.Concat(worlds)) world?.Dispose();
             }
             return lines;
         });
     }
 
-    /// <summary>As Harness's combat route, one per run, like <see cref="PooledPimc.Route"/>: the same decisions on the
-    /// same seeds.</summary>
-    /// <param name="name">The brain's name in reports: pimc and its leaf's name, as on replay.</param>
+    /// <summary>World <paramref name="k"/>'s seed of a decision's: FNV-1a of the two, the same in every process.</summary>
+    public static ulong WorldSeed(ulong seed, int k)
+    {
+        ulong hash = 14695981039346656037;
+        foreach (char c in $"{seed}:{k}") hash = (hash ^ c) * 1099511628211;
+        return hash;
+    }
+
+    /// <summary>As Harness's combat route, one per run: the same decisions on the same seeds.</summary>
+    /// <param name="name">The brain's name in reports: pimc and its leaf's name.</param>
     public CombatRoute Route(Budget budget, string name)
     {
         var plan = new TurnPlan(all: false);
         return new(name, (decision, seed, _, history) => plan.Decide(decision.Observation, decision.Legal,
-            () => Decide(decision.Observation, decision.Legal, seed.ToString("X16"), budget.For(decision.Observation.Room), seed, history,
-                decision.RunObservation?.Run ?? throw new InvalidOperationException("pimc searches a combat in a run: its leaves need the run"))), budget);
+            () => Decide(decision.Observation, decision.Legal,
+                () => decision.Export ?? throw new InvalidOperationException("the host gives no live combat: NoSL's worlds are drawn from it"),
+                budget.For(decision.Observation.Room), seed, history)), budget);
     }
 }

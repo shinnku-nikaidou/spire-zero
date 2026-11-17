@@ -6,6 +6,7 @@
 //!  - a combat called "LONG" is won by "play:7" from round 3 on only; before, the play is a step like any other;
 //!  - a combat called "keyless" has no keys: both are 0, with an error, and a step from it fails;
 //!  - a world imported as a NoSL sample, and every world made of it, has 1 << 40 added to its hidden key;
+//!  - a world drawn again (`sz_world_determinize`) is a copy that is a NoSL sample; "undrawable" cannot be;
 //!  - every call on a world forgets the thread's last error first, as the engine does.
 //! `sz_test_live` counts the worlds not yet freed, `sz_test_steps` and `sz_test_clones` the steps and clones made.
 
@@ -121,6 +122,18 @@ pub unsafe extern "C" fn sz_world_clone(id: u64) -> u64 {
     begin();
     CLONES.fetch_add(1, Ordering::SeqCst);
     make(unsafe { world(id) }.clone())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_determinize(id: u64, _seed: u64) -> u64 {
+    begin();
+    let source = unsafe { world(id) };
+    if source.encounter == "undrawable" {
+        fail("the stand-in draws no combat called undrawable");
+        return 0;
+    }
+    CLONES.fetch_add(1, Ordering::SeqCst);
+    make(World { sample: true, ..source.clone() })
 }
 
 #[unsafe(no_mangle)]

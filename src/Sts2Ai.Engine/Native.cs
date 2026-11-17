@@ -66,6 +66,7 @@ internal static unsafe partial class Native
 
     [LibraryImport(Library)] internal static partial WorldHandle sz_world_import(byte* json, nuint len, int sample);
     [LibraryImport(Library)] internal static partial WorldHandle sz_world_clone(WorldHandle world);
+    [LibraryImport(Library)] internal static partial WorldHandle sz_world_determinize(WorldHandle world, ulong seed);
     [LibraryImport(Library)] internal static partial void sz_world_free(nint world);
     [LibraryImport(Library)] internal static partial WorldHandle sz_world_step(WorldHandle world, byte* action, nuint len, Node* node);
     [LibraryImport(Library)] internal static partial int sz_world_status(WorldHandle world);

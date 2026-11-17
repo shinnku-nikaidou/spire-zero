@@ -324,8 +324,9 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         }
         bool sl = _env == PlayEnvironment.SL;
         if (sl) SendNode();
-        // In the same frame as the observation, with the action queue empty: the combat as it is shown.
-        string? export = sl && asking.Surface == Surfaces.Combat
+        // In the same frame as the observation, with the action queue empty: the combat as it is shown. SL's search
+        // plays it; NoSL's draws its worlds from it, everything the player cannot see drawn again first.
+        string? export = asking.Surface == Surfaces.Combat
             ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)
             : null;
         var trace = sl ? NodeRecord.Steps : null;

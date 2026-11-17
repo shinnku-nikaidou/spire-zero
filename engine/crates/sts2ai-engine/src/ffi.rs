@@ -303,6 +303,25 @@ pub unsafe extern "C" fn sz_world_clone(world: u64) -> u64 {
     })
 }
 
+/// A NoSL world from this one: a copy with everything the player cannot see drawn again from `seed`
+/// (determinize.rs), a sample whose states are told apart by `HiddenState.Key`; 0 on error. `world` stands between
+/// the player's actions, as an import does; it stays as it is.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_determinize(world: u64, seed: u64) -> u64 {
+    call(0, || {
+        let handle = unsafe { self::world(world) }?;
+        if handle.world.asked().is_some() {
+            return Err("a world at a card prompt is not drawn again: the middle of an action has no sample".into());
+        }
+        let mut copy = handle.world.clone();
+        crate::determinize::determinize(copy.combat(), seed)?;
+        Ok(make(copy, true))
+    })
+}
+
 /// Frees a world. Any thread may free a world no thread is using.
 ///
 /// # Safety

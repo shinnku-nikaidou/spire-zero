@@ -33,8 +33,7 @@ internal static class Serve
     /// <param name="leaf">The leaf to search with; null for a worker that only probes l0's options on the clone.</param>
     private static int Run(Pump pump, TextWriter wire, ICombatLeaf? leaf)
     {
-        // pimc plays in NoSL, the planner in SL: each reads its states in its own environment.
-        var pimc = leaf == null ? null : new PimcBrain(leaf.In(PlayEnvironment.NoSL));
+        // The planner plays in SL and reads its states there (pimc searches in the engine, in the run's own process).
         var planner = leaf == null ? null : new SlPlanner(leaf.In(PlayEnvironment.SL));
         static Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
         HeadlessGame.TakeErrors();
@@ -48,11 +47,9 @@ internal static class Serve
                 id = request.Id;
                 var reply = request switch
                 {
-                    SlTurnRequest turn => new WorkerReply(id, null, null, [], SearchTurn(pump, planner ?? throw NoLeaf(), turn)),
-                    SlMacroRequest macro => new WorkerReply(id, null, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
-                    SlPromptRequest prompt => new WorkerReply(id, null, null, [], Crossed: Cross(pump, prompt)),
-                    PimcWorldRequest world => new WorkerReply(id, Search(pump, pimc ?? throw NoLeaf(), world), null, []),
-                    PimcSampleRequest sample => new WorkerReply(id, null, null, [], Sample: Sample(pump, sample)),
+                    SlTurnRequest turn => new WorkerReply(id, null, [], SearchTurn(pump, planner ?? throw NoLeaf(), turn)),
+                    SlMacroRequest macro => new WorkerReply(id, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
+                    SlPromptRequest prompt => new WorkerReply(id, null, [], Crossed: Cross(pump, prompt)),
                     _ => throw new InvalidDataException($"no search for {request.GetType().Name}"),
                 };
                 wire.WriteLine(ProtocolJson.Serialize(reply with { GameErrors = HeadlessGame.TakeErrors() }));
@@ -60,7 +57,7 @@ internal static class Serve
             catch (Exception e)
             {
                 Logs.Sim.LogError(e, "request {Id} failed", id);
-                wire.WriteLine(ProtocolJson.Serialize(new WorkerReply(id, null, Describe(e), HeadlessGame.TakeErrors())));
+                wire.WriteLine(ProtocolJson.Serialize(new WorkerReply(id, Describe(e), HeadlessGame.TakeErrors())));
                 return 1;
             }
         }
@@ -76,20 +73,6 @@ internal static class Serve
         var frames = (e.GetBaseException().StackTrace ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Take(3).Select(f => string.Join('.', f.Split('(')[0].Split(' ').Last().Split('.').TakeLast(2)));
         return $"{e.GetType().Name} at {string.Join(" from ", frames)}: {Logs.FirstLine(e.Message)}\n{e}";
-    }
-
-    private static IReadOnlyList<PlannedLine> Search(Pump pump, PimcBrain brain, PimcWorldRequest r)
-    {
-        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, r.Run, r.History);
-        return brain.SearchWorld(worlds.Worlds(r.Worlds, r.SearchSeed)[r.World], r.Observation.Round, r.First, r.NodesPerFirst, r.History);
-    }
-
-    /// <summary>PIMC's NoSL world for the engine: built and determinized as <see cref="Search"/>'s is, written out
-    /// where it begins.</summary>
-    private static string Sample(Pump pump, PimcSampleRequest r)
-    {
-        using var worlds = SimWorlds.NoSL(pump, r.Observation, r.BuildSeed, run: null, r.History);
-        return Convert.ToBase64String(worlds.Sample(r.Worlds, r.SearchSeed, r.World));
     }
 
     /// <summary>What stands in the node's clone after a path of answers from the card prompt it waits on; where the

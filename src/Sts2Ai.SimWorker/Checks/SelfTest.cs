@@ -26,8 +26,8 @@ namespace Sts2Ai.SimWorker.Checks;
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form (the brain's and harness's
 ///    assemblies reaching no game assembly is a unit test, BoundaryTests);
-///  - worker pool (with --workers N): PIMC over worlds searched in serve processes picks what it picks here, with the
-///    same values.
+///  - pimc's threads (with --workers N): PIMC over worlds drawn from the live combat in the engine picks on N threads
+///    what it picks on one, with the same values.
 /// The searches value their leaves with --combat-net's net. The checks are in the files next to this one: of combats,
 /// of rules, and of runs and their SL worlds.
 /// </summary>
@@ -37,7 +37,7 @@ internal static partial class SelfTest
 
     private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base");
 
-    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "also checks a pool of this many worker processes");
+    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "also checks plan's pool of this many worker processes, and pimc on this many threads");
 
     private static readonly PoolArgs Pool = new();
 
@@ -164,7 +164,7 @@ internal static partial class SelfTest
         DeathsOutsideTheEnemysTurnEndTheirCombat(pump, seed, Check);
         int workers = r.GetValue(Workers);
         PlanHoldsInTheRun(pump, seed, workers, net, Check);
-        if (workers > 0) PooledMatches(pump, combats, seed, workers, net, Check);
+        if (workers > 0) PimcThreads(pump, combats, seed, workers, net, Check);
 
         Console.WriteLine($"draw order resampled by a different determinize seed: {drawResampled}/{drawCompared}; differs from the true order: {drawMovedFromTrue}/{drawCompared}");
         foreach (var (name, (pass, fail)) in results)

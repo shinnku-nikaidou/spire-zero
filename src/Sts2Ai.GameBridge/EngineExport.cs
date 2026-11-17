@@ -228,7 +228,7 @@ public sealed class EngineSchema
 /// bounds the walk and names every field, so nothing is mapped by hand: what the schema does not list is not written.
 ///
 /// <code>
-/// {"format":1,"game":"v0.113.1","schema":"9f2c..","sim":{"prompts":0},
+/// {"format":2,"game":"v0.113.1","schema":"9f2c..","sim":{"prompts":0,"draw_log":[..]},
 ///  "roots":{"combat_manager__instance":["combat_manager",0],"local_context__net_id":1,...},
 ///  "arenas":{"creature":[{"class":"Creature","Creature":{"_block":0,...}}],
 ///            "card_model":[{"class":"Deflect","AbstractModel":{...},"CardModel":{...}}]},
@@ -251,11 +251,13 @@ public sealed class EngineSchema
 /// and the field that holds the reference ("CLR.Name from Class.field"), and the engine takes in an export only where
 /// it is empty: a refusal names where each such reference comes from. <c>sim</c> is what the program around the game
 /// holds that the combat's later observations depend on, which is no state of the game's and so in no arena
-/// (<see cref="Around"/>).
+/// (<see cref="Around"/>), and the draw pile's public record since its last shuffle (<see cref="DrawPileLog"/>), from
+/// which a NoSL world draws the pile's order.
 /// </summary>
 public sealed class EngineExport(EngineSchema schema)
 {
-    private const int Format = 1;
+    /// <summary>2: <c>sim</c> carries the draw pile's record (<see cref="DrawPileLog"/>).</summary>
+    private const int Format = 2;
 
     /// <summary>An export: its bytes, how many objects it holds, and the references it could not follow.</summary>
     /// <param name="Outside">The references to objects of classes the schema does not hold, counted by the class and
@@ -309,6 +311,8 @@ public sealed class EngineExport(EngineSchema schema)
             json.WriteString("schema", schema.Hash);
             json.WriteStartObject("sim");
             json.WriteNumber("prompts", around.Prompts);
+            json.WritePropertyName("draw_log");
+            DrawPileLog.Write(json);
             json.WriteEndObject();
 
             json.WriteStartObject("roots");

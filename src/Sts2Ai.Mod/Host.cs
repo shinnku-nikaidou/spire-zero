@@ -58,6 +58,7 @@ internal static class Host
             // First, before anything else compiles game code that could inline an entry.
             var harmony = new Harmony("sts2ai.mod");
             ChoiceContexts.Patch(harmony);
+            DrawPileLog.Patch(harmony);
             NodeRecord.Patch(harmony);
             Executor.Patch(harmony);
             SettingsTab.Patch(harmony);
