@@ -222,6 +222,10 @@ public sealed partial class Body
             {
                 string inner = Expr(aw.Operation);
                 if (!World.IsTask(aw.Operation.Type, out _)) throw new Unsupported($"await of {aw.Operation.Type?.Name}");
+                // A hook's wait gives a hook that still waits for the player (Stop::Pending, manual/hook_player_choice_context.rs):
+                // awaited on its own, it is awaited as Task.WhenAll awaits it, which runs the hook's action.
+                if (Unwrapped(aw.Operation) is IInvocationOperation { TargetMethod: { Name: "WaitForCompletion", ContainingType.Name: "HookPlayerChoiceContext" } })
+                    return $"rt::when_all(vec![{inner}], c)?";
                 return $"{inner}?";
             }
             case IDelegateCreationOperation dc: return Delegate(dc.Target, dc.Type!);

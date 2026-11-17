@@ -26,16 +26,27 @@ pub fn get_selected_cards(
             c,
         );
     }
+    // A hook whose action the executor started at once asks here and waits (manual/hook_player_choice_context.rs).
+    let asking = c.x.hooks.asking;
+    if !asking.is_null() {
+        return super::hook_player_choice_context::ask(asking, options, min_select, max_select, c);
+    }
     let number = c.x.prompts;
     c.x.prompts += 1;
     if let Some(picks) = c.choices.take() {
         return Ok(picks.iter().map(|&i| options[i as usize]).collect());
     }
+    c.x.asked = Some(asked(options, min_select, max_select, number, c));
+    Err(Stop::Choice)
+}
+
+/// What a prompt asks, for the world to show: the running CardSelectCmd entry's reasons and the game's options.
+pub fn asked(options: Vec<CardModel>, min_select: i32, max_select: i32, number: i32, c: &mut Combat) -> Asked {
     let entry =
         c.x.entry
             .clone()
             .expect("a card prompt outside the CardSelectCmd entries");
-    c.x.asked = Some(Asked {
+    Asked {
         entry: entry.name,
         pile: entry.pile,
         source: entry.source,
@@ -47,6 +58,5 @@ pub fn get_selected_cards(
         min_select,
         max_select,
         number,
-    });
-    Err(Stop::Choice)
+    }
 }

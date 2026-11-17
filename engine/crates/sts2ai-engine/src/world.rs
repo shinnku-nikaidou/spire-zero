@@ -15,6 +15,7 @@
 
 use crate::ffi;
 use crate::r#gen as g;
+use crate::r#gen::enums::GameActionState;
 use crate::r#gen::kinds::*;
 use crate::r#gen::state::*;
 use crate::manual;
@@ -60,14 +61,12 @@ impl ffi::World for Live {
                 (&*prompted.before, prompted.action.clone(), answers)
             }
         };
-        let mut c = before.clone();
-        c.choices = Choices {
-            answers: answers.clone(),
-            next: 0,
-            stopped: false,
+        // A hook that pauses for the player is found again from what the step started from
+        // (manual/hook_player_choice_context.rs): a step where one pauses is run again keeping it.
+        let (mut c, stopped) = match run(before, &action, &answers, false)? {
+            (c, _) if c.x.hooks.restart => run(before, &action, &answers, true)?,
+            ran => ran,
         };
-        start(&action, &mut c)?;
-        let stopped = pump(&mut c).and_then(|()| cap(&mut c));
         let stopped = if c.choices.stopped {
             Err(Stop::Choice)
         } else {
@@ -82,6 +81,17 @@ impl ffi::World for Live {
                         c.choices.next
                     );
                 }
+                // Every hook that paused for the player has run its rest.
+                if !c.x.hooks.started.is_null() || !c.x.hooks.asking.is_null() {
+                    panic!("{action}: the step ended with a hook action started and not run (not ported)");
+                }
+                for &(context, _) in &c.x.hooks.waiting {
+                    let waits = HookPlayerChoiceContextData::of(context, &c)._game_action;
+                    if GameActionData::of(waits, &c).state != GameActionState::Finished {
+                        panic!("{action}: the step ended with a hook that waits for the player: {waits:?} (not ported)");
+                    }
+                }
+                c.x.hooks = Default::default();
                 Ok(Live {
                     combat: c,
                     prompted: None,
@@ -90,7 +100,11 @@ impl ffi::World for Live {
             Err(Stop::Dropped) => {
                 unreachable!("{action}: a dropped setup's stop left the turn start")
             }
+            Err(stop @ (Stop::Paused(_) | Stop::Resumed(_) | Stop::Pending(_) | Stop::Restart)) => {
+                unreachable!("{action}: {stop:?} left the step")
+            }
             Err(Stop::Choice) => {
+                c.x.hooks = Default::default();
                 let asked =
                     c.x.asked
                         .take()
@@ -124,6 +138,29 @@ impl ffi::World for Live {
     fn asked(&self) -> Option<&Asked> {
         self.prompted.as_deref().map(|p| &p.asked)
     }
+}
+
+/// The action from `before` with these answers, and how it stopped. `keep`: the combat keeps what the step started
+/// from while it runs, which a hook that pauses for the player needs (manual/hook_player_choice_context.rs); without
+/// it, such a hook stops the step at once (`hooks.restart`).
+fn run(before: &Combat, action: &str, answers: &[Vec<i32>], keep: bool) -> Result<(Combat, R<()>), String> {
+    let mut c = before.clone();
+    c.choices = Choices {
+        answers: answers.to_vec(),
+        next: 0,
+        stopped: false,
+    };
+    c.x.hooks = Default::default();
+    if keep {
+        c.x.step = Some(Arc::new(manual::hook_player_choice_context::StepStart {
+            before: before.clone(),
+            action: action.to_string(),
+        }));
+    }
+    start(action, &mut c)?;
+    let stopped = pump(&mut c).and_then(|()| cap(&mut c));
+    c.x.step = None;
+    Ok((c, stopped))
 }
 
 /// "pick:0,2": the picked options of the prompt as the player sees it, as indexes into the game's list of cards.
@@ -263,14 +300,27 @@ fn cap(c: &mut Combat) -> R<()> {
     pump(c)
 }
 
-/// Runs the queued actions and the turn loop in turn until neither can go on.
+/// Runs the queued actions and the turn loop in turn until neither can go on. A hook that paused for the player in
+/// the turn loop's last move has its action started (manual/hook_player_choice_context.rs): its rest runs then, and
+/// the turn loop may move again after it.
 fn pump(c: &mut Combat) -> R<()> {
     let executor = RunManagerData::of(c.s.run_manager__instance, c).action_executor;
     let manager = c.s.combat_manager__instance;
     loop {
         manual::action_executor::execute_actions(executor, c)?;
-        if !manual::combat_manager::turn_loop(manager, c)? {
+        if !manual::combat_manager::turn_loop(manager, c)? && c.x.hooks.started.is_null() {
             return Ok(());
         }
     }
+}
+
+/// The step `action` once more from the combat it started from, for a hook that paused in it
+/// (manual/hook_player_choice_context.rs, `resume`): the replay goes over to the step's combat at the hook's choice,
+/// and stops at the hook's end (`Stop::Resumed`).
+pub(crate) fn replay(action: &str, c: &mut Combat) -> R<()> {
+    if let Err(refused) = start(action, c) {
+        panic!("a replay of `{action}` was refused: {refused}");
+    }
+    pump(c)?;
+    cap(c)
 }

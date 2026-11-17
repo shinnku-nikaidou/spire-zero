@@ -311,6 +311,8 @@ members = [
     "HookPlayerChoiceContext.AssignTaskAndWaitForPauseOrCompletion",
     "HookPlayerChoiceContext.WaitForPauseOrCompletionWithoutAssigningTask", "HookPlayerChoiceContext.WaitForCompletion",
     "HookPlayerChoiceContext.SignalPlayerChoiceBegun", "HookPlayerChoiceContext.SignalPlayerChoiceEnded",
+    # A hook that asks the player waits, and its rest runs as this action (manual/hook_player_choice_context.rs).
+    "GenericHookGameAction.ExecuteAction",
     "GameActionPlayerChoiceContext.SignalPlayerChoiceBegun", "GameActionPlayerChoiceContext.SignalPlayerChoiceEnded",
     # waits for a creature another player's game has yet to make
     "CombatState.GetCreatureAsync",

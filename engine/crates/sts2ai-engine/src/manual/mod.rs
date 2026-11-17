@@ -16,6 +16,7 @@ pub mod combat_state;
 pub mod epoch_model;
 pub mod game_action;
 pub mod game_action_player_choice_context;
+pub mod generic_hook_game_action;
 pub mod hook_player_choice_context;
 pub mod i_card_selector;
 pub mod mod_helper;
@@ -52,4 +53,10 @@ pub struct Extra {
     /// world made of the import, and read only where a NoSL world is drawn from it (determinize.rs). A record the
     /// engine could not read is kept as what was wrong with it.
     pub draw_log: Option<std::sync::Arc<Result<crate::drawlog::DrawLog, String>>>,
+    /// The hooks that asked the player in the running step (manual/hook_player_choice_context.rs).
+    pub hooks: hook_player_choice_context::Hooks,
+    /// What the running step started from (world.rs), where a paused hook is found again; none between steps.
+    pub step: Option<std::sync::Arc<hook_player_choice_context::StepStart>>,
+    /// In a replay of the step: the paused hook it runs to and the combat it goes on in from there.
+    pub resume: Option<Box<hook_player_choice_context::Resume>>,
 }

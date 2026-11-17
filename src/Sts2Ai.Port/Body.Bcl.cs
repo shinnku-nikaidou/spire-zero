@@ -461,7 +461,7 @@ public sealed partial class Body
             case "Task.WhenAll" when n == 1 && World.CollOf(a[0].Type) != World.Coll.None:
             {
                 var element = a[0].Type is IArrayTypeSymbol arr ? arr.ElementType : ((INamedTypeSymbol)a[0].Type!).TypeArguments[0];
-                return World.IsTask(element, out var result) && result != null ? $"rt::when_all_values({V(0)})" : $"rt::when_all({V(0)})";
+                return World.IsTask(element, out var result) && result != null ? $"rt::when_all_values({V(0)})" : $"rt::when_all({V(0)}, c)";
             }
             case "Task.ConfigureAwait": return I();
             case "Task.Yield" or "Task.Delay": throw new Dropped("Task." + def.Name);

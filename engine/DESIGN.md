@@ -432,13 +432,28 @@ game's objects (`Combat.x`).
   play phase) with what it queued, and only then is the choice shown; the setup's rest and its
   `RunAutoPrePlayPhase` run after the answer, as an action the executor checks the win after. The engine's turn
   start is written by hand for this (`manual/combat_manager.rs`, `start_turn`): the rest runs where the setup pauses.
-  Elsewhere a hook's prompt stops the step like any other, and when the step is run again with the answer, the
-  hook's rest runs where the hook stands, before what follows it. With one player that is the game's order too: the
+  The game's other hooks that run each listener with a `HookPlayerChoiceContext` of its own (`Hook.AfterDeath`,
+  `AfterDiedToDoom`, `BeforeFlush`, `BeforeSideTurnStart`, `BeforeSideTurnEnd`, `AfterSideTurnEnd`, `DoTurnEnd`,
+  `FlushPlayerHand`) pause the same way, and a listener of theirs can ask without being a card that asks: a draw
+  that shuffles reaches Stratagem's choice (Dark Embrace and Joss Paper at a turn's end, a draw on a death). Then
+  the game enqueues the hook's action (`GenericHookGameAction`) and goes on: the next listeners, the rest of the
+  card play or of the turn, until its action executor runs that action (after the action running now, or at the
+  `Task.WhenAll` of `AfterSideTurnEnd`), and only then is the choice shown and the hook's rest run. The engine
+  cannot hold a hook half run, so it runs it again (`manual/hook_player_choice_context.rs`): at its first choice
+  its action is enqueued, and with the executor busy the hook stops there (`Stop::Paused`, which its context's
+  wait takes). An idle executor starts the action at once in the game (the queue's `ActionQueueChanged`, which the
+  engine does by hand: `start_at_once`), and the hook goes on to its prompt, reading the options then, before the
+  code that ran it goes on: the engine asks the prompt there and stops the hook. When the executor runs the
+  action, the step is played again from the combat it started from (`StepStart`), with the same answers, up to
+  that hook's choice or prompt (hooks that pause are numbered as they pause), and the replay goes over there to
+  the combat as it stands now and runs the hook to its end; what the running code keeps in the combat (the card
+  prompt's entry, the turn start's setup) stays with the code. The lockstep check reaches these hooks with
+  Stratagem loadouts, every encounter at A0 and A10 (`sim parity --world engine --decks 1 --hp 400 --max-hp 400
+  --relics GREMLIN_HORN,JOSS_PAPER`): REGENT `--deck STRATAGEM*2,STRIKE_REGENT*3,DEFEND_REGENT*2,FALLING_STAR*2`
+  and IRONCLAD `--deck
+  STRATAGEM*2,DARK_EMBRACE*2,TRUE_GRIT*2,BURNING_PACT,STRIKE_IRONCLAD*3,DEFEND_IRONCLAD*2,ASCENDERS_BANE*2`. The
   cards the turn end plays by itself (`AfterAutoPostPlayPhaseEntered`: Stampede, Simpleton, Howl from Beyond) are
-  awaited where they are played, so their prompts come before the turn goes on, and in v0.113.1 no listener of the
-  game's other hooks that can pause (`Hook.AfterDeath`, `AfterDiedToDoom`, `BeforeFlush`, `BeforeSideTurnStart`,
-  `BeforeSideTurnEnd`, `AfterSideTurnEnd`, `DoTurnEnd`, `FlushPlayerHand`) asks the player. A card or relic of a
-  later version that asks from one of those needs the turn start's treatment.
+  awaited where they are played, so their prompts come before the turn goes on.
 
 **Events.** An event of the game is a list of delegates, called in the order they subscribed. Nearly all are how
 the game tells its screen that something changed. An event is state when a subscriber is game code: a member of an

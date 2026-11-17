@@ -11,6 +11,19 @@ pub enum Stop {
     /// the combat, or every player was ready to end the turn, and the game never runs the setup's rest
     /// (manual/combat_manager.rs, `start_turn`, which takes this stop).
     Dropped,
+    /// The hook a `HookPlayerChoiceContext` runs asked the player for the first time: the hook waits, and its rest
+    /// runs later as an action of its own (manual/hook_player_choice_context.rs). The context's
+    /// `AssignTaskAndWaitForPauseOrCompletion` takes this stop.
+    Paused(crate::rt::Obj),
+    /// The paused hook of this context has run to its end in a replay of the step (manual/hook_player_choice_context.rs,
+    /// `resume`, which takes this stop).
+    Resumed(crate::rt::Obj),
+    /// What `HookPlayerChoiceContext.WaitForCompletion` gives for a hook that waits: `Task.WhenAll` runs the action
+    /// executor until the hook's action has run (rt::when_all).
+    Pending(crate::rt::Obj),
+    /// A hook paused in a step that was run without keeping what it started from: world.rs runs the step again,
+    /// keeping it (manual/hook_player_choice_context.rs).
+    Restart,
 }
 
 /// What a C# Task is here: the value, or the reason the action stopped. `await x` is `x?`.

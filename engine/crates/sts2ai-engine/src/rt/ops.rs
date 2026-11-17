@@ -485,10 +485,19 @@ pub fn lifted_test<A, B>(a: Option<A>, b: Option<B>, f: impl FnOnce(A, B) -> boo
 
 // ---------------------------------------------------------------- tasks
 
-/// Task.WhenAll: every task has already run; the first stop among them is the stop.
-pub fn when_all(tasks: Vec<R<()>>) -> R<()> {
+/// Task.WhenAll: every task has already run, but a hook that waits for the player (`Stop::Pending`), whose rest
+/// runs here as the action the executor runs next (manual/hook_player_choice_context.rs, `wait`); the first other
+/// stop among them is the stop.
+pub fn when_all(tasks: Vec<R<()>>, c: &mut Combat) -> R<()> {
+    let mut waiting = Vec::new();
     for t in tasks {
-        t?;
+        match t {
+            Err(super::Stop::Pending(context)) => waiting.push(context),
+            t => t?,
+        }
+    }
+    if !waiting.is_empty() {
+        crate::manual::hook_player_choice_context::wait(&waiting, c)?;
     }
     Ok(())
 }
