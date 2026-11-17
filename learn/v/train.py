@@ -56,7 +56,7 @@ from workers import built  # noqa: E402
 script = common.app()
 
 FLOORS = 64  # the hazard head's floors, from floor 0
-EPOCHS, PATIENCE = 40, 5  # at most, and without a better held-out loss before stopping
+EPOCHS, PATIENCE = 40, 3  # at most, and without a better held-out loss before stopping
 BATCH = 256  # decisions per step
 LR, WEIGHT_DECAY = 3e-5, 1e-4
 AUX_WEIGHT = 3.0  # the second head's squared errors, per decision
