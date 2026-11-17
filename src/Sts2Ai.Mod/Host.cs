@@ -101,8 +101,7 @@ internal static class Host
         try
         {
             var assist = _assist;
-            _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : env => Settings.Set(Settings.Current with { Env = env }),
-                assist == null ? null : assist.Press);
+            _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : assist.Press);
             _panel.Poll();
             // Once, in the game's language, which loads after the mods.
             if (_offForSeLinux && _notice == null && MegaCrit.Sts2.Core.Localization.LocManager.Instance?.Language != null)
@@ -111,7 +110,7 @@ internal static class Host
                            "Add this line to the game's launch options in Steam (Properties, Launch Options), then restart the game."),
                     LaunchOption);
             if (assist == null)
-                _panel.Show("—", L10n.T("off"), null, L10n.T(_off!), _offForSeLinux ? L10n.T("Steam launch options: {0}", LaunchOption) : null,
+                _panel.Show("—", L10n.T("off"), L10n.T(_off!), _offForSeLinux ? L10n.T("Steam launch options: {0}", LaunchOption) : null,
                     _offForSeLinux ? Tone.Warn : Tone.Plain);
             else assist.Tick(_panel);
             _lastError = null;
@@ -123,7 +122,7 @@ internal static class Host
             if (error == _lastError) return;
             _lastError = error;
             ModLog.Error("mod", error);
-            _panel?.Show("—", L10n.T("error"), null, L10n.T("Mod error"), e.Message, Tone.Error);
+            _panel?.Show("—", L10n.T("error"), L10n.T("Mod error"), e.Message, Tone.Error);
         }
     }
 }

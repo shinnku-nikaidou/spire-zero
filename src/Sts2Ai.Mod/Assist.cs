@@ -221,18 +221,18 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         string champion = _champion ?? "—";
         if (!_connected)
         {
-            if (_down == null) panel.Show(champion, L10n.T("starting"), _env, L10n.T("Connecting to the brain"), link.Where);
-            else panel.Show(champion, L10n.T("offline"), _env, L10n.T("No brain running"), L10n.T("{0} · trying again every 2 s", _down), Tone.Warn);
+            if (_down == null) panel.Show(champion, L10n.T("starting"), L10n.T("Connecting to the brain"), link.Where);
+            else panel.Show(champion, L10n.T("offline"), L10n.T("No brain running"), L10n.T("{0} · trying again every 2 s", _down), Tone.Warn);
             return;
         }
         if (run == null || me == null || id == null)
         {
-            panel.Show(champion, L10n.T("ready"), _env, L10n.T("Start or continue a run"), L10n.T("single-player only"));
+            panel.Show(champion, L10n.T("ready"), L10n.T("Start or continue a run"), L10n.T("single-player only"));
             return;
         }
         if (!single)
         {
-            panel.Show(champion, L10n.T("off"), null, L10n.T("Off in multiplayer"));
+            panel.Show(champion, L10n.T("off"), L10n.T("Off in multiplayer"));
             return;
         }
         // A run that started without Neow (a new profile's first, before the timeline reveals Neow's epoch) is one
@@ -240,7 +240,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         // less HP), so the player plays it alone.
         if (!run.ExtraFields.StartedWithNeow)
         {
-            panel.Show(champion, L10n.T("off for this run"), null, L10n.T("Off in a run without Neow"),
+            panel.Show(champion, L10n.T("off for this run"), L10n.T("Off in a run without Neow"),
                 L10n.T("a new profile's first run · play it yourself"));
             return;
         }
@@ -256,12 +256,12 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (over && _goal != Goal.Off) Stop(L10n.T("the run is over"));
         if (_failure != null)
         {
-            panel.Show(champion, L10n.T("off for this run"), _env, L10n.T("Brain error"), L10n.T("{0} · back on at the next run", _failure), Tone.Error);
+            panel.Show(champion, L10n.T("off for this run"), L10n.T("Brain error"), L10n.T("{0} · back on at the next run", _failure), Tone.Error);
             return;
         }
         if (_champion == null)
         {
-            panel.Show(champion, L10n.T("run sent"), _env, L10n.T("Waiting for the brain"), L10n.T("it loads the champion for this run"));
+            panel.Show(champion, L10n.T("run sent"), L10n.T("Waiting for the brain"), L10n.T("it loads the champion for this run"));
             return;
         }
         if (asking != null)
@@ -276,7 +276,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             (_key, _stable) = (null, 0);
             Nudge();
-            panel.Show(champion, status, _env, L10n.T("Waiting for a decision"), note != "" ? L10n.T(note) : null, drive: Drive());
+            panel.Show(champion, status, L10n.T("Waiting for a decision"), note != "" ? L10n.T(note) : null, drive: Drive());
             return;
         }
         _idle = Environment.TickCount64;
@@ -287,7 +287,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             (_key, _stable) = (null, 0);
             // Auto-play hands the room over, rather than wait on it: nothing plays it until the game's next save.
             if (_goal != Goal.Off) Stop(L10n.T("no SL clone of this room"));
-            panel.Show(champion, status, _env, L10n.T("No SL clone of this room"),
+            panel.Show(champion, status, L10n.T("No SL clone of this room"),
                 L10n.T("{0} · the next room has one", NodeRecord.Broken ?? L10n.T("no checkpoint")), Tone.Warn, Drive());
             return;
         }
@@ -301,16 +301,16 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             if (_shown == 0) _shown = Environment.TickCount64;
             Play(asking, answer, run, me);
-            panel.Show(champion, status, _env, answer.Shown, Sub(answer), answer.Foot, answer.Route, answer.Plan, Drive());
+            panel.Show(champion, status, answer.Shown, Sub(answer), answer.Foot, answer.Route, answer.Plan, Drive());
             return;
         }
         _shown = 0;
         if (key == _askedKey && _asked != null)
         {
-            panel.Show(champion, status, _env, L10n.T("Thinking…"), $"{(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s", drive: Drive());
+            panel.Show(champion, status, L10n.T("Thinking…"), $"{(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s", drive: Drive());
             return;
         }
-        panel.Show(champion, status, _env, L10n.T("Thinking…"), drive: Drive());
+        panel.Show(champion, status, L10n.T("Thinking…"), drive: Drive());
         if (key == _askedKey) return;
         if (_asked != null)
         {

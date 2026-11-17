@@ -142,10 +142,6 @@ internal static class L10n
         ["AI assist"] = ["Assistance IA", "Asistencia IA", "AI 辅助", "AI 輔助", "AIアシスト"],
         ["off: the mod asks nothing and draws nothing"] = ["désactivé : le mod ne demande rien et n'affiche rien", "desactivado: el mod no pregunta ni muestra nada",
             "关闭：mod 不询问也不显示任何东西", "關閉：mod 不詢問也不顯示任何東西", "オフ：Modは何も問い合わせず何も表示しない"],
-        ["Environment"] = ["Environnement", "Entorno", "环境", "環境", "環境"],
-        ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",
-            "SL ve el resultado real de la sala actual; NoSL nunca mira", "SL 能看到当前房间的真实结果；NoSL 从不偷看", "SL 能看到目前房間的真實結果；NoSL 從不偷看",
-            "SLは今いる部屋の本当の結果を見る。NoSLは一切覗かない"],
         ["Panel"] = ["Panneau", "Panel", "面板", "面板", "パネル"],
         ["F8 hides everything at once"] = ["F8 masque tout d'un coup", "F8 oculta todo a la vez", "F8 一次隐藏全部", "F8 一次隱藏全部", "F8ですべて隠す"],
         ["Considered options"] = ["Options envisagées", "Opciones consideradas", "候选项", "候選項", "候補"],
@@ -180,6 +176,11 @@ internal static class L10n
         ["the pause before each of the AI's actions"] = ["la pause avant chaque action de l'IA", "la pausa antes de cada acción de la IA", "AI 每个动作前停多久", "AI 每個動作前停多久", "AIの各操作の前の間"],
         ["Stop before elites and bosses"] = ["S'arrêter avant les élites et les boss", "Parar antes de élites y jefes", "精英、Boss 前停下", "菁英、頭目前停下", "エリート・ボスの前で止まる"],
         ["Stop when the win chance falls 3 points"] = ["S'arrêter si la victoire perd 3 points", "Parar si la probabilidad de ganar baja 3 puntos", "胜率掉 3 点时停下", "勝率掉 3 點時停下", "勝率が3ポイント下がったら止まる"],
+        ["Advanced"] = ["Avancé", "Avanzado", "高级", "進階", "詳細設定"],
+        ["Environment"] = ["Environnement", "Entorno", "环境", "環境", "環境"],
+        ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",
+            "SL ve el resultado real de la sala actual; NoSL nunca mira", "SL 能看到当前房间的真实结果；NoSL 从不偷看", "SL 能看到目前房間的真實結果；NoSL 從不偷看",
+            "SLは今いる部屋の本当の結果を見る。NoSLは一切覗かない"],
     };
 
     /// <summary>The line in the game's language, with <paramref name="args"/> in its holes.</summary>

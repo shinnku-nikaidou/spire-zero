@@ -90,8 +90,6 @@ internal static class SettingsTab
         bool[] bools = [false, true];
         content.AddChild(Header(L10n.T("Assist"), font));
         content.AddChild(Choice(L10n.T("AI assist"), L10n.T("off: the mod asks nothing and draws nothing"), font, onOff, bools, s => s.Assist, (s, v) => s with { Assist = v }, refresh));
-        content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,
-            ["SL", "NoSL"], [PlayEnvironment.SL, PlayEnvironment.NoSL], s => s.Env, (s, v) => s with { Env = v }, refresh));
         content.AddChild(Choice(L10n.T("Panel"), L10n.T("F8 hides everything at once"), font, onOff, bools, s => s.Panel, (s, v) => s with { Panel = v }, refresh));
         content.AddChild(Choice(L10n.T("Considered options"), L10n.T("in the panel"), font, [L10n.T("Off"), L10n.T("Values"), L10n.T("Values + bars")],
             [ConsideredMode.Off, ConsideredMode.Values, ConsideredMode.Bars], s => s.Considered, (s, v) => s with { Considered = v }, refresh));
@@ -110,6 +108,10 @@ internal static class SettingsTab
             [L10n.T("Slow"), L10n.T("Medium"), L10n.T("Fast")], [AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast], s => s.Speed, (s, v) => s with { Speed = v }, refresh));
         content.AddChild(Choice(L10n.T("Stop before elites and bosses"), "", font, onOff, bools, s => s.StopAtElites, (s, v) => s with { StopAtElites = v }, refresh));
         content.AddChild(Choice(L10n.T("Stop when the win chance falls 3 points"), "", font, onOff, bools, s => s.StopOnDrop, (s, v) => s with { StopOnDrop = v }, refresh));
+        // The environment comes last, under its own header, and is set only here.
+        content.AddChild(Header(L10n.T("Advanced"), font));
+        content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,
+            ["SL", "NoSL"], [PlayEnvironment.SL, PlayEnvironment.NoSL], s => s.Env, (s, v) => s with { Env = v }, refresh));
         var reset = new Button { Text = L10n.T("Reset AI settings"), FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd };
         Style(reset, font, 1);
         reset.Pressed += () =>

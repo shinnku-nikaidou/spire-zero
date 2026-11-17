@@ -79,7 +79,7 @@
   type Text = Record<Lang, string>;
   type Option = { name: Text; value: number; ci: number; win: number | null; hp: number | null; rooms: (string | null)[] | null };
   type Answer = {
-    source: { champion: string; decision: number; env: string };
+    source: { champion: string; decision: number };
     status: Text;
     floor: number;
     surface: 'combat' | 'map' | 'other';
@@ -98,15 +98,15 @@
   };
   const ANSWERS = { sl_combat: data.sl_combat, nosl_combat: data.nosl_combat, map: data.map_options } as unknown as Record<Exclude<Mode, 'message'>, Answer>;
 
-  const MESSAGES: { status: string; text: string; sub?: [string, string]; tone?: 'warn' | 'error'; env?: boolean; drive?: boolean; champion?: boolean }[] = [
-    { status: 'starting', text: 'Connecting to the brain', sub: ['', '…/mods/Sts2Ai/brain/linux-x64/Sts2Ai.SimWorker'], env: true },
-    { status: 'offline', text: 'No brain running', sub: ['{0} · trying again every 2 s', 'the brain ended (exit code 134): … (log: ~/.local/state/sts2ai/brain.log)'], tone: 'warn', env: true },
-    { status: 'run sent', text: 'Waiting for the brain', sub: ['it loads the champion for this run', ''], env: true },
-    { status: 'line', text: 'Waiting for a decision', sub: ['open the chest', ''], env: true, drive: true, champion: true },
-    { status: 'line', text: 'No SL clone of this room', sub: ['{0} · the next room has one', 'a potion thrown away in combat'], tone: 'warn', env: true, drive: true, champion: true },
-    { status: 'line', text: 'Thinking…', sub: ['', '3.4 s'], env: true, drive: true, champion: true },
-    { status: 'off for this run', text: 'Brain error', sub: ['{0} · back on at the next run', 'an SL decision before any node checkpoint'], tone: 'error', env: true, champion: true },
-    { status: 'off', text: 'Off in multiplayer', env: false },
+  const MESSAGES: { status: string; text: string; sub?: [string, string]; tone?: 'warn' | 'error'; drive?: boolean; champion?: boolean }[] = [
+    { status: 'starting', text: 'Connecting to the brain', sub: ['', '…/mods/Sts2Ai/brain/linux-x64/Sts2Ai.SimWorker'] },
+    { status: 'offline', text: 'No brain running', sub: ['{0} · trying again every 2 s', 'the brain ended (exit code 134): … (log: ~/.local/state/sts2ai/brain.log)'], tone: 'warn' },
+    { status: 'run sent', text: 'Waiting for the brain', sub: ['it loads the champion for this run', ''] },
+    { status: 'line', text: 'Waiting for a decision', sub: ['open the chest', ''], drive: true, champion: true },
+    { status: 'line', text: 'No SL clone of this room', sub: ['{0} · the next room has one', 'a potion thrown away in combat'], tone: 'warn', drive: true, champion: true },
+    { status: 'line', text: 'Thinking…', sub: ['', '3.4 s'], drive: true, champion: true },
+    { status: 'off for this run', text: 'Brain error', sub: ['{0} · back on at the next run', 'an SL decision before any node checkpoint'], tone: 'error', champion: true },
+    { status: 'off', text: 'Off in multiplayer' },
   ];
   const msg = $derived(MESSAGES[message]);
   const msgSub = (m: (typeof MESSAGES)[number]) => (!m.sub ? null : m.sub[0] === '' ? m.sub[1] : m.sub[1] === '' ? T(m.sub[0]) : T(m.sub[0], m.sub[1]));
@@ -116,7 +116,6 @@
   const base = ANSWERS.sl_combat;
   const champion = $derived(a ? a.source.champion : msg.champion ? base.source.champion : '—');
   const status = $derived(a ? a.status[lang] : msg.status === 'line' ? base.status[lang] : T(msg.status));
-  const env = $derived(a ? a.source.env : msg.env ? 'SL' : null);
   const drive = $derived(a !== null || !!msg.drive);
   const run = $derived(a ?? base);
   const surface = $derived(a ? a.surface : 'combat');
@@ -198,9 +197,6 @@
         <div class="names">
           <div class="clip" style="font-size: 13px;">{champion}</div>
           <div class="clip muted" style="font-size: 11px;">{status}</div>
-        </div>
-        <div class="switch">
-          <span class:on={env === 'SL'}>SL</span><span class:on={env === 'NoSL'}>NoSL</span>
         </div>
         <span class="muted" style="font-size: 11px;">F8</span>
       </div>
@@ -430,7 +426,6 @@
     border: 2px solid #bf59ff;
     box-sizing: border-box;
   }
-  .switch,
   .toggles {
     display: inline-flex;
     gap: 2px;
@@ -439,7 +434,6 @@
     padding: 3px;
     font-size: 12px;
   }
-  .switch span,
   .toggles span {
     display: inline-flex;
     align-items: center;
@@ -454,7 +448,6 @@
     gap: 8px;
     padding: 0;
   }
-  .switch span.on,
   .toggles span.on {
     background: #bf59ff;
     color: #14081f;
