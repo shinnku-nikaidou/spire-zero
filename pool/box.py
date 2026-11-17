@@ -553,11 +553,7 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
             raise Refused(f"{path}: game {game}: env is nosl, or left out (SL)")
         if env == "nosl":
             if set(g) - {"mode"} != {"env", "auto_win"}:
-                raise Refused(f"{path}: game {game} of NoSL has env = \"nosl\" and auto_win = [acts], and no effort (its budget is nosl_champion's)")
-            if "mode" in g:
-                # NoSL builds each world from the observation, always the standard game (plans/2026-11-17-1120-nosl-dread-architecture.md):
-                # the Dread mode waits for the worlds made from the real combat, that plan's (c), step 2
-                raise Refused(f"{path}: game {game}: NoSL does not play the Dread mode yet")
+                raise Refused(f"{path}: game {game} of NoSL has env = \"nosl\" and auto_win = [acts], and may have mode; no effort (its budget is nosl_champion's)")
         elif set(g) - {"mode", "env"} != {"auto_win", "effort"} or set(g["effort"]) != set(ROOMS):
             raise Refused(f"{path}: game {game} has auto_win = [acts] and effort = {{ monster, elite, boss }}, and may have mode")
         if any(a not in (1, 2, 3) for a in g["auto_win"]) or any(e not in EFFORTS for e in g.get("effort", {}).values()):

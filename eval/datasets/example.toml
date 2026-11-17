@@ -32,8 +32,7 @@ mode = "dread"
 auto_win = []
 effort = { monster = "medium", elite = "medium", boss = "high" }
 
-# A NoSL game: env = "nosl", played by nosl_champion, no effort. Not the Dread mode yet: NoSL builds its worlds from the
-# observation, always the standard game (plans/2026-11-17-1120-nosl-dread-architecture.md, (c) step 2 lifts it).
+# A NoSL game: env = "nosl", played by nosl_champion, no effort; mode as an SL game's.
 [games.nosl]
 env = "nosl"
 auto_win = []
