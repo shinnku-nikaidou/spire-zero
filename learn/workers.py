@@ -6,7 +6,9 @@ its own encoder and reads whole logs; the trainer takes the logs' samples back i
 
 Building batches (`built`): a batch was built in Python while the GPU waited (on pushqkzh a combat batch of 256 took 148
 ms, a training step 4.5 ms). The trainer still draws the order and cuts it into parts; a worker builds each part's batch
-on the CPU, as the trainer's own process would, and the trainer moves it to its device.
+on the CPU, as the trainer's own process would, and the trainer moves it to its device. Since 2026-11-17 a batch's
+tokens are looked up and padded in Rust (learn/batch): on one core of gcpsg a batch of 256 V 17 ms and combat 22 ms,
+where the Python took 170 and 482.
 
 Workers are forked from a fresh forkserver process, so the trainer's samples and CUDA state stay out of them, and run
 one torch thread each. What goes to them and back goes by pickle: a function is a module's function or a

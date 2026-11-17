@@ -6,113 +6,23 @@ it if still alive there; V's value is the chance to survive every floor. The sec
 costs, which shapes the body only: it is not in the net file.
 """
 
+import sts2_batch
 import torch
 from torch import nn
 
-from common import unpack
 from v import spec
 from v.data import AUX
 
 
-def padded(rows, device):
-    """Lists of ids as one padded tensor (at least one wide) and its mask."""
-    width = max(1, max(len(r) for r in rows))
-    ids, mask = torch.zeros(len(rows), width, dtype=torch.long), torch.zeros(len(rows), width)
-    for b, r in enumerate(rows):
-        ids[b, : len(r)], mask[b, : len(r)] = torch.tensor(r, dtype=torch.long), 1
-    return ids.to(device), mask.to(device)
-
-
-def numbers(rows, device):
-    """Lists of numbers as one padded tensor, at least one wide, as padded pads their ids."""
-    width = max(1, max(len(r) for r in rows))
-    out = torch.zeros(len(rows), width)
-    for b, r in enumerate(rows):
-        out[b, : len(r)] = torch.tensor(r, dtype=torch.float32)
-    return out.to(device)
-
-
-def card_rows(decks, index, prefix=""):
-    """Lists of cards (a token's [id, up, modifiers, amounts, [damage, block, growth]]) as the net's card inputs by
-    name (spec.CARDS, with PREFIX), padded to the widest list and the most modifiers, each at least 1."""
-    width = max(1, max(len(d) for d in decks))
-    m_n = max(1, max((len(c[2]) for d in decks for c in d), default=0))
-    rows = {name: [] for name in spec.CARDS}
-    for deck in decks:
-        pad = width - len(deck)
-        rows["cards"].append([index["cards"].get(c[0], 0) for c in deck] + [0] * pad)
-        rows["ups"].append([float(c[1]) for c in deck] + [0.0] * pad)
-        rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
-        mods = [[index["modifiers"].get(m, 0) for m in c[2]] for c in deck]
-        rows["mods"].append([m + [0] * (m_n - len(m)) for m in mods] + [[0] * m_n] * pad)
-        rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (m_n - len(m)) for m in mods] + [[0.0] * m_n] * pad)
-        rows["mod_amounts"].append([c[3] + [0.0] * (m_n - len(c[3])) for c in deck] + [[0.0] * m_n] * pad)
-        rows["numbers"].append([list(c[4]) for c in deck] + [[0.0] * N_NUMBERS] * pad)
-    return {
-        prefix + name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32)
-        for name, r in rows.items()
-    }
-
-
-NO_PENDING = {"key": None, "cards": [], "cards_owned": [], "relics": [], "relic_values": [], "relic_status": [],
-              "relics_owned": [], "potions": [], "potions_owned": [], "numbers": [], "number_values": []}  # fmt: skip
-
-
-def pending_rows(toks, index, device):
-    """The inputs of the event option each run has picked and not yet played out (spec.PENDING), empty for none: its
-    key in `pending` (an id the table does not list, entry 0, reads as nothing), its cards as the deck's, its relics as
-    the run's, its potions, and its numbers by their rows."""
-    pend = [tok.get("pending", NO_PENDING) for tok in toks]
-    p = spec.PEND
-    feed = {k: v.to(device) for k, v in card_rows([x["cards"] for x in pend], index, p).items()}
-    feed["pending"], feed["pending_mask"] = padded(
-        [[] if x["key"] is None else [index["pending"].get(x["key"], 0)] for x in pend], device
-    )
-    feed[p + "cards_owned"] = numbers([x["cards_owned"] for x in pend], device)
-    feed[p + "relics"], feed[p + "relic_mask"] = padded(
-        [[index["relics"].get(i, 0) for i in x["relics"]] for x in pend], device
-    )
-    r_n = feed[p + "relics"].shape[1]
-    relic_values, relic_status = torch.zeros(len(pend), r_n, 3), torch.zeros(len(pend), r_n, dtype=torch.long)
-    for b, x in enumerate(pend):
-        for k, (v, status) in enumerate(zip(x["relic_values"], x["relic_status"], strict=True)):
-            relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
-    feed[p + "relic_values"], feed[p + "relic_status"] = relic_values.to(device), relic_status.to(device)
-    feed[p + "relics_owned"] = numbers([x["relics_owned"] for x in pend], device)
-    feed[p + "potions"], feed[p + "potion_mask"] = padded(
-        [[index["potions"].get(i, 0) for i in x["potions"]] for x in pend], device
-    )
-    feed[p + "potions_owned"] = numbers([x["potions_owned"] for x in pend], device)
-    feed[p + "vars"], feed[p + "var_mask"] = padded(
-        [[index["event_vars"].get(i, 0) for i in x["numbers"]] for x in pend], device
-    )
-    feed[p + "var_values"] = numbers([x["number_values"] for x in pend], device)
-    return feed
-
-
 class Batch:
     """Samples (their tokens packed, v/data.py) as tensors: the net's inputs (names: spec.INPUTS), the hazards' targets
-    and the second head's, and the weights."""
+    and the second head's, and the weights. The tokens are looked up in the tables and padded by learn/batch (Rust,
+    sts2_batch), as RunNet does for one run."""
 
     def __init__(self, samples, index, mean, std, floors, device):
-        toks = [unpack(s["tokens"]) for s in samples]
-        n = len(samples)
-        feed = {name: t.to(device) for name, t in card_rows([tok["cards"] for tok in toks], index).items()}
-        for t, bag_mask in spec.BAGS.items():
-            feed[t], feed[bag_mask] = padded(
-                [[index[t].get(i, 0) for i in tok[t]] for tok in toks],
-                device,
-            )
+        feed = {name: t.to(device) for name, t in sts2_batch.v_inputs([s["tokens"] for s in samples], index).items()}
         x = torch.tensor([s["state"] for s in samples], dtype=torch.float64)
         feed["state"] = ((x - mean) / std).float().to(device)
-        r_n = max(1, max(len(tok["relics"]) for tok in toks))
-        relic_values, relic_status = torch.zeros(n, r_n, 3), torch.zeros(n, r_n, dtype=torch.long)
-        for b, tok in enumerate(toks):
-            for k, (v, status) in enumerate(zip(tok["relic_values"], tok["relic_status"], strict=True)):
-                relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
-        feed["relic_values"], feed["relic_status"] = relic_values.to(device), relic_status.to(device)
-        feed["held"], feed["held_mask"] = padded([[index["cards"].get(c, 0) for c in tok["held"]] for tok in toks], device)
-        feed |= pending_rows(toks, index, device)
         self.feed = feed
 
         g = torch.arange(floors)
@@ -123,36 +33,35 @@ class Batch:
         target = (died & (g == end)).float()
         # A censored sample says nothing from the floor it stopped on; one with no reach (end = start) says nothing.
         label_mask = ((g >= start) & (won | (g < end) | (died & (g == end)))).float()
-        for b, s in enumerate(samples):
-            if "boot" in s:  # a multi-step target (v/bootstrap.py): s' floor and the frozen V's hazards there
-                later_floor, hazards = s["boot"]
-                target[b], label_mask[b] = boot_targets(s["start"], later_floor, torch.tensor(hazards), floors)
+        boot = [b for b, s in enumerate(samples) if "boot" in s]
+        if boot:  # multi-step targets (v/bootstrap.py): s' floor and the frozen V's hazards there
+            later = torch.tensor([samples[b]["boot"][0] for b in boot])[:, None]
+            hazards = torch.tensor([list(samples[b]["boot"][1]) for b in boot])
+            target[boot], label_mask[boot] = boot_targets(start[boot], later, hazards, floors)
         self.target, self.label_mask = target.to(device), label_mask.to(device)
         self.weight = torch.tensor([s["weight"] for s in samples]).to(device)
         self.start = start[:, 0].to(device)
 
-        aux, aux_mask = torch.zeros(n, AUX), torch.zeros(n, AUX)
-        for b, s in enumerate(samples):
-            for k, cost in enumerate(s["next"]):
-                aux[b, k], aux_mask[b, k] = cost, 1
-        self.aux, self.aux_mask = aux.to(device), aux_mask.to(device)
+        costs = [s["next"] for s in samples]
+        self.aux = torch.tensor([c + [0.0] * (AUX - len(c)) for c in costs], dtype=torch.float32).to(device)
+        self.aux_mask = torch.tensor([[1.0] * len(c) + [0.0] * (AUX - len(c)) for c in costs]).to(device)
 
     def inputs(self):
         """The net's inputs, in the order of spec.INPUTS."""
         return tuple(self.feed[name] for name in spec.INPUTS)
 
 
-def boot_targets(start: int, later_floor: int, hazards: torch.Tensor, floors: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """A bootstrapped sample's targets and weights per floor (v/bootstrap.py): lived through from its start to s', then
-    from s' on the frozen V's hazards there, each floor weighed by the frozen V's chance that the run is alive on it."""
+def boot_targets(start, later, hazards, floors: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Bootstrapped samples' targets and weights per floor (v/bootstrap.py; START and LATER [m, 1], the floors of each
+    sample and of its s', HAZARDS [m, floors]): lived through from its start to s', then from s' on the frozen V's
+    hazards there, each floor weighed by the frozen V's chance that the run is alive on it."""
     g = torch.arange(floors)
-    target = torch.where(g >= later_floor, hazards, torch.zeros(floors))
-    alive = torch.ones(floors)
-    alive[later_floor + 1 :] = torch.cumprod(1 - hazards[later_floor:-1], 0)
+    after = g >= later
+    target = torch.where(after, hazards, torch.zeros(floors))
+    # alive on a floor: the product of the chances to live through each floor from s' to the one before (1 up to s')
+    lived = torch.cumprod(torch.where(after, 1 - hazards, torch.ones(floors)), 1)
+    alive = torch.cat([torch.ones(len(hazards), 1), lived[:, :-1]], 1)
     return target, torch.where(g >= start, alive, torch.zeros(floors))
-
-
-N_NUMBERS = 3  # a card's damage, block and growth (a card's token)
 
 
 class Net(nn.Module):

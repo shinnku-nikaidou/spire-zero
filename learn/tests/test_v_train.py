@@ -249,9 +249,10 @@ def test_hazards_of_0_and_1_at_the_runs_real_end_give_todays_labels():
 
 
 def test_a_bootstrapped_floor_weighs_the_frozen_vs_chance_that_the_run_is_alive_there():
-    target, weight = boot_targets(1, 3, torch.tensor([0.0, 0.0, 0.0, 0.5, 0.2, 0.0]), 6)
-    assert target.tolist() == pytest.approx([0, 0, 0, 0.5, 0.2, 0])
-    assert weight.tolist() == pytest.approx([0, 1, 1, 1, 0.5, 0.4])
+    hazards = torch.tensor([[0.0, 0.0, 0.0, 0.5, 0.2, 0.0]])
+    target, weight = boot_targets(torch.tensor([[1]]), torch.tensor([[3]]), hazards, 6)
+    assert target[0].tolist() == pytest.approx([0, 0, 0, 0.5, 0.2, 0])
+    assert weight[0].tolist() == pytest.approx([0, 1, 1, 1, 0.5, 0.4])
 
 
 def test_a_training_on_multi_step_targets_takes_a_v_of_each_fold_and_says_so(tmp_path):

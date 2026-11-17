@@ -4,145 +4,27 @@ after a win in each group of buckets (data.POTION_GROUPS), each potion's of bein
 the potions drunk together.
 """
 
+import sts2_batch
 import torch
 from torch import nn
 
 from combat import spec
 from combat.data import BUCKETS, LOSS_MIN, POTION_GROUPS, WIDTH, potion_group
-from common import unpack
-
-
-def padded(rows, device):
-    """Lists of ids as one padded tensor (at least one wide) and its mask."""
-    width = max(1, max(len(r) for r in rows))
-    ids, mask = torch.zeros(len(rows), width, dtype=torch.long), torch.zeros(len(rows), width)
-    for b, r in enumerate(rows):
-        ids[b, : len(r)], mask[b, : len(r)] = torch.tensor(r, dtype=torch.long), 1
-    return ids.to(device), mask.to(device)
-
-
-def power_tensors(rows, index):
-    """Powers (a state's `powers`) as ids, amounts, stacks, kept cards and their masks, and moved numbers, padded to the most
-    any row has."""
-    n, width = len(rows), max(1, max(len(r) for r in rows))
-    ids, amounts, mask = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width), torch.zeros(n, width)
-    stacks, cards, card_mask = torch.zeros(n, width), torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
-    details = torch.zeros(n, width)
-    for b, r in enumerate(rows):
-        for k, (pid, amount, st, card, detail) in enumerate(r):
-            ids[b, k], amounts[b, k], mask[b, k], stacks[b, k] = index["powers"].get(pid, 0), amount, 1, st
-            details[b, k] = detail
-            if card:
-                cards[b, k], card_mask[b, k] = index["cards"].get(card, 0), 1
-    return ids, amounts, mask, stacks, cards, card_mask, details
 
 
 class Batch:
-    """Samples (their tokens packed, combat/data.py) as tensors, in the order of spec.INPUTS, and their targets."""
+    """Samples (their tokens packed, combat/data.py) as tensors, in the order of spec.INPUTS, and their targets. The
+    tokens are looked up in the tables and padded by learn/batch (Rust, sts2_batch), as CombatNet does for one state."""
 
     def __init__(self, samples, index, device):
-        n, toks = len(samples), [unpack(s["tokens"]) for s in samples]
-        width = max(1, max(len(t["cards"]) for t in toks))
-        cards, ups = torch.zeros(n, width, dtype=torch.long), torch.zeros(n, width)
-        piles = torch.zeros(n, width, len(spec.PILES))
-        m_n = max(1, max((len(c[3]) for t in toks for c in t["cards"]), default=0))
-        mods, mod_mask = torch.zeros(n, width, m_n, dtype=torch.long), torch.zeros(n, width, m_n)
-        costs, mod_amounts, damages = torch.zeros(n, width), torch.zeros(n, width, m_n), torch.zeros(n, width)
-        numbers = torch.zeros(n, width, spec.NUMBERS)
-        for b, t in enumerate(toks):
-            for k, (card_id, up, pile, ms, cost, amounts, damage, nums) in enumerate(t["cards"]):
-                cards[b, k], ups[b, k], piles[b, k, pile], costs[b, k] = index["cards"].get(card_id, 0), up, 1, cost
-                damages[b, k], numbers[b, k] = damage, torch.tensor(nums)
-                for j, m in enumerate(ms):
-                    mods[b, k, j], mod_mask[b, k, j] = index["modifiers"].get(m, 0), 1
-                mod_amounts[b, k, : len(amounts)] = torch.tensor(amounts)
-        p_ids, p_amounts, p_mask, p_stacks, p_cards, p_card_mask, p_details = power_tensors(
-            [t["powers"] for t in toks], index
-        )
-
-        e_n = max(1, max(len(t["enemies"]) for t in toks))
-        q_n = max(1, max((len(e["powers"]) for t in toks for e in t["enemies"]), default=0))
-        i_n = max(1, max((len(s) for t in toks for e in t["enemies"] for s in e["slots"]), default=0))
-        enemies, enemy_mask, enemy_scalars = (
-            torch.zeros(n, e_n, dtype=torch.long),
-            torch.zeros(n, e_n),
-            torch.zeros(n, e_n, spec.ENEMY_SCALARS),
-        )
-        e_powers = [torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n)]
-        e_numbers = [torch.zeros(n, e_n, q_n), torch.zeros(n, e_n, q_n, dtype=torch.long), torch.zeros(n, e_n, q_n)]
-        e_details = torch.zeros(n, e_n, q_n)
-        intents = torch.zeros(n, e_n, spec.SLOTS, i_n, dtype=torch.long)
-        intent_values, intent_mask = torch.zeros(n, e_n, spec.SLOTS, i_n, 2), torch.zeros(n, e_n, spec.SLOTS, i_n)
-        for b, t in enumerate(toks):
-            for k, e in enumerate(t["enemies"]):
-                enemies[b, k], enemy_mask[b, k] = index["enemies"].get(e["id"], 0), 1
-                enemy_scalars[b, k] = torch.tensor(e["scalars"])
-                for j, (pid, amount, st, card, detail) in enumerate(e["powers"]):
-                    e_powers[0][b, k, j], e_powers[1][b, k, j], e_powers[2][b, k, j] = (
-                        index["powers"].get(pid, 0),
-                        amount,
-                        1,
-                    )
-                    e_numbers[0][b, k, j], e_details[b, k, j] = st, detail
-                    if card:
-                        e_numbers[1][b, k, j], e_numbers[2][b, k, j] = index["cards"].get(card, 0), 1
-                for s, slot in enumerate(e["slots"][: spec.SLOTS]):
-                    for j, (kind, damage, total) in enumerate(slot):
-                        intents[b, k, s, j], intent_mask[b, k, s, j] = index["intents"].get(kind, 0), 1
-                        intent_values[b, k, s, j] = torch.tensor([damage, total])
-
-        bags = [
-            x
-            for table in spec.BAGS
-            for x in padded([[index[table].get(i, 0) for i in t[table]] for t in toks], "cpu")
-        ]
-        orbs, orb_mask = padded([[index["orbs"].get(o, 0) for o in t["orbs"]] for t in toks], "cpu")
-        orb_values = torch.zeros(n, orbs.shape[1], 2)
-        for b, t in enumerate(toks):
-            if t["orb_values"]:
-                orb_values[b, : len(t["orb_values"])] = torch.tensor(t["orb_values"])
-        a_n = max(1, max(len(t["allies"]) for t in toks))
-        aq_n = max(1, max((len(a["powers"]) for t in toks for a in t["allies"]), default=0))
-        allies, ally_scalars, ally_mask = (
-            torch.zeros(n, a_n, dtype=torch.long),
-            torch.zeros(n, a_n, 4),
-            torch.zeros(n, a_n),
-        )
-        a_powers = [torch.zeros(n, a_n, aq_n, dtype=torch.long), torch.zeros(n, a_n, aq_n), torch.zeros(n, a_n, aq_n)]
-        for b, t in enumerate(toks):
-            for k, a in enumerate(t["allies"]):
-                allies[b, k], ally_scalars[b, k], ally_mask[b, k] = (
-                    index["allies"].get(a["id"], 0),
-                    torch.tensor(a["scalars"]),
-                    1,
-                )
-                for j, (pid, amount, _, _, _) in enumerate(a["powers"]):
-                    a_powers[0][b, k, j], a_powers[1][b, k, j], a_powers[2][b, k, j] = (
-                        index["powers"].get(pid, 0),
-                        amount,
-                        1,
-                    )
-
-        r_n = max(1, max(len(t["relics"]) for t in toks))
-        relic_values, relic_status = torch.zeros(n, r_n, 3), torch.zeros(n, r_n, dtype=torch.long)
-        for b, t in enumerate(toks):
-            for k, (values, status) in enumerate(zip(t["relic_values"], t["relic_status"], strict=True)):
-                relic_values[b, k], relic_status[b, k] = torch.tensor(values), index["relic_status"].get(status, 0)
-
-        tensors = [
-            cards, ups, piles, mods, mod_mask, p_ids, p_amounts, p_mask, torch.tensor([t["player"] for t in toks]),
-            enemies, enemy_scalars, enemy_mask, *e_powers, intents, intent_values, intent_mask, *bags,
-            p_stacks, p_cards, p_card_mask, *e_numbers, orbs, orb_mask, allies, ally_scalars, ally_mask, *a_powers,
-            torch.tensor([t["extra"] for t in toks]), costs, mod_amounts, relic_values, relic_status, damages, orb_values,
-            numbers, p_details, e_details,
-        ]  # fmt: skip
-        self.tensors = [x.to(device) for x in tensors]
+        inputs = sts2_batch.combat_inputs([s["tokens"] for s in samples], index)
+        self.tensors = [inputs[name].to(device) for name in spec.INPUTS]
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
         self.potions = self.tensors[spec.INPUTS.index("potions")]
         self.potion_mask = self.tensors[spec.INPUTS.index("potion_mask")]
-        self.potion_used = torch.zeros_like(self.potion_mask)
-        for b, s in enumerate(samples):
-            self.potion_used[b, : len(s["potion_used"])] = torch.tensor(s["potion_used"], dtype=torch.float, device=device)
+        w = self.potion_mask.shape[1]
+        used = [s["potion_used"] for s in samples]
+        self.potion_used = torch.tensor([u + [0] * (w - len(u)) for u in used], dtype=torch.float, device=device)
 
     def inputs(self):
         """The net's inputs, in the order of spec.INPUTS."""
