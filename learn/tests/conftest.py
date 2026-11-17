@@ -22,16 +22,29 @@ def encoder() -> common.Encoder:
     return common.Encoder(encoder_command())
 
 
-def read_run(view: dict) -> dict:
-    """A run view as V reads it: its tokens and its numbers by name."""
-    return encoder().runs([json.dumps({"run_view": view})])[0]["run"]
+def read_run(view: dict, env="SL") -> dict:
+    """A run view as V reads it in ENV: its tokens and its numbers by name."""
+    return encoder().runs([json.dumps({"run_view": view, "env": env})])[0]["run"]
 
 
-def round_start(obs: dict, history=()) -> dict:
-    """A round's start as combat/data.py holds it: the observation, the history logged with it and its tokens."""
+# An event option as its button shows it (EventOptionView): a card of the deck named, a relic held and one offered, a
+# potion of the belt, and a number.
+OPTION = {
+    "index": 0,
+    "key": "WELLSPRING.pages.INITIAL.options.BATHE",
+    "cards": [{"card": {"id": "STRIKE", "up": 1}, "owned": True}, {"card": {"id": "GUILTY"}}],
+    "relics": [{"relic": {"id": "RING", "counter": 3}, "owned": True}, {"relic": {"id": "VASE"}}],
+    "potions": [{"id": "FIRE_POTION", "owned": True}],
+    "numbers": {"WELLSPRING.BatheCurses": 1},
+}
+
+
+def round_start(obs: dict, history=(), env="SL") -> dict:
+    """A round's start as combat/data.py holds it: the observation, the history logged with it, its environment and its
+    tokens."""
     history = list(history)
-    tokens = encoder().combats([json.dumps({"obs": obs, "history": history})])[0]["tokens"]
-    return {"obs": obs, "history": history, "tokens": tokens}
+    tokens = encoder().combats([json.dumps({"obs": obs, "history": history, "env": env})])[0]["tokens"]
+    return {"obs": obs, "history": history, "env": env, "tokens": tokens}
 
 
 def make_enemy(uid, hp=10, intents=({"type": "Attack", "damage": 6, "hits": 1},), monster="M"):

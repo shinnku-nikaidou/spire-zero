@@ -5,9 +5,10 @@ namespace Sts2Ai.Brain.Macro;
 /// <summary>
 /// Afterstates predicted from what a screen shows: the run after an option, not applied in a
 /// world. The card a reward adds, the relic, the gold a purchase costs, the HP a rest heals, a card's upgrade preview,
-/// the point a map move enters. An option whose result the screen does not show (most event options, a reroll, a
-/// transform) leaves the run as it is. One that opens a choice (a card reward, a removal, smithing) is the best pick in
-/// it by <paramref name="value"/>, so a choice that would be skipped is not opened.
+/// the point a map move enters. An event's option whose result its button does not show is the run with the option
+/// pending (<see cref="RunView.Pending"/>: everything its button shows, which V reads). Another option whose result the
+/// screen does not show (a reroll, a transform) leaves the run as it is. One that opens a choice (a card reward, a
+/// removal, smithing) is the best pick in it by <paramref name="value"/>, so a choice that would be skipped is not opened.
 ///
 /// NoSL's macro brain values every option by these. In SL the node's clone plays the options for real
 /// (<see cref="CloneSearch"/>), and only what leaves the node is predicted here: a map move.
@@ -46,7 +47,7 @@ public sealed class ScreenAfterstates(IRunValue value)
             case EventScreen screen when action.Verb == MacroAction.Event:
                 var option = screen.Options.First(o => o.Index == action.Index);
                 if (option.Kills == true) return run with { Hp = 0 };
-                return option.Relic != null ? WithRelic(run, option.Relic) : run;
+                return option.Relic != null ? WithRelic(run, option.Relic) : run with { Pending = option };
             case ShopScreen screen when action.Verb == MacroAction.Buy:
                 var entry = screen.Entries.First(e => e.Slot == action.Index);
                 var paid = run with { Gold = run.Gold - entry.Cost };
@@ -98,6 +99,14 @@ public sealed class ScreenAfterstates(IRunValue value)
         int each = run.Relics.Any(r => r.Id == "ECTOPLASM") ? 0 : run.Relics.Any(r => r.Id == "BOWLER_HAT") ? FoulGold * 5 / 4 : FoulGold;
         return run with { Gold = run.Gold + thrown * each, Potions = [.. run.Potions.Select(p => p == Combat.PimcBrain.Foul ? null : p)] };
     }
+
+    /// <summary>
+    /// Whether <paramref name="action"/> is an event's option whose result its button does not show: its afterstate is
+    /// the run with it pending (<see cref="After"/>). Not one the button says kills (lost), nor one that gives a relic
+    /// (an ancient's: the relic added).
+    /// </summary>
+    public static bool Pends(EventScreen screen, MacroAction action) =>
+        action.Verb == MacroAction.Event && screen.Options.First(o => o.Index == action.Index) is { Kills: not true, Relic: null };
 
     /// <summary>An event option the screen says kills: the run ends there, lost.</summary>
     public static bool Kills(Observation obs, MacroAction action) =>

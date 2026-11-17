@@ -20,13 +20,20 @@ from v.net import Batch, Hazards, values
 
 def onnx_bytes(model, example: Batch) -> bytes:
     """The model as an ONNX graph, every input's batch and length dimensions left free."""
-    axes = {name: {0: "batch", 1: "cards"} for name in ("cards", "ups", "card_mask")}
-    axes |= {name: {0: "batch", 1: "cards", 2: "card_mods"} for name in ("mods", "mod_mask", "mod_amounts")}
-    axes["numbers"] = {0: "batch", 1: "cards"}
+    p, axes = spec.PEND, {}
+    for prefix in ("", p):
+        cards = prefix + "cards"
+        axes |= {prefix + name: {0: "batch", 1: cards} for name in ("cards", "ups", "card_mask", "numbers")}
+        axes |= {prefix + name: {0: "batch", 1: cards, 2: prefix + "card_mods"} for name in ("mods", "mod_mask", "mod_amounts")}
     for t, mask in spec.BAGS.items():
         axes[t] = axes[mask] = {0: "batch", 1: t}
     axes["relic_values"] = axes["relic_status"] = {0: "batch", 1: "relics"}
     axes["held"] = axes["held_mask"] = {0: "batch", 1: "held"}
+    axes["pending"] = axes["pending_mask"] = {0: "batch", 1: "pending"}
+    axes[p + "cards_owned"] = {0: "batch", 1: p + "cards"}
+    for group, names in (("relics", ("relics", "relic_mask", "relic_values", "relic_status", "relics_owned")),
+                         ("potions", ("potions", "potion_mask", "potions_owned")), ("vars", ("vars", "var_mask", "var_values"))):  # fmt: skip
+        axes |= {p + name: {0: "batch", 1: p + group} for name in names}
     axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}}
     out = io.BytesIO()
     torch.onnx.export(
@@ -43,12 +50,16 @@ def onnx_bytes(model, example: Batch) -> bytes:
 
 def net_file(name, floors, tables, mean, std, model, held, report, seed, trained) -> dict:
     """The file's content; its test runs are a few held-out decisions (those that kept their view, data.read_runs),
-    valued on the CPU as RunNet values them: loading the file, RunNet reads each view again and must come to the same
-    value. `trained` says what made the net (common.trained)."""
+    valued on the CPU as RunNet values them: loading the file, RunNet reads each view again, in its environment, and
+    must come to the same value. A few of them are event options picked and not yet played out, when the held-out
+    samples have any, so that the check covers those inputs too. `trained` says what made the net (common.trained)."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     held = [s for s in held if "view" in s]
-    picks = random.Random(seed).sample(held, min(8, len(held)))
+    pending = [s for s in held if s.get("pending")]  # an event option's sample (v/data.py)
+    plain = [s for s in held if not s.get("pending")]
+    draw = random.Random(seed)
+    picks = draw.sample(plain, min(8, len(plain))) + draw.sample(pending, min(4, len(pending)))
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
         valued = values(model, b)
@@ -60,7 +71,10 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
         "trained": trained,
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
-        "tests": [{"run": unpack(s["view"]), "value": float(v)} for s, v in zip(picks, valued, strict=True)],
+        "tests": [
+            {"run": unpack(s["view"]), "value": float(v)} | ({"env": s["env"]} if s.get("env", "SL") != "SL" else {})
+            for s, v in zip(picks, valued, strict=True)
+        ],
     }
 
 

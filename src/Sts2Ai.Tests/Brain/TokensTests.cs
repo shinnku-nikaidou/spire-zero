@@ -39,7 +39,7 @@ public class TokensTests
         return JsonNode.Parse(Encoding.UTF8.GetString(stream.ToArray()))!;
     }
 
-    private static JsonNode Tokens(RunView run) => Json(RunNet.Tokens(run).Write);
+    private static JsonNode Tokens(RunView run, PlayEnvironment env = PlayEnvironment.SL) => Json(RunNet.Tokens(run, env).Write);
 
     private static void Same(string expected, JsonNode? actual) => Assert.Equal(JsonNode.Parse(expected)!.ToJsonString(), actual!.ToJsonString());
 
@@ -101,9 +101,9 @@ public class TokensTests
     public void ARunsNumbersAreRawByName()
     {
         Same("""{"floor":1,"hp":50,"max_hp":70,"gold":99,"ascension":3,"potion_slots":3,"auto_win_0":0,"auto_win_1":0,"auto_win_2":0}""",
-            Json(json => RunNet.Write(json, Run()))["state"]);
+            Json(json => RunNet.Write(json, Run(), PlayEnvironment.SL))["state"]);
         // The game's rule: the acts whose plain monster fights are won at their start.
-        var ruled = Json(json => RunNet.Write(json, Run(more: ""","auto_win":[0,1]""")))["state"]!;
+        var ruled = Json(json => RunNet.Write(json, Run(more: ""","auto_win":[0,1]"""), PlayEnvironment.SL))["state"]!;
         Assert.Equal([1, 1, 0], new[] { "auto_win_0", "auto_win_1", "auto_win_2" }.Select(name => (double)ruled[name]!));
     }
 
@@ -123,7 +123,40 @@ public class TokensTests
              "potions":["FIRE",null,null],"relics":RELICS,"allies":[],"enemies":ENEMIES}
             """.Replace("ROUND", $"{round}").Replace("HAND", hand).Replace("RELICS", relics).Replace("ENEMIES", enemies));
 
-    private static JsonNode Tokens(CombatObservation obs, params EnemyTurns[] history) => Json(CombatTokens.Of(obs, history, 3).Write);
+    private static JsonNode Tokens(CombatObservation obs, params EnemyTurns[] history) => Json(CombatTokens.Of(obs, history, 3, PlayEnvironment.SL).Write);
+
+    [Fact]
+    public void NoSlsStatesCarryItsMarkInBothNetsContextAndSlsNone()
+    {
+        Assert.DoesNotContain("env:", Tokens(Run())["context"]!.ToJsonString());
+        Assert.Contains("\"env:NoSL\"", Tokens(Run(), PlayEnvironment.NoSL)["context"]!.ToJsonString());
+        Assert.DoesNotContain("env:", Tokens(Obs())["context"]!.ToJsonString());
+        Assert.Contains("\"env:NoSL\"", Json(CombatTokens.Of(Obs(), [], 3, PlayEnvironment.NoSL).Write)["context"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void AnEventOptionPendingReadsEverythingItsButtonShows()
+    {
+        var option = ProtocolJson.Deserialize<EventOptionView>("""
+            {"index":0,"key":"WELLSPRING.pages.INITIAL.options.BATHE",
+             "cards":[{"card":{"id":"STRIKE","up":1},"owned":true},{"card":{"id":"GUILTY"}}],
+             "relics":[{"relic":{"id":"RING","counter":3},"owned":true},{"relic":{"id":"VASE"}}],
+             "potions":[{"id":"FIRE","owned":true}],"numbers":{"WELLSPRING.BatheCurses":1,"WELLSPRING.Gold":450}}
+            """);
+        Assert.Null(Tokens(Run())["pending"]);
+        var p = Tokens(Run() with { Pending = option }, PlayEnvironment.NoSL)["pending"]!;
+        Assert.Equal("WELLSPRING.pages.INITIAL.options.BATHE", (string)p["key"]!);
+        Same("""[["STRIKE",1,[],[],[0,0,0]],["GUILTY",0,[],[],[0,0,0]]]""", p["cards"]);
+        Same("[1,0]", p["cards_owned"]);
+        Same("""["RING","VASE"]""", p["relics"]);
+        Same("[[0.3,1,0],[0,0,0]]", p["relic_values"]);
+        Same("[1,0]", p["relics_owned"]);
+        Same("""["FIRE"]""", p["potions"]);
+        Same("[1]", p["potions_owned"]);
+        // each number / 20, capped at ±20
+        Same("""["WELLSPRING.BatheCurses","WELLSPRING.Gold"]""", p["numbers"]);
+        Same("[0.05,20]", p["number_values"]);
+    }
 
     [Fact]
     public void ACombatsCardsAreIdsUpgradesPilesModifiersCostsAndNumbers()

@@ -1,7 +1,9 @@
 """V's net: a set encoder over the deck, bags of ids for the rest (each relic with its
-numbers and status), the cards the relics keep through the deck's card encoder, the raw state, then a body and two heads. The main head gives, per floor, the chance to die on it if still alive there; V's value is the chance to
-survive every floor. The second head learns the next combats' HP costs, which shapes the body only: it is not in the net
-file.
+numbers and status), the cards the relics keep through the deck's card encoder, the raw state, and an event option
+picked and not yet played out (its key, the cards it names through the deck's card encoder, its relics and potions as
+the run's, its numbers by their rows), then a body and two heads. The main head gives, per floor, the chance to die on
+it if still alive there; V's value is the chance to survive every floor. The second head learns the next combats' HP
+costs, which shapes the body only: it is not in the net file.
 """
 
 import torch
@@ -21,29 +23,81 @@ def padded(rows, device):
     return ids.to(device), mask.to(device)
 
 
+def numbers(rows, device):
+    """Lists of numbers as one padded tensor, at least one wide, as padded pads their ids."""
+    width = max(1, max(len(r) for r in rows))
+    out = torch.zeros(len(rows), width)
+    for b, r in enumerate(rows):
+        out[b, : len(r)] = torch.tensor(r, dtype=torch.float32)
+    return out.to(device)
+
+
+def card_rows(decks, index, prefix=""):
+    """Lists of cards (a token's [id, up, modifiers, amounts, [damage, block, growth]]) as the net's card inputs by
+    name (spec.CARDS, with PREFIX), padded to the widest list and the most modifiers, each at least 1."""
+    width = max(1, max(len(d) for d in decks))
+    m_n = max(1, max((len(c[2]) for d in decks for c in d), default=0))
+    rows = {name: [] for name in spec.CARDS}
+    for deck in decks:
+        pad = width - len(deck)
+        rows["cards"].append([index["cards"].get(c[0], 0) for c in deck] + [0] * pad)
+        rows["ups"].append([float(c[1]) for c in deck] + [0.0] * pad)
+        rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
+        mods = [[index["modifiers"].get(m, 0) for m in c[2]] for c in deck]
+        rows["mods"].append([m + [0] * (m_n - len(m)) for m in mods] + [[0] * m_n] * pad)
+        rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (m_n - len(m)) for m in mods] + [[0.0] * m_n] * pad)
+        rows["mod_amounts"].append([c[3] + [0.0] * (m_n - len(c[3])) for c in deck] + [[0.0] * m_n] * pad)
+        rows["numbers"].append([list(c[4]) for c in deck] + [[0.0] * N_NUMBERS] * pad)
+    return {
+        prefix + name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32)
+        for name, r in rows.items()
+    }
+
+
+NO_PENDING = {"key": None, "cards": [], "cards_owned": [], "relics": [], "relic_values": [], "relic_status": [],
+              "relics_owned": [], "potions": [], "potions_owned": [], "numbers": [], "number_values": []}  # fmt: skip
+
+
+def pending_rows(toks, index, device):
+    """The inputs of the event option each run has picked and not yet played out (spec.PENDING), empty for none: its
+    key in `pending` (an id the table does not list, entry 0, reads as nothing), its cards as the deck's, its relics as
+    the run's, its potions, and its numbers by their rows."""
+    pend = [tok.get("pending", NO_PENDING) for tok in toks]
+    p = spec.PEND
+    feed = {k: v.to(device) for k, v in card_rows([x["cards"] for x in pend], index, p).items()}
+    feed["pending"], feed["pending_mask"] = padded(
+        [[] if x["key"] is None else [index["pending"].get(x["key"], 0)] for x in pend], device
+    )
+    feed[p + "cards_owned"] = numbers([x["cards_owned"] for x in pend], device)
+    feed[p + "relics"], feed[p + "relic_mask"] = padded(
+        [[index["relics"].get(i, 0) for i in x["relics"]] for x in pend], device
+    )
+    r_n = feed[p + "relics"].shape[1]
+    relic_values, relic_status = torch.zeros(len(pend), r_n, 3), torch.zeros(len(pend), r_n, dtype=torch.long)
+    for b, x in enumerate(pend):
+        for k, (v, status) in enumerate(zip(x["relic_values"], x["relic_status"], strict=True)):
+            relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
+    feed[p + "relic_values"], feed[p + "relic_status"] = relic_values.to(device), relic_status.to(device)
+    feed[p + "relics_owned"] = numbers([x["relics_owned"] for x in pend], device)
+    feed[p + "potions"], feed[p + "potion_mask"] = padded(
+        [[index["potions"].get(i, 0) for i in x["potions"]] for x in pend], device
+    )
+    feed[p + "potions_owned"] = numbers([x["potions_owned"] for x in pend], device)
+    feed[p + "vars"], feed[p + "var_mask"] = padded(
+        [[index["event_vars"].get(i, 0) for i in x["numbers"]] for x in pend], device
+    )
+    feed[p + "var_values"] = numbers([x["number_values"] for x in pend], device)
+    return feed
+
+
 class Batch:
     """Samples (their tokens packed, v/data.py) as tensors: the net's inputs (names: spec.INPUTS), the hazards' targets
     and the second head's, and the weights."""
 
     def __init__(self, samples, index, mean, std, floors, device):
         toks = [unpack(s["tokens"]) for s in samples]
-        n, width = len(samples), max(1, max(len(tok["cards"]) for tok in toks))
-        m_n = max(1, max((len(c[2]) for tok in toks for c in tok["cards"]), default=0))
-        rows = {name: [] for name in ("cards", "ups", "card_mask", "mods", "mod_mask", "mod_amounts", "numbers")}
-        for tok in toks:
-            deck, pad = tok["cards"], width - len(tok["cards"])
-            rows["cards"].append([index["cards"].get(c[0], 0) for c in deck] + [0] * pad)
-            rows["ups"].append([float(c[1]) for c in deck] + [0.0] * pad)
-            rows["card_mask"].append([1.0] * len(deck) + [0.0] * pad)
-            mods = [[index["modifiers"].get(m, 0) for m in c[2]] for c in deck]
-            rows["mods"].append([m + [0] * (m_n - len(m)) for m in mods] + [[0] * m_n] * pad)
-            rows["mod_mask"].append([[1.0] * len(m) + [0.0] * (m_n - len(m)) for m in mods] + [[0.0] * m_n] * pad)
-            rows["mod_amounts"].append([c[3] + [0.0] * (m_n - len(c[3])) for c in deck] + [[0.0] * m_n] * pad)
-            rows["numbers"].append([list(c[4]) for c in deck] + [[0.0] * N_NUMBERS] * pad)
-        feed = {
-            name: torch.tensor(r, dtype=torch.long if name in ("cards", "mods") else torch.float32).to(device)
-            for name, r in rows.items()
-        }
+        n = len(samples)
+        feed = {name: t.to(device) for name, t in card_rows([tok["cards"] for tok in toks], index).items()}
         for t, bag_mask in spec.BAGS.items():
             feed[t], feed[bag_mask] = padded(
                 [[index[t].get(i, 0) for i in tok[t]] for tok in toks],
@@ -58,6 +112,7 @@ class Batch:
                 relic_values[b, k], relic_status[b, k] = torch.tensor(v), index["relic_status"].get(status, 0)
         feed["relic_values"], feed["relic_status"] = relic_values.to(device), relic_status.to(device)
         feed["held"], feed["held_mask"] = padded([[index["cards"].get(c, 0) for c in tok["held"]] for tok in toks], device)
+        feed |= pending_rows(toks, index, device)
         self.feed = feed
 
         g = torch.arange(floors)
@@ -117,13 +172,23 @@ class Net(nn.Module):
         self.bags = nn.ModuleDict({t: nn.Embedding(sizes[t], d) for t in spec.BAGS})
         self.relic_counter = nn.Embedding(sizes["relics"], d)
         self.relic_status = nn.Embedding(sizes["relic_status"], d)
+        # An event option picked and not yet played out: its key's row (entry 0, a key the table does not list, is
+        # held at zero) and its numbers' rows; whether a card, relic or potion it names is the player's own.
+        self.pending = nn.Embedding(sizes["pending"], d, padding_idx=0)
+        self.event_vars = nn.Embedding(sizes["event_vars"], d)
         for e in (self.cards, self.card_up, self.card_damage, self.card_block, self.card_grown, self.modifiers, self.mod_amount,
-                  *self.bags.values(), self.relic_counter, self.relic_status):  # fmt: skip
+                  *self.bags.values(), self.relic_counter, self.relic_status, self.pending, self.event_vars):  # fmt: skip
             nn.init.normal_(e.weight, std=0.1)
+        with torch.no_grad():
+            self.pending.weight[0] = 0
         self.melted = nn.Parameter(torch.randn(d) * 0.1)
+        self.pend_card_owned = nn.Parameter(torch.randn(d) * 0.1)
+        self.pend_relic_owned = nn.Parameter(torch.randn(d) * 0.1)
+        self.pend_potion_owned = nn.Parameter(torch.randn(d) * 0.1)
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
-        # the deck's mean and scaled sum, the bags, the state, then the kept cards' sum
-        width = 2 * h + len(spec.BAGS) * d + len(spec.STATE) + h
+        # the deck's mean and scaled sum, the bags, the state, the kept cards' sum, then the event option's key, cards'
+        # sum, relics, potions and numbers
+        width = 2 * h + len(spec.BAGS) * d + len(spec.STATE) + h + d + h + 3 * d
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
         self.head = nn.Linear(self.BODY, floors)
         self.aux_head = nn.Linear(self.BODY, AUX)
@@ -137,11 +202,10 @@ class Net(nn.Module):
         x = self.encoded(*inputs)
         return self.head(x), self.aux_head(x)
 
-    def encoded(self, cards, ups, card_mask, mods, mod_mask, mod_amounts, numbers, *rest):
-        """The body's output, which both heads read. A relic reads as the combat net reads it: its id's row, its counter
-        times its id's counter row, the melted row if melted, and its status's row."""
-        *bags, state, relic_values, relic_status, held, held_mask = rest
-        x = (
+    def card_x(self, cards, ups, mods, mod_mask, mod_amounts, numbers):
+        """A card's reading before the card encoder: its id's row, its upgrade level, damage, block and growth times
+        its id's rows for them, and its modifiers with their amounts."""
+        return (
             self.cards(cards)
             + ups[..., None] * self.card_up(cards)
             + numbers[..., 0:1] * self.card_damage(cards)
@@ -149,21 +213,43 @@ class Net(nn.Module):
             + numbers[..., 2:3] * self.card_grown(cards)
             + ((self.modifiers(mods) + mod_amounts[..., None] * self.mod_amount(mods)) * mod_mask[..., None]).sum(2)
         )
-        h = self.phi(x) * card_mask[..., None]
+
+    def relic_rows(self, ids, values, status):
+        """Relics as the combat net reads them: the id's row, the counter times the id's counter row, the melted row if
+        melted, and the status's row."""
+        return (
+            self.bags["relics"](ids)
+            + values[..., 0:1] * self.relic_counter(ids)
+            + values[..., 2:3] * self.melted
+            + self.relic_status(status)
+        )
+
+    def encoded(self, *inputs):
+        """The body's output, which both heads read (inputs as spec.INPUTS)."""
+        x = dict(zip(spec.INPUTS, inputs, strict=True))
+        p = spec.PEND
+        h = self.phi(self.card_x(*(x[k] for k in ("cards", "ups", "mods", "mod_mask", "mod_amounts", "numbers"))))
+        h = h * x["card_mask"][..., None]
         total = h.sum(1)
-        parts = [total / card_mask.sum(1, keepdim=True).clamp_min(1), total * self.SUM_SCALE]
-        for t, (ids, mask) in zip(spec.BAGS, zip(bags[::2], bags[1::2], strict=True), strict=True):
-            rows = self.bags[t](ids)
-            if t == "relics":
-                rows = (
-                    rows
-                    + relic_values[..., 0:1] * self.relic_counter(ids)
-                    + relic_values[..., 2:3] * self.melted
-                    + self.relic_status(relic_status)
-                )
-            parts.append((rows * mask[..., None]).sum(1))
-        kept = (self.phi(self.cards(held)) * held_mask[..., None]).sum(1)
-        return self.body(torch.cat(parts + [state, kept], 1))
+        parts = [total / x["card_mask"].sum(1, keepdim=True).clamp_min(1), total * self.SUM_SCALE]
+        for t, mask in spec.BAGS.items():
+            ids = x[t]
+            rows = self.relic_rows(ids, x["relic_values"], x["relic_status"]) if t == "relics" else self.bags[t](ids)
+            parts.append((rows * x[mask][..., None]).sum(1))
+        parts.append(x["state"])
+        parts.append((self.phi(self.cards(x["held"])) * x["held_mask"][..., None]).sum(1))
+        # the event option picked and not yet played out: all zero for none
+        parts.append((self.pending(x["pending"]) * x["pending_mask"][..., None]).sum(1))
+        named = self.card_x(*(x[p + k] for k in ("cards", "ups", "mods", "mod_mask", "mod_amounts", "numbers")))
+        named = named + x[p + "cards_owned"][..., None] * self.pend_card_owned
+        parts.append((self.phi(named) * x[p + "card_mask"][..., None]).sum(1))
+        relics = self.relic_rows(x[p + "relics"], x[p + "relic_values"], x[p + "relic_status"])
+        relics = relics + x[p + "relics_owned"][..., None] * self.pend_relic_owned
+        parts.append((relics * x[p + "relic_mask"][..., None]).sum(1))
+        potions = self.bags["potions"](x[p + "potions"]) + x[p + "potions_owned"][..., None] * self.pend_potion_owned
+        parts.append((potions * x[p + "potion_mask"][..., None]).sum(1))
+        parts.append((self.event_vars(x[p + "vars"]) * (x[p + "var_values"] * x[p + "var_mask"])[..., None]).sum(1))
+        return self.body(torch.cat(parts, 1))
 
 
 class Hazards(nn.Module):

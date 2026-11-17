@@ -71,8 +71,9 @@ def low_hp(s: dict) -> bool:
 
 def net_file(name, env, tables, model, kept, report, seed, trained) -> dict:
     """The file's content; its test states are TESTS of the held-out round starts kept with their observations, among
-    them, where the states kept hold one, a multi-hit attack, a potion and low HP, predicted on the CPU as CombatNet does.
-    `trained` says what made the net (common.trained)."""
+    them, where the states kept hold one, a multi-hit attack, a potion and low HP, predicted on the CPU as CombatNet does,
+    each in its environment. `env` names the environments whose games trained it ("SL+NoSL"). `trained` says what made
+    the net (common.trained)."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     rng = random.Random(seed)
@@ -103,6 +104,7 @@ def net_file(name, env, tables, model, kept, report, seed, trained) -> dict:
                 "outcome": [float(v) for v in probs[k]],
                 "potion_used": [float(v) for v in gone[k].flatten()],
             }
+            | ({"env": s["env"]} if s.get("env", "SL") != "SL" else {})
             for k, s in enumerate(picks)
         ],
     }

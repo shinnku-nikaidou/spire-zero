@@ -116,15 +116,16 @@ def shown(round):
 
 
 def write_runs(tmp_path, env="SL", runs=10):
-    """A log and its records: runs of one combat of three rounds, each ending at 40 HP with its potion gone."""
+    """A log and its records: runs of one combat of three rounds, each ending at 40 HP with its potion gone; ENV "both"
+    plays every other run in NoSL."""
     log, recs = tmp_path / "log.jsonl", tmp_path / "rec.jsonl"
     with open(log, "w") as lf, open(recs, "w") as rf:
         for i in range(runs):
             run = f"{i:016x}"
             for d, r in enumerate((1, 1, 2, 3)):
-                line = {"run": run, "decision_id": d, "env": env, "surface": "combat", "obs": obs(round=r, hp=60 - r), "history": shown(r)}
+                line = {"run": run, "decision_id": d, "env": env_of(env, i), "surface": "combat", "obs": obs(round=r, hp=60 - r), "history": shown(r)}
                 lf.write(json.dumps(line, separators=(",", ":")) + "\n")
-            line = {"run": run, "decision_id": 4, "env": env, "surface": "map", "run_view": {"potions": [None, None, None]}}
+            line = {"run": run, "decision_id": 4, "env": env_of(env, i), "surface": "map", "run_view": {"potions": [None, None, None]}}
             lf.write(json.dumps(line, separators=(",", ":")) + "\n")
             end = {"died": i % 3 == 0, "hp": 40, "max_hp": 70, "potions": 0}
             rf.write(
@@ -135,8 +136,12 @@ def write_runs(tmp_path, env="SL", runs=10):
     return str(tmp_path / "s")
 
 
+def env_of(env: str, i: int) -> str:
+    return ("SL", "NoSL")[i % 2] if env == "both" else env
+
+
 def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
-    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), "SL", encoder())
+    samples, skipped = data.read(*common.lists(write_runs(tmp_path)), encoder())
     assert skipped == 0 and len(samples) == 30  # rounds 1, 2 and 3 of each run's combat
     first, third = samples[0], samples[2]
     enemy = [common.unpack(s["tokens"])["enemies"][0] for s in (first, third)]
@@ -145,9 +150,13 @@ def test_each_round_start_is_a_sample_with_the_history_before_it(tmp_path):
     assert first["potion_used"] == [0] and first["lost"] is None and samples[3]["lost"] == pytest.approx((59 - 40) / 70)
 
 
-def test_another_environments_logs_are_refused(tmp_path):
-    with pytest.raises(common.LearnError, match="NoSL decisions, not SL"):
-        data.read(*common.lists(write_runs(tmp_path, env="NoSL")), "SL", encoder())
+def test_both_environments_train_one_net_each_state_read_in_its_own(tmp_path):
+    samples, skipped = data.read(*common.lists(write_runs(tmp_path, env="both")), encoder())
+    assert skipped == 0 and len(samples) == 30
+    for s in samples:
+        context = common.unpack(s["tokens"])["context"]
+        assert ("env:NoSL" in context) == (s["env"] == "NoSL")
+    assert {s["env"] for s in samples} == {"SL", "NoSL"}
 
 
 def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
@@ -171,17 +180,19 @@ def test_the_onnx_graph_gives_the_test_states_the_endings_torch_gave_them():
         assert 0 <= min(test["potion_used"]) and max(test["potion_used"]) <= 1
 
 
-def test_training_writes_a_net_file_of_its_environment(tmp_path, monkeypatch):
+def test_training_writes_a_net_file_of_both_environments(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "KEEP", 1)
     out = tmp_path / "net.json"
-    runs = write_runs(tmp_path, runs=14)
+    runs = write_runs(tmp_path, env="both", runs=14)
     # --workers 0: the patched KEEP holds in this process only, not in a worker's fresh import
-    args = ["--list", runs, "--env", "SL", "--name", "t", "--out", str(out), "--test-list", runs, "--encoder", encoder_command()]
+    args = ["--list", runs, "--name", "t", "--out", str(out), "--test-list", runs, "--encoder", encoder_command()]
     args += ["--workers", "0"]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
-    assert net["env"] == "SL" and net["fit"]["runs"] == 14 and net["fit"]["held_out_runs"] == 3 and net["tests"]
+    assert net["env"] == "SL+NoSL" and set(net["fit"]["held_out_loss_by_env"]) == {"SL", "NoSL"}
+    assert {t.get("env", "SL") for t in net["tests"]} == {"SL", "NoSL"}
+    assert net["fit"]["runs"] == 14 and net["fit"]["held_out_runs"] == 3 and net["tests"]
     made = net["trained"]
     assert (made["list"], made["init"], made["seed"]) == (runs, None, 0) and made["rev"] == common.revision()
     assert 1 <= made["epochs"] <= made["settings"]["epochs"] and made["settings"]["lr"] == train.LR
@@ -211,10 +222,10 @@ def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(
     monkeypatch.setattr(data, "KEEP", 1)
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     runs = write_runs(tmp_path, runs=14)
-    args = ["--list", runs, "--env", "SL", "--name", "first", "--out", str(first), "--encoder", encoder_command(), "--workers", "0"]
+    args = ["--list", runs, "--name", "first", "--out", str(first), "--encoder", encoder_command(), "--workers", "0"]
     assert CliRunner().invoke(train.script, args).exit_code == 0
     monkeypatch.setattr(train, "EPOCHS", 0)
-    args = ["--list", runs, "--env", "SL", "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command(), "--workers", "0"]
+    args = ["--list", runs, "--name", "second", "--out", str(second), "--init", str(first), "--encoder", encoder_command(), "--workers", "0"]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
@@ -229,5 +240,5 @@ def test_a_combat_the_run_died_in_before_its_first_decision_leaves_the_run_in(tm
     entered = {"encounter": "BOSS", "hp": 0, "end": {"died": True, "hp": 0, "max_hp": 70, "potions": 0}}
     lines = [json.loads(line) for line in recs.read_text().splitlines()]
     recs.write_text("".join(json.dumps(r | {"combats": r["combats"] + [entered]}) + "\n" for r in lines))
-    samples, skipped = data.read(*common.lists(prefix), "SL", encoder())
+    samples, skipped = data.read(*common.lists(prefix), encoder())
     assert skipped == 0 and len(samples) == 9

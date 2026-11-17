@@ -34,9 +34,14 @@ def mode_ids() -> list[str]:
     return [f"mode:{i}" for i in IDS["modes"]] + [f"dominion:{i}" for i in IDS["dominions"]]
 
 
+def env_ids() -> list[str]:
+    """Both nets' context ids of the environment (CombatTokens.EnvTokens): NoSL's; SL marks none."""
+    return [f"env:{i}" for i in IDS["envs"]]
+
+
 def combat_tables() -> dict[str, list[str]]:
-    """The combat net's. Of the context the encounter, which says the room and the act, the character, and the game
-    mode and dominion; a relic's status also reads "Spent" for a once-a-combat effect used."""
+    """The combat net's. Of the context the encounter, which says the room and the act, the character, the game mode
+    and dominion, and the environment; a relic's status also reads "Spent" for a once-a-combat effect used."""
     return {
         "cards": table(IDS["cards"]),
         "modifiers": table(modifiers()),
@@ -46,7 +51,7 @@ def combat_tables() -> dict[str, list[str]]:
         "relics": table(relics()),
         "potions": table(IDS["potions"]),
         "context": table(
-            [f"encounter:{i}" for i in IDS["encounters"]] + [f"character:{i}" for i in IDS["characters"]] + mode_ids()
+            [f"encounter:{i}" for i in IDS["encounters"]] + [f"character:{i}" for i in IDS["characters"]] + mode_ids() + env_ids()
         ),
         "orbs": table(IDS["orbs"]),
         "allies": table(IDS["monsters"]),
@@ -55,7 +60,9 @@ def combat_tables() -> dict[str, list[str]]:
 
 
 def macro_tables() -> dict[str, list[str]]:
-    """V's; a relic's status as the combat net's."""
+    """V's; a relic's status as the combat net's. An event option picked and not yet played out reads its key in
+    `pending` (whose entry 0, a key the table does not list, is a row of zeros: v/net.py) and its numbers by
+    `event_vars`, "EVENT.Name"."""
     return {
         "cards": table(IDS["cards"]),
         "modifiers": table(modifiers()),
@@ -68,6 +75,9 @@ def macro_tables() -> dict[str, list[str]]:
             + [f"boss:{i}" for i in IDS["bosses"]]
             + [f"character:{i}" for i in IDS["characters"]]
             + mode_ids()
+            + env_ids()
         ),
         "map": table(f"{p}+{k}{quest}" for p in IDS["points"] for k in range(AHEAD) for quest in ("", ":quest")),
+        "pending": table(IDS["event_options"]),
+        "event_vars": table(IDS["event_vars"]),
     }

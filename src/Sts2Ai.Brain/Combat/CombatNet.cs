@@ -5,8 +5,9 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Combat;
 
-/// <summary>A round's start and what the trainer's net made of it, which loading checks.</summary>
-public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, IReadOnlyList<double> PotionUsed);
+/// <summary>A round's start and what the trainer's net made of it, which loading checks, in its environment (null: SL).</summary>
+public sealed record CombatNetTest(CombatObservation Obs, IReadOnlyList<EnemyTurns> History, IReadOnlyList<double> Outcome, IReadOnlyList<double> PotionUsed,
+    string? Env = null);
 
 /// <summary>The combat net as <c>learn/combat/export.py</c> writes it.</summary>
 /// <param name="Buckets">How many buckets of the share of max HP lost from the state to a win the head has, after its
@@ -47,6 +48,11 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
 
+    /// <summary>The environment its states are read in (<see cref="In"/>), and the net loaded, which owns the graph's
+    /// session: this one, or the one a view in another environment shares it with.</summary>
+    private readonly PlayEnvironment _env = PlayEnvironment.SL;
+    private readonly CombatNet _root;
+
     /// <summary>V's values of the runs the leaf priced, by the run without its HP and potions (<see cref="Key"/>), the HP and the potions.</summary>
     private readonly ConcurrentDictionary<(ulong Run, int Hp, string Potions), double> _prices = new();
 
@@ -58,9 +64,22 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         // One thread per call: search workers run side by side, and a leaf is one small input.
         using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
         _session = new InferenceSession(Convert.FromBase64String(file.Onnx), options);
+        _root = this;
+    }
+
+    private CombatNet(CombatNet root, PlayEnvironment env)
+    {
+        (_file, _index, _session, _env, _root) = (root._file, root._index, root._session, env, root);
+        _value = root._value.In(env);
     }
 
     public string Name => _file.Name;
+
+    /// <summary>
+    /// This leaf reading every state in <paramref name="env"/> (<see cref="CombatTokens.EnvTokens"/>), its endings priced
+    /// by V in it too: the same graph, which this net keeps. A net loaded is SL's.
+    /// </summary>
+    public ICombatLeaf In(PlayEnvironment env) => env == _env ? this : env == _root._env ? _root : new CombatNet(_root, env);
 
     /// <summary>The net of a file, its endings priced by <paramref name="value"/>, once it gives every test state the trainer's outcome.</summary>
     public static CombatNet Load(CombatNetFile file, IRunValue value)
@@ -68,7 +87,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         var net = new CombatNet(file, value);
         foreach (var test in file.Tests)
         {
-            var outputs = net.Graph(test.Obs, test.History);
+            var outputs = net.Graph(test.Obs, test.History, test.Env is { } env ? Enum.Parse<PlayEnvironment>(env) : PlayEnvironment.SL);
             var (outcome, potionUsed) = (outputs[0], outputs[1]);
             double error = 0;
             for (int k = 0; k < potionUsed.Length; k++) error = Math.Max(error, Math.Abs(potionUsed[k] - test.PotionUsed[k]));
@@ -86,7 +105,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public const int Batch = 16;
 
     public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) =>
-        Ended(status, run) ?? Priced(run, Graphs([CombatTokens.Of(obs, history, _file.Lags)])[0]);
+        Ended(status, run) ?? Priced(run, Graphs([CombatTokens.Of(obs, history, _file.Lags, _env)])[0]);
 
     /// <summary>
     /// The states' outcomes with the net asked about <see cref="Batch"/> of them at a time, in their order: one
@@ -106,7 +125,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
         for (int from = 0; from < going.Count; from += Batch)
         {
             var asked = going.GetRange(from, Math.Min(Batch, going.Count - from));
-            var outputs = Graphs([.. asked.Select(i => CombatTokens.Of(states[i].Obs, states[i].History, _file.Lags))]);
+            var outputs = Graphs([.. asked.Select(i => CombatTokens.Of(states[i].Obs, states[i].History, _file.Lags, _env))]);
             for (int k = 0; k < asked.Count; k++) outcomes[asked[k]] = Priced(states[asked[k]].Run, outputs[k]);
         }
         return outcomes;
@@ -185,12 +204,13 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public void Dispose()
     {
-        _session.Dispose();
+        if (_root == this) _session.Dispose();
         _keyed.Dispose();
     }
 
     /// <summary>The graph's outputs on a batch of one state.</summary>
-    private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history) => Graphs([CombatTokens.Of(obs, history, _file.Lags)])[0];
+    private float[][] Graph(CombatObservation obs, IReadOnlyList<EnemyTurns> history, PlayEnvironment env) =>
+        Graphs([CombatTokens.Of(obs, history, _file.Lags, env)])[0];
 
     /// <summary>The graph's outputs for each of the states, asked as one batch.</summary>
     private float[][][] Graphs(IReadOnlyList<CombatTokens> states)
@@ -404,8 +424,10 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     }
 
     /// <summary>The graph inputs relic_values and relic_status of a run's relics (<see cref="CombatTokens.RelicValuesOf"/>,
-    /// <see cref="CombatTokens.RelicStatusOf"/>), as both nets take them; a status's row by <paramref name="index"/>.</summary>
-    public static NamedOnnxValue[] RelicInputs(IReadOnlyList<IReadOnlyList<double>> values, IReadOnlyList<string> status, Func<string, long> index)
+    /// <see cref="CombatTokens.RelicStatusOf"/>), as both nets take them; a status's row by <paramref name="index"/>. V
+    /// takes an event button's relics so too, by the names with <paramref name="prefix"/>.</summary>
+    public static NamedOnnxValue[] RelicInputs(IReadOnlyList<IReadOnlyList<double>> values, IReadOnlyList<string> status, Func<string, long> index,
+        string prefix = "")
     {
         int n = Math.Max(1, values.Count);
         var numbers = new DenseTensor<float>([1, n, 3]);
@@ -415,7 +437,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
             for (int j = 0; j < values[k].Count; j++) numbers[0, k, j] = (float)values[k][j];
             rows[0, k] = index(status[k]);
         }
-        return [NamedOnnxValue.CreateFromTensor("relic_values", numbers), NamedOnnxValue.CreateFromTensor("relic_status", rows)];
+        return [NamedOnnxValue.CreateFromTensor(prefix + "relic_values", numbers), NamedOnnxValue.CreateFromTensor(prefix + "relic_status", rows)];
     }
 
     private NamedOnnxValue[] Allies(IReadOnlyList<AllyTokens> allies)

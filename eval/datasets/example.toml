@@ -1,6 +1,7 @@
-# An example of a dataset file, eval/datasets/NAME.toml: an SL self-play step on the hub's work pool, every amount
-# made up. box.py plan FILE [REV] shows what it deals; box.py launch FILE REV [--smoke] opens it (pool/README.md).
-name = "example"                    # the step, and the jobs' folder CHAR/sl/selfplay/NAME/...
+# An example of a dataset file, eval/datasets/NAME.toml: a self-play step on the hub's work pool, SL's and NoSL's games
+# in one, every amount made up. box.py plan FILE [REV] shows what it deals; box.py launch FILE REV [--smoke] opens it
+# (pool/README.md).
+name = "example"                    # the step, and the jobs' folder CHAR/ENV/selfplay/NAME/... (ENV sl or nosl)
 deadline = "+72h"                   # box.py deadline NAME UNTIL moves it later
 priority = 0
 seeds = 1000000                     # the first of six ledger blocks, one a character: SILENT from +0, IRONCLAD +100,000,
@@ -8,6 +9,7 @@ seeds = 1000000                     # the first of six ledger blocks, one a char
                                     # character's last 1,000 are the smoke's (at most 99,000 runs a character)
 characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]   # a row's characters unless it names its own
 champion = "eval/champions/sl.json" # nets, policy and budget; a game sets its rule and efforts on top
+nosl_champion = "eval/champions/nosl.json"   # a NoSL game's (pimc: its worlds and nodes are its budget); only with one
 workers = 4                         # search workers per run
 
 # A row's tiers unless it names its own; its runs split evenly over them. epsilon: the chance a macro decision is
@@ -30,6 +32,12 @@ mode = "dread"
 auto_win = []
 effort = { monster = "medium", elite = "medium", boss = "high" }
 
+# A NoSL game: env = "nosl", played by nosl_champion, no effort. Not the Dread mode yet: NoSL builds its worlds from the
+# observation, always the standard game (plans/2026-11-17-1120-nosl-dread-architecture.md, (c) step 2 lifts it).
+[games.nosl]
+env = "nosl"
+auto_win = []
+
 # Rows of runs, each for every character of the row. asc and n: one number each, or two lists of the same length.
 [[runs]]
 game = "gauntlet"
@@ -45,6 +53,11 @@ n = 1000
 game = "dread"
 asc = 10
 n = 1000
+
+[[runs]]                            # NoSL's runs take each character's seeds after the rows before, in one block
+game = "nosl"
+asc = [0, 10]
+n = [500, 500]
 
 [[runs]]
 game = "full"

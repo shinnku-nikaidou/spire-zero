@@ -1,7 +1,9 @@
-"""Train the combat net, the combat search's leaf, from one environment's games, and write its
+"""Train the combat net, the combat search's leaf, from SL's and NoSL's games, and write its
 net file for `--combat-net`.
 
-The samples are combat/data.py's: each round's start in the logs of --env, every character's. The loss is the
+The samples are combat/data.py's: each round's start in the logs, every character's and each environment's, a NoSL
+state carrying its mark (env:NoSL), so that one net serves both; the report gives each environment's held-out loss
+apart (`held_out_loss_by_env`). The loss is the
 endings' cross-entropy plus POTION_WEIGHT times each held potion's cross-entropy of being gone after a win. The net's
 sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps the change.
 --list refuses test runs (eval jobs); --test-list's games are only reported, as `medium`. --init goes on from a net file instead of from scratch, at the lower
@@ -10,7 +12,7 @@ LR_INIT, and keeps the file's weights unless a later epoch beats them on the hel
 A state is read by the simulator's code (common.Encoder): --encoder is how to start it, the simulator's `encode` at
 the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program src/Sts2Ai.Encode.
 
-    uv run python -m combat.train --list PREFIX --env SL --name NAME --encoder "SIM encode" [--test-list PREFIX]
+    uv run python -m combat.train --list PREFIX --name NAME --encoder "SIM encode" [--test-list PREFIX]
         [--init ../weights/all/CHAMPION.json]
 """
 
@@ -40,12 +42,12 @@ script = common.app()
 EPOCHS, PATIENCE = 20, 3  # at most, and without a better held-out loss before stopping
 BATCH = 256
 LR, LR_INIT, WEIGHT_DECAY = 1e-3, 3e-4, 1e-4
+ENVS = ("SL", "NoSL")  # the environments, in the order a net file names them
 
 
 @script.command(help=__doc__)
 def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
-    env: Annotated[str, typer.Option(help="the environment whose games these are, SL or NoSL")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     encoder: Annotated[str, typer.Option(help="how to start the encoder that reads the states: \"SIM encode\"")],
     test_list: Annotated[str | None, typer.Option(help="a list pair whose games are only reported, as `medium`")] = None,
@@ -54,8 +56,6 @@ def main(
     seed: int = 0,
     workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
 ) -> None:
-    if env not in ("SL", "NoSL"):
-        raise LearnError(f"--env is SL or NoSL, not {env}")
     out_file = out_path(name, out)
     torch.manual_seed(seed)
     random.seed(seed)
@@ -64,7 +64,7 @@ def main(
     reader = common.Encoder(encoder)
     if reader.hello["lags"] != spec.LAGS:
         raise LearnError(f"the encoder reads {reader.hello['lags']} earlier rounds of intents, the net {spec.LAGS}")
-    samples, skipped = data.read(*common.train_lists(list_), env, reader, workers)
+    samples, skipped = data.read(*common.train_lists(list_), reader, workers)
     train = [s for s in samples if not data.held_out(s["run"])]
     test = [s for s in samples if data.held_out(s["run"])]
     if not train or not test:
@@ -89,9 +89,12 @@ def main(
 
     test_batches = list(batches(test, False))
 
-    def held_out_loss(model):
+    def held_out_loss_of(model, part_batches, n):
         with torch.no_grad():
-            return sum(float(loss(model(*b.inputs()), b).sum()) for b in test_batches) / len(test)
+            return sum(float(loss(model(*b.inputs()), b).sum()) for b in part_batches) / n
+
+    def held_out_loss(model):
+        return held_out_loss_of(model, test_batches, len(test))
 
     model = Net({t: len(ids) for t, ids in tables.items()}).to(device)
     best, best_state, stale, epochs = math.inf, None, 0, 0
@@ -121,6 +124,18 @@ def main(
     model.load_state_dict(best_state)
     model.eval()
 
+    envs = [e for e in ENVS if any(s["env"] == e for s in samples)]
+    env = "+".join(envs)
+
+    def by_env(part):
+        """The held-out loss of each environment's samples apart."""
+        out = {}
+        for e in envs:
+            mine = [s for s in part if s["env"] == e]
+            if mine:
+                out[e] = held_out_loss_of(model, list(batches(mine, False)), len(mine))
+        return out
+
     fit = {
         "env": env,
         "runs": len({s["key"] for s in samples}),
@@ -129,9 +144,10 @@ def main(
         "held_out_samples": len(test),
         "vocab": {t: len(ids) for t, ids in tables.items()},
         **report.summary(model, test, test_batches, train),
+        "held_out_loss_by_env": by_env(test),
     }
     if test_list:
-        medium, _ = data.read(*common.lists(test_list), env, reader, workers)
+        medium, _ = data.read(*common.lists(test_list), reader, workers)
         fit["medium"] = report.summary(model, medium, list(batches(medium, False)), train)
     reader.close()
     print(json.dumps(fit))

@@ -23,8 +23,11 @@ namespace Sts2Ai.Brain.Macro;
 /// </summary>
 /// <param name="hostSaysPlayed">Whether the host says which answers it played (<see cref="Played"/>): the mod, whose
 /// player may act instead of an answer. Otherwise every answer is played.</param>
+/// <param name="eventLines">SL, logging for V's training in NoSL: V in NoSL, with which each event option whose result
+/// its button does not show is played out on the node's clone as NoSL plays it (<see cref="EventLines"/>,
+/// <see cref="MacroAnswer.Event"/>); null for none.</param>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
-    bool hostSaysPlayed = false)
+    bool hostSaysPlayed = false, IRunValue? eventLines = null)
     : IMacroPolicy, IChoicePolicy
 {
     private readonly ScreenAfterstates _screen = new(new FreeDisposal(value));
@@ -70,8 +73,12 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         else pick = _draws.Pick(values, ref explored);
         var option = options[pick];
         _opened = option.Opens;
+        // The lines are the decided states' as the search saw them: before this one is counted as decided.
+        var lines = eventLines != null && decision.Clone is { } clone && obs.Screen is EventScreen
+            ? new EventLines(eventLines, clone, _decided).All(Root(decision), decision.Legal) : null;
         ulong? state = decision.Clone != null ? Answered(CloneSearch.Key(Root(decision))) : null;
-        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action), state);
+        return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action), state,
+            lines is { Count: > 0 } ? lines : null);
     }
 
     /// <summary>The state of a decision just answered: decided now, or once its host says the answer was played.</summary>
@@ -126,8 +133,24 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         }
         // On the map every option is valued entering a point (MacroLeaf): one that stays on the map, as its best move.
         // One worth −∞ (it would come back to a state already decided) stays so.
-        if (moves.Count == 0) return options;
+        if (moves.Count == 0) return decision.Clone == null ? Staying(obs, options) : options;
         return [.. options.Select(o => moves.Contains(o.Action) || double.IsNegativeInfinity(o.Value) ? o : o with { Value = _leaf.BestMove(o.After, moves) })];
+    }
+
+    /// <summary>
+    /// NoSL, at an event whose options pend (<see cref="ScreenAfterstates.Pends"/>): each option is valued with it
+    /// pending, so one that stays on the screen (a potion drunk or thrown away) is valued as the best of those options
+    /// after it, as on the map a staying option is valued as its best move. Valued as it is, it would be taken whenever V
+    /// valued every pending option below the run as it is.
+    /// </summary>
+    private List<Option> Staying(Observation obs, List<Option> options)
+    {
+        if (obs.Screen is not EventScreen screen) return options;
+        var pending = options.Where(o => ScreenAfterstates.Pends(screen, o.Action)).Select(o => o.Action).ToList();
+        if (pending.Count == 0) return options;
+        return [.. options.Select(o => o.Action.Verb is MacroAction.Potion or MacroAction.DiscardPotion
+            ? o with { Value = pending.Max(a => _leaf.Value(_screen.After(obs with { Run = o.After }, a))) }
+            : o)];
     }
 
     /// <summary>

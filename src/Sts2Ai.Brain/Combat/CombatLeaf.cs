@@ -9,6 +9,10 @@ namespace Sts2Ai.Brain.Combat;
 /// </summary>
 public interface ICombatLeaf
 {
+    /// <summary>This leaf in <paramref name="env"/>: one that reads the environment (<see cref="CombatNet"/>) marks its
+    /// states so; another is the same in every environment.</summary>
+    ICombatLeaf In(PlayEnvironment env) => this;
+
     double Value(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) =>
         Outcome(status, obs, run, history).Value;
 

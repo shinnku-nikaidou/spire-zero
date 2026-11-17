@@ -11,15 +11,26 @@ public class RunNetTests
     /// with a Mad Science of Tinker Time and cards with keywords; the first's first card given a Goopy of amount 4 and a
     /// growth of 4)
     /// valued by the trainer at their chance to win (<c>learn/v/net.py</c>'s win_chance): loading checks RunNet gives each
-    /// the trainer's value, so a change to how RunNet feeds a run's tokens to the graph fails here.
+    /// the trainer's value, so a change to how RunNet feeds a run's tokens to the graph fails here. Carried to the
+    /// environment's mark and the event-option inputs with random weights for them, it has the first run again in NoSL,
+    /// and in NoSL with an event option pending that names cards, relics, a potion and a number.
     /// </summary>
     [Fact]
     public void ValuesATinyNetsRunsAtTheTrainersChanceToWin()
     {
         var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json")));
         using var net = RunNet.Load(file);
-        Assert.All(file.Tests, t => Assert.InRange(net.Value(t.Run), 0.01, 0.99));
-        Assert.Equal(3, file.Tests.Select(t => Math.Round(t.Value, 2)).Distinct().Count());
+        Assert.All(file.Tests, t => Assert.InRange(net.Value(t.Run, t.Env is null ? PlayEnvironment.SL : PlayEnvironment.NoSL), 0.01, 0.99));
+        var plain = file.Tests.Where(t => t.Env == null).ToList();
+        Assert.Equal(3, plain.Count);
+        Assert.Equal(3, plain.Select(t => Math.Round(t.Value, 4)).Distinct().Count());
+        var noSl = file.Tests.Single(t => t.Env == "NoSL" && t.Run.Pending == null);
+        var pending = file.Tests.Single(t => t.Run.Pending != null);
+        Assert.Equal("NoSL", pending.Env);
+        // the mark and the option each move the value: the graph reads them
+        Assert.NotEqual(net.Value(noSl.Run), noSl.Value, 4);
+        Assert.NotEqual(noSl.Value, pending.Value, 4);
+        Assert.Equal(noSl.Value, net.In(PlayEnvironment.NoSL).Value(noSl.Run), 4);
     }
 
     /// <summary>The champion's own file: loading checks RunNet gives its test runs the trainer's values.</summary>

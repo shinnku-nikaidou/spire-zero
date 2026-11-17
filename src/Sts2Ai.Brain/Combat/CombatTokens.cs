@@ -35,7 +35,8 @@ public sealed record AllyTokens(string Id, IReadOnlyList<double> Scalars, IReadO
 /// <param name="Relics">Each relic's id, with ":used" once used up.</param>
 /// <param name="RelicValues">Each relic's numbers (<see cref="RelicValuesOf"/>).</param>
 /// <param name="RelicStatus">Each relic's status (<see cref="RelicStatusOf"/>).</param>
-/// <param name="Context">The character, the encounter, the room and the act, and in the Dread mode the mode and the fight's dominion (<see cref="ModeTokens"/>).</param>
+/// <param name="Context">The character, the encounter, the room and the act, in the Dread mode the mode and the fight's
+/// dominion (<see cref="ModeTokens"/>), and the environment's mark (<see cref="EnvTokens"/>).</param>
 /// <param name="OrbValues">Each orb's passive / 10 and evoke / 10.</param>
 /// <param name="Extra">The ascension / 10, the orb slots / 10, the gold / 100, the potion slots / 10, the arrows held / 3
 /// and the arrows shown in all / 3.</param>
@@ -63,7 +64,8 @@ public sealed record CombatTokens(
     /// <summary>The tokens of a state.</summary>
     /// <param name="history">The combat's record of enemy moves; the rounds before this one are read.</param>
     /// <param name="lags">How many earlier rounds of each enemy's intents the net reads.</param>
-    public static CombatTokens Of(CombatObservation obs, IReadOnlyList<EnemyTurns> history, int lags)
+    /// <param name="env">The environment the combat is played in: the brain's, never the observation's.</param>
+    public static CombatTokens Of(CombatObservation obs, IReadOnlyList<EnemyTurns> history, int lags, PlayEnvironment env)
     {
         var pl = obs.Player;
         var past = history.ToDictionary(h => h.Uid, h => h.Turns.Where(t => t.Round < obs.Round).ToList());
@@ -85,7 +87,7 @@ public sealed record CombatTokens(
             [.. obs.Relics.Select(RelicStatusOf)],
             [.. obs.Potions.OfType<string>()],
             ["character:" + pl.Character, "encounter:" + (obs.Encounter ?? "<none>"), "room:" + (obs.Room ?? "<none>"), $"act:{obs.Act}",
-                .. ModeTokens(obs.Mode, obs.Dominion)],
+                .. ModeTokens(obs.Mode, obs.Dominion), .. EnvTokens(env)],
             [.. pl.Orbs.Select(o => o.Id)],
             [.. pl.Orbs.Select(o => (IReadOnlyList<double>)[Capped((double)o.Passive / 10.0), Capped((double)o.Evoke / 10.0)])],
             [.. obs.Allies.Where(a => a.Hp > 0).Select(a => new AllyTokens(a.Id ?? "<player>", Creature(a.Hp, a.MaxHp, a.Block), PowersOf(a.Powers)))],
@@ -99,6 +101,15 @@ public sealed record CombatTokens(
     {
         if (mode != null) yield return "mode:" + mode;
         if (dominion != null) yield return "dominion:" + dominion;
+    }
+
+    /// <summary>
+    /// The environment as both nets read it: "env:NoSL" in NoSL, none in SL. It is the brain's to give, never the
+    /// observation's: a state looks the same in both, and only what follows it differs (who plays the rest).
+    /// </summary>
+    public static IEnumerable<string> EnvTokens(PlayEnvironment env)
+    {
+        if (env != PlayEnvironment.SL) yield return "env:" + env;
     }
 
     /// <summary>A relic's id as both nets read it: with ":used" once used up.</summary>

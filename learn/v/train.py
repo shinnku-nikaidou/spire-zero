@@ -17,6 +17,12 @@ happened over the next N floors and from there on is labelled with the hazards o
 FA trained on fold A of the training runs alone and FB on fold B (`--fold A`, `--fold B`); the held-out decisions keep
 their real outcomes, so the report and early stopping are on the same labels as without.
 
+Event options (v/data.py) train with the rest; an SL line's that left the room is labelled by the frozen V's, so only
+with --bootstrap. Their held-out samples are not in the held-out loss, which stays on real outcomes: the report gives
+theirs apart (`held_out_event_loss`, labelled by both frozen V's, neither of which saw those runs), with how many of
+each kind there were (`event_samples`), and the held-out loss of SL's and NoSL's decisions apart
+(`held_out_loss_by_env`).
+
 The net's sizes and the training's settings are fixed below: an experiment changes them here, and only a result keeps
 the change.
 
@@ -93,8 +99,13 @@ def main(
         raise LearnError(f"the encoder knows no {', '.join(missing)} of a run: is it this code's commit?")
     samples, runs = data.read_runs(logs, records, FLOORS, reader, workers)
     reader.close()
+    if not frozen and (left := sum(1 for s in samples if "later" in s)):
+        logger.info("{} event options whose lines left the room are left out: their labels need --bootstrap", left)
+        samples = [s for s in samples if "later" not in s]
+    event_kinds = {k: sum(1 for s in samples if s.get("event") == k) for k in ("taken", "left", "ended")}
     train = [s for s in samples if not data.held_out(s["run"]) and fold in (None, bootstrap.fold(s["run"]))]
-    test = [s for s in samples if data.held_out(s["run"])]
+    test = [s for s in samples if data.held_out(s["run"]) and "event" not in s]
+    test_events = [s for s in samples if data.held_out(s["run"]) and "event" in s]
     if not train or not test:
         raise LearnError(f"{len(train)} train and {len(test)} held-out samples: too few runs")
     logger.info(
@@ -150,6 +161,28 @@ def main(
         got = bootstrap.attach(train, horizon, nets, index, FLOORS, BATCH, device, workers)
         boot = {"nets": {f: nets[f][0]["name"] for f in sorted(nets)}, "horizon": horizon, "share": got / len(train)}
         logger.info("{} of {} training decisions labelled {} floors on by {}", got, len(train), horizon, boot["nets"])
+        lines = bootstrap.attach_events(train + test_events, nets, index, FLOORS, BATCH, device, workers)
+        logger.info("{} event options labelled where their lines left the room", lines)
+    event_batches = list(batches(test_events, False))
+    event_weight = sum(s["weight"] for s in test_events)
+
+    def event_loss(model):
+        """The held-out event options' loss, by their own labels."""
+        if not event_batches:
+            return None
+        with torch.no_grad():
+            return sum(float((hazard_loss(model(*b.inputs()), b) * b.weight).sum()) for b in event_batches) / event_weight
+
+    def by_env(model):
+        """The held-out loss of SL's decisions and of NoSL's apart."""
+        out = {}
+        for env in ("SL", "NoSL"):
+            mine = [s for s in test if s.get("env", "SL") == env]
+            if mine:
+                with torch.no_grad():
+                    total = sum(float((hazard_loss(model(*b.inputs()), b) * b.weight).sum()) for b in batches(mine, False))
+                out[env] = total / sum(s["weight"] for s in mine)
+        return out
 
     def evaluate(model):
         total, aux_total, wins = 0.0, 0.0, []
@@ -190,7 +223,7 @@ def main(
             opt.step()
         model.eval()
         held, held_aux, _ = evaluate(model)
-        logger.info("epoch {}: held-out loss {:.4f}, next combats {:.4f}", epoch, held, held_aux)
+        logger.info("epoch {}: held-out loss {:.4f}, next combats {:.4f}, event options {}", epoch, held, held_aux, event_loss(model))
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
@@ -223,6 +256,9 @@ def main(
         "brier_held_out_floor_only": brier(base_won_chance),
         # how often V would still throw a potion away: under potions.LIMIT, MacroBrain.Offered goes
         "potion_below_empty": potions.below_empty(potions.by(model, make), test)["share"],
+        "held_out_loss_by_env": by_env(model),
+        "event_samples": event_kinds,
+        "held_out_event_loss": event_loss(model),
     }
     if start:
         report |= {"init_held_out_loss": init_loss, "init_brier_held_out": brier(init_won_chance)}
@@ -239,7 +275,7 @@ def main(
         trained["fold"] = fold  # a frozen V of v/bootstrap.py: it never saw the other fold's runs
     if boot:
         trained["bootstrap"] = {"nets": boot["nets"], "horizon": horizon}
-    net = export.net_file(name, FLOORS, tables, mean, std, model, test, report, seed, trained)
+    net = export.net_file(name, FLOORS, tables, mean, std, model, test + test_events, report, seed, trained)
     export.write(net, out_file)
     logger.info("wrote {}", out_file)
 

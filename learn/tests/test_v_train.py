@@ -6,10 +6,11 @@ import math
 import onnx
 import pytest
 import torch
-from conftest import encoder, encoder_command, make_view, read_run
+from conftest import OPTION, encoder, encoder_command, make_view, read_run
 from onnx.reference import ReferenceEvaluator
 from typer.testing import CliRunner
 
+import carry
 import common
 import game_ids
 from v import bootstrap, data, export, potions, spec, train
@@ -281,3 +282,131 @@ def test_a_training_on_multi_step_targets_takes_a_v_of_each_fold_and_says_so(tmp
     assert CliRunner().invoke(train.script, args).exit_code == 0
     _, unfolded = multi_step(f"{nets['A']},{plain}")
     assert isinstance(unfolded.exception, common.LearnError) and "not trained on one fold" in str(unfolded.exception)
+
+
+def test_an_event_option_pending_reads_everything_its_button_shows_in_noSL():
+    view = make_view(floor=3)
+    plain, pending = read_run(view), read_run(view | {"pending": OPTION}, "NoSL")
+    assert "pending" not in plain["tokens"] and "env:NoSL" not in plain["tokens"]["context"]
+    p = pending["tokens"]["pending"]
+    assert "env:NoSL" in pending["tokens"]["context"] and p["key"] == OPTION["key"]
+    assert [c[0] for c in p["cards"]] == ["STRIKE", "GUILTY"] and p["cards"][0][1] == 1 and p["cards_owned"] == [1, 0]
+    assert p["relics"] == ["RING", "VASE"] and p["relic_values"][0] == [0.3, 1, 0] and p["relics_owned"] == [1, 0]
+    assert p["potions"] == ["FIRE_POTION"] and p["potions_owned"] == [1]
+    assert p["numbers"] == ["WELLSPRING.BatheCurses"] and p["number_values"] == [0.05]
+
+
+def test_the_onnx_graph_reads_a_pending_event_option_and_the_environment_as_torch_does():
+    plain = [held_out_sample(make_view(floor=f, hp=30 + f)) for f in (1, 2)]
+    pending = [
+        data.sample("a", read_run(view, "NoSL"), 16, 9, "died") | {"view": common.pack(view), "env": "NoSL", "pending": True}
+        for view in (make_view(floor=f) | {"pending": OPTION} for f in (2, 3))
+    ]
+    tables = game_ids.macro_tables()
+    torch.manual_seed(0)
+    model = Net({t: len(ids) for t, ids in tables.items()}, 16)
+    mean, std = torch.zeros(len(spec.STATE)), torch.full((len(spec.STATE),), 10.0)
+    net = export.net_file("t", 16, tables, mean, std, model, plain + pending, {}, 0, {})
+    assert [t.get("env") for t in net["tests"]] == [None, None, "NoSL", "NoSL"]
+    graph = onnx.load_from_string(base64.b64decode(net["onnx"]))
+    assert [i.name for i in graph.graph.input] == spec.INPUTS
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    values_of = []
+    for test in net["tests"]:
+        b = Batch([data.sample("a", read_run(test["run"], test.get("env", "SL")), 16)], index, mean, std, 16, "cpu")
+        feed = {name: x.numpy() for name, x in zip(spec.INPUTS, b.inputs(), strict=True)}
+        [hazards] = ReferenceEvaluator(graph).run(None, feed)
+        values_of.append(float(win_chance(torch.tensor(hazards), b.start)[0]))
+        assert math.isclose(values_of[-1], test["value"], rel_tol=1e-5)
+    # a fresh net reads them: the option moves the value
+    without = Batch([data.sample("a", read_run(make_view(floor=2), "NoSL"), 16)], index, mean, std, 16, "cpu")
+    assert not math.isclose(float(values(model, without)[0]), values_of[2], rel_tol=1e-6)
+
+
+def test_a_carried_v_values_a_run_alike_in_both_environments_and_with_an_option_pending():
+    """What carry.py does to a V of before the environment and the event options: their rows and columns at zero."""
+    tables = game_ids.macro_tables()
+    torch.manual_seed(1)
+    model = Net({t: len(ids) for t, ids in tables.items()}, 16)
+    own = model.state_dict()
+    was = {t: [i for i in ids if not i.startswith("env:")] for t, ids in tables.items() if t not in ("pending", "event_vars")}
+    width = own["body.0.weight"].shape[1] - (3 * Net.DIM + Net.DIM + Net.HIDDEN)
+    old = {k: v for k, v in own.items() if k not in carry.FRESH and k not in ("pending.weight", "event_vars.weight")}
+    old["body.0.weight"] = own["body.0.weight"][:, :width]
+    old["bags.context.weight"] = own["bags.context.weight"][[tables["context"].index(i) for i in was["context"]]]
+    model.load_state_dict(carry.carried(old, own, carry.V_ROWS, was, tables, ["aux_head."]))
+    model.eval()
+    assert model.event_vars.weight.abs().sum() > 0 and model.pending.weight[0].abs().sum() == 0
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    mean, std = torch.zeros(len(spec.STATE)), torch.full((len(spec.STATE),), 10.0)
+    view = make_view(floor=4)
+    runs = [read_run(view), read_run(view, "NoSL"), read_run(view | {"pending": OPTION}, "NoSL")]
+    b = Batch([data.sample("a", r, 16) for r in runs], index, mean, std, 16, "cpu")
+    with torch.no_grad():
+        got = values(model, b).tolist()
+    assert got[0] == pytest.approx(got[1], abs=1e-7) and got[0] == pytest.approx(got[2], abs=1e-7)
+
+
+def write_event_runs(tmp_path, runs=10):
+    """write_runs's runs with an event at their second decision: odd runs in NoSL, the option taken; even runs in SL,
+    three options played out, one leaving the room, one dying there and one starting a fight."""
+    lists = write_runs(tmp_path, runs)
+    log = common.lists(lists)[0].split(",")[0]
+    rows = [json.loads(line) for line in open(log)]
+    for r in rows:
+        i = int(r["run"], 16)
+        if r["decision_id"] != 1:
+            r["env"] = ("SL", "NoSL")[i % 2]
+            continue
+        if i % 2:
+            r |= {"env": "NoSL", "event": [{"option": OPTION}]}
+        else:
+            later = r["run_view"] | {"floor": r["run_view"]["floor"], "hp": 20}
+            r["event"] = [
+                {"option": OPTION, "end": later, "ending": "left"},
+                {"option": OPTION | {"index": 1}, "end": r["run_view"] | {"hp": 0}, "ending": "died"},
+                {"option": OPTION | {"index": 2}, "ending": "fight"},
+            ]
+    with open(log, "w") as f:
+        f.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in rows)
+    return lists
+
+
+def test_event_options_give_samples_in_noSL_apart_from_their_runs_decisions(tmp_path):
+    samples, _ = data.read_runs(*common.lists(write_event_runs(tmp_path)), 64, encoder())
+    events = [s for s in samples if "event" in s]
+    kinds = sorted(s["event"] for s in events)
+    assert kinds == ["ended"] * 5 + ["left"] * 5 + ["taken"] * 5
+    for s in events:
+        tok = common.unpack(s["tokens"])
+        assert s["env"] == "NoSL" and "env:NoSL" in tok["context"] and tok["pending"]["key"] == OPTION["key"]
+    left = next(s for s in events if s["event"] == "left")
+    assert left["end"] == left["start"] and left["later"]["start"] == left["start"]  # labelled from where it left
+    ended = next(s for s in events if s["event"] == "ended")
+    assert ended["kind"] == "died" and ended["end"] == ended["start"]
+    # the runs' own decisions weigh one a run, each event option one decision of its run more
+    assert math.isclose(sum(s["weight"] for s in samples if "event" not in s), 10)
+    assert math.isclose(sum(s["weight"] for s in events), 15 / 3)
+    assert {s["env"] for s in samples if "event" not in s} == {"SL", "NoSL"}
+    assert all(("view" in s) == data.held_out(s["run"]) for s in events)
+
+
+def test_an_sl_line_of_an_event_is_labelled_from_where_it_left_the_room_by_the_v_that_never_saw_its_run(tmp_path):
+    lists = write_event_runs(tmp_path)
+    nets = {}
+    for f in bootstrap.FOLDS:
+        nets[f] = tmp_path / f"f{f}.json"
+        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--fold", f]
+        result = CliRunner().invoke(train.script, args)
+        assert result.exit_code == 0, result.output
+    out = tmp_path / "td.json"
+    args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command()]
+    result = CliRunner().invoke(train.script, [*args, "--bootstrap", f"{nets['A']},{nets['B']}", "--horizon", "1"])
+    assert result.exit_code == 0, result.output
+    fit = json.loads(out.read_text())["fit"]
+    assert fit["event_samples"] == {"taken": 5, "left": 5, "ended": 5}
+    assert fit["held_out_event_loss"] is not None and set(fit["held_out_loss_by_env"]) == {"SL", "NoSL"}
+    plain = tmp_path / "plain.json"
+    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command()])
+    assert result.exit_code == 0, result.output
+    assert json.loads(plain.read_text())["fit"]["event_samples"] == {"taken": 5, "left": 0, "ended": 5}

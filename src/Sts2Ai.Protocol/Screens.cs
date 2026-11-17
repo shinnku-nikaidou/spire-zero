@@ -76,8 +76,8 @@ public sealed record BundleScreen : ScreenView
 }
 
 /// <summary>
-/// An event page. Texts are loc keys; the numbers the game fills into them are not included yet, since an event can
-/// keep values the page doesn't show among them.
+/// An event page. Texts are loc keys; of the numbers the game fills into them, each option carries those its text and
+/// the page's show (<see cref="EventOptionView.Numbers"/>), not the event's others, which it may keep unshown.
 /// </summary>
 public sealed record EventScreen : ScreenView
 {
@@ -101,7 +101,26 @@ public sealed record EventOptionView
     public IReadOnlyList<string>? Tips { get; init; }
     /// <summary>The button warns that it would kill the player.</summary>
     public bool? Kills { get; init; }
+    /// <summary>The cards its hover tips show, each as the deck view shows a card.</summary>
+    public IReadOnlyList<NamedCard>? Cards { get; init; }
+    /// <summary>The relics its hover tips show.</summary>
+    public IReadOnlyList<NamedRelic>? Relics { get; init; }
+    /// <summary>The potions its hover tips show.</summary>
+    public IReadOnlyList<NamedPotion>? Potions { get; init; }
+    /// <summary>The numbers the button's text and the page's text show, by the event's id and the variable's name
+    /// ("WELLSPRING.BatheCurses"), as shown.</summary>
+    public IReadOnlyDictionary<string, decimal>? Numbers { get; init; }
 }
+
+/// <summary>A card an event's button names, and whether it is one of the player's own (the card of the deck).</summary>
+public sealed record NamedCard(CardView Card, bool? Owned = null);
+
+/// <summary>A relic an event's button names: one the player holds as the top bar shows it (<paramref name="Owned"/>),
+/// another by its id.</summary>
+public sealed record NamedRelic(RelicView Relic, bool? Owned = null);
+
+/// <summary>A potion an event's button names, and whether it is one of the player's own.</summary>
+public sealed record NamedPotion(string Id, bool? Owned = null);
 
 public sealed record ShopScreen : ScreenView
 {

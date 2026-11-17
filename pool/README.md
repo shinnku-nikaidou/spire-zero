@@ -59,8 +59,9 @@ A self-play dataset is one file, `eval/datasets/NAME.toml` (`eval/datasets/examp
 seeds, the characters, the champion file it plays, the exploration tiers (each a uniform draw's chance ε and a softmax
 temperature τ on log V), the games (which acts win their plain monster fights at their start, a fight's effort by
 its room: monster, elite, boss, and the game mode: `mode = "dread"` for the Dread mode, played at ascension 10 only, or
-none for the standard game), and rows of runs, each a game, ascensions and counts, for every character or for the
-ones it names.
+none for the standard game; `env = "nosl"` for a NoSL game, played by the file's `nosl_champion`, with no effort and
+not in the Dread mode yet), and rows of runs, each a game, ascensions and counts, for every character or for the ones
+it names. SL's jobs go to `CHAR/sl/selfplay/NAME/...`, NoSL's to `CHAR/nosl/selfplay/NAME/...`, one step.
 
 ```bash
 pool/box.py plan eval/datasets/NAME.toml                # the jobs, their options and seeds, the shares; nothing sent

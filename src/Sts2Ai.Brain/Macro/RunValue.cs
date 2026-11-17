@@ -9,4 +9,8 @@ public interface IRunValue
     string Name { get; }
 
     double Value(RunView run);
+
+    /// <summary>This V in <paramref name="env"/>: one that reads the environment (<see cref="RunNet"/>) marks its runs
+    /// so; another is the same in every environment.</summary>
+    IRunValue In(PlayEnvironment env) => this;
 }

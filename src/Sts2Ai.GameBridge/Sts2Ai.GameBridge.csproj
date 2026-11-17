@@ -10,6 +10,10 @@
     <ProjectReference Include="../Sts2Ai.Protocol/Sts2Ai.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Every event option's key, and which variables each event text shows (event_texts.py writes it from the game's pack). -->
+    <EmbeddedResource Include="EventTexts.json" LogicalName="EventTexts.json" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Namespaces follow folders; these are in scope in every file. -->
     <Using Include="Sts2Ai.GameBridge.Actions" />
   </ItemGroup>

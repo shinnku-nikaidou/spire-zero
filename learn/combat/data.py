@@ -9,15 +9,15 @@ potion held, whether it is gone; relative to the state, so the HP and potions it
 
 Every fifth run (by run id) is held out, for early stopping and the report.
 
-The endings are those of the policy that played, so only logs of the --env given are read.
+The endings are those of the policy that played, so a state is read in its line's environment (`env`: NoSL's carry its
+mark, CombatTokens.EnvTokens), and a sample keeps it: SL's and NoSL's games train one net.
 """
 
-import functools
 import json
 import zlib
 from collections import Counter
 
-from common import HEAD, LearnError, pack, runs_by_log
+from common import HEAD, pack, runs_by_log
 from workers import each
 
 BUCKETS = 50  # buckets of the HP share lost from the state to a win
@@ -36,10 +36,10 @@ def held_out(run_id: str) -> bool:
     return int(run_id, 16) % 5 == 0
 
 
-def combats(path: str, env: str, encoder) -> dict[str, list[dict]]:
-    """Per run, its combats in order: each round's start (its observation, the history logged with it and its tokens)
-    and the run's view after the combat. A combat closes at the next macro decision, or when the round goes back, as
-    Dispatcher's history does. A line of another env fails."""
+def combats(path: str, encoder) -> dict[str, list[dict]]:
+    """Per run, its combats in order: each round's start (its observation, the history logged with it, its environment
+    and its tokens) and the run's view after the combat. A combat closes at the next macro decision, or when the round
+    goes back, as Dispatcher's history does."""
     runs = {}
     starts, lines = [], []  # the round starts, each with its line of the log, for the encoder
     with open(path) as f:
@@ -47,9 +47,7 @@ def combats(path: str, env: str, encoder) -> dict[str, list[dict]]:
             m = HEAD.match(line)
             if not m:
                 continue
-            run, line_env, surface = m.groups()
-            if line_env != env:
-                raise LearnError(f"{path} holds {line_env} decisions, not {env}: each environment has its combat nets")
+            run, env, surface = m.groups()
             if surface == "card_choice":
                 continue
             r = runs.setdefault(run, {"fights": [], "open": False})
@@ -70,7 +68,7 @@ def combats(path: str, env: str, encoder) -> dict[str, list[dict]]:
                 r["fights"].append(fight)
                 r["open"] = True
             if not fight["starts"] or fight["starts"][-1]["obs"]["round"] != obs["round"]:
-                fight["starts"].append({"obs": obs, "history": e.get("history") or []})
+                fight["starts"].append({"obs": obs, "history": e.get("history") or [], "env": env})
                 starts.append(fight["starts"][-1])
                 lines.append(line)
     for start, read in zip(starts, encoder.combats(lines, path), strict=True):
@@ -120,17 +118,18 @@ def sample(run: str, start: dict, end: dict, after: dict | None) -> dict:
         "act": obs["act"],
         "encounter": obs.get("encounter") or "<none>",
         "round": obs["round"],
+        "env": start["env"],
     }
     if held_out(run) and zlib.crc32(f"{run}:{obs['encounter']}:{obs['round']}:{obs['player']['hp']}".encode()) % KEEP == 0:
         s |= {"obs": obs, "history": start["history"]}
     return s
 
 
-def read_log(i: int, log: str, runs: dict, env: str, encoder) -> tuple[list[dict], int]:
+def read_log(i: int, log: str, runs: dict, encoder) -> tuple[list[dict], int]:
     """The round starts of the I-th log of a list as samples, each keyed (i, run), and how many of its runs were
     skipped (read below)."""
     samples, skipped = [], 0
-    for run, fights in combats(log, env, encoder).items():
+    for run, fights in combats(log, encoder).items():
         r = runs.get(run)
         if r is None or r.get("failure"):
             continue
@@ -150,14 +149,14 @@ def read_log(i: int, log: str, runs: dict, env: str, encoder) -> tuple[list[dict
     return samples, skipped
 
 
-def read(logs: str, records: str, env: str, encoder, workers: int = 0) -> tuple[list[dict], int]:
+def read(logs: str, records: str, encoder, workers: int = 0) -> tuple[list[dict], int]:
     """The round starts of the logs' combats as samples, and how many runs were skipped: those whose combats do not
     match their record's (a log cut short, a combat logged apart). The run's last combat in a lost run counts as a death
     even with no `end` in its record; a win with no run view after it is left out. WORKERS processes read the logs
     (workers.each)."""
     samples, skipped = [], 0
     pairs = ((i, log, runs) for i, (log, runs) in enumerate(runs_by_log(logs, records)))
-    for got, n in each(functools.partial(read_log, env=env), pairs, encoder, workers):
+    for got, n in each(read_log, pairs, encoder, workers):
         samples += got
         skipped += n
     return samples, skipped

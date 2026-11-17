@@ -8,7 +8,16 @@ them all. A run's map moves give a second sample each, the chosen point's afters
 V reads when it values a map option, which no logged view shows.
 
 A run is read by the simulator's code, not here (common.Encoder): its tokens and its numbers, and a map move's
-afterstate, are what RunNet feeds V in play.
+afterstate, are what RunNet feeds V in play, each in its line's environment (`env`: a NoSL run carries env:NoSL).
+
+Event options (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2) teach V in NoSL what an option whose result its button
+does not show is worth, read with the option pending (RunNet.PendingOf), in NoSL. Two kinds of sample, apart from the
+decisions (`event`, and each weighs EVENT_WEIGHT of one decision of its run, not counted among them):
+- NoSL's runs: the option taken, with the run's own outcome, as a map move's afterstate is;
+- SL's runs: every such option of an event, played out on the node's clone as NoSL plays it to where the room is left
+  (EventLines). One whose line left the room is labelled from there by a frozen V in NoSL (`later`, which v/bootstrap.py
+  values: without --bootstrap these are left out); one whose run ended there died on that floor; one whose line started
+  a combat, came back or ran long gives no sample.
 """
 
 import functools
@@ -21,6 +30,8 @@ from workers import each
 
 AUX = 6  # the next combats whose HP cost the second head learns
 DECISION = re.compile(r'\{"run":"\w+","decision_id":(\d+)')  # a log line's decision number in its run
+EVENT_WEIGHT = 1.0  # an event option's sample, in decisions of its run
+ENDS = {"left", "died", "won"}  # how an SL line of an event option ends that gives a sample (EventLine.Ending)
 
 
 def held_out(run_id: str) -> bool:
@@ -61,16 +72,16 @@ def next_combats(record: dict, floor: int) -> list[float]:
     return costs
 
 
-def macro_lines(log: str, runs: dict) -> list[tuple[str, str]]:
-    """The lines of a log that are macro decisions of the runs given, each with its run id; a line still being written
-    is left out."""
+def macro_lines(log: str, runs: dict) -> list[tuple[str, str, str]]:
+    """The lines of a log that are macro decisions of the runs given, each with its run id and environment; a line
+    still being written is left out."""
     try:
         f = open(log)
     except OSError as e:
         raise LearnError(f"cannot read {log}: {e.strerror}") from e
     with f:
         heads = ((HEAD.match(line), line) for line in f)
-        return [(m[1], line) for m, line in heads if m and m[1] in runs and '"run_view"' in line and line.endswith("\n")]
+        return [(m[1], m[2], line) for m, line in heads if m and m[1] in runs and '"run_view"' in line and line.endswith("\n")]
 
 
 def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[dict], list[dict]]:
@@ -78,21 +89,48 @@ def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[d
     runs = {k: r for k, r in runs.items() if not r.get("failure")}
     samples = []
     lines = macro_lines(log, runs)
-    for (run, line), read in zip(lines, encoder.runs([line for _, line in lines], log), strict=True):
+    for (run, env, line), read in zip(lines, encoder.runs([line for _, _, line in lines], log), strict=True):
         if read is None:
             continue
         r = runs[run]
         kind = {"won": "won", "lost": "died"}.get(r["outcome"], "censored")
         s = sample(run, read["run"], floors, r["floor"], kind)
         nxt = next_combats(r, int(read["run"]["state"]["floor"]))
+        logged = json.loads(line) if held_out(run) or "event" in read else None
         if held_out(run):
-            s["view"] = pack(json.loads(line)["run_view"])
+            s["view"] = pack(logged["run_view"])
         more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
         decision = int(DECISION.match(line)[1])
         for x in [s, *more]:
             # own: the decision's own view, which a multi-step target may start from (v/bootstrap.py)
-            samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt, "decision": decision, "own": x is s})
+            samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt, "decision": decision, "own": x is s, "env": env})
+        for option, answer in zip(logged.get("event", []) if logged else [], read.get("event", []), strict=True):
+            e = event_sample(run, env, answer, floors, r["floor"], kind)
+            if e is None:
+                continue
+            if held_out(run):
+                e["view"] = pack(logged["run_view"] | {"pending": option["option"]})
+            samples.append(e | {"key": (i, run), "floor": r["floor"], "next": [], "decision": decision, "own": False})
     return samples, list(runs.values())
+
+
+def event_sample(run: str, env: str, answer: dict, floors: int, reached: int, kind: str) -> dict | None:
+    """An event option's sample (the module's doc), from the encoder's answer for it: the run with the option pending
+    in NoSL, and in SL where its line ended. None for a line that gives none."""
+    if env == "NoSL":  # the option taken: the run's own outcome
+        return sample(run, answer["run"], floors, reached, kind) | {"env": "NoSL", "event": "taken", "pending": True}
+    if answer.get("ending") not in ENDS:
+        return None
+    end = answer["end"]
+    end_floor = int(end["state"]["floor"])
+    if answer["ending"] != "left":  # the run ended in the room
+        ended = {"died": "died", "won": "won"}[answer["ending"]]
+        return sample(run, answer["run"], floors, end_floor, ended) | {"env": "NoSL", "event": "ended", "pending": True}
+    later = sample(run, end, floors)
+    return sample(run, answer["run"], floors) | {
+        "env": "NoSL", "event": "left", "pending": True,
+        "later": {"tokens": later["tokens"], "state": later["state"], "start": later["start"]},
+    }
 
 
 def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -> tuple[list[dict], list[dict]]:
@@ -109,7 +147,8 @@ def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -
         runs_seen += seen
     per_run = {}
     for s in samples:
-        per_run[s["key"]] = per_run.get(s["key"], 0) + 1
+        if "event" not in s:
+            per_run[s["key"]] = per_run.get(s["key"], 0) + 1
     for s in samples:
-        s["weight"] = 1.0 / per_run[s["key"]]
+        s["weight"] = (EVENT_WEIGHT if "event" in s else 1.0) / per_run[s["key"]]
     return samples, runs_seen

@@ -42,6 +42,12 @@ public sealed record RunView
     /// Null in the normal game: always in the real game, set only by the simulator.
     /// </summary>
     public IReadOnlyList<int>? AutoWin { get; init; }
+    /// <summary>
+    /// Never in an observation: in a NoSL afterstate of an event's option whose result the screen does not show, the
+    /// option picked and not yet played out, as the event's screen shows its button. V reads it (RunNet.Tokens) as it
+    /// reads a map move's point being entered (<see cref="MapView.Entering"/>).
+    /// </summary>
+    public EventOptionView? Pending { get; init; }
 
     /// <summary>Whether the rule wins a fight in a room of type <paramref name="room"/> at its start, in the act the run is in.</summary>
     public bool WinsAtStart(string? room) => WinsAtStart(AutoWin, Act, room);

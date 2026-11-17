@@ -17,7 +17,9 @@ namespace Sts2Ai.Brain.Macro;
 /// with its point: where the node's screens end or the search stops. On the map, entering the next point: a move as
 /// its afterstate, and an option that stays on the map (a potion's) as the best move after it (<see cref="BestMove"/>);
 /// valued as the state it stays in, such an option won for nothing (v9-2: staying beat the best move in 19 of 26 map
-/// decisions, by 1 point at the median).
+/// decisions, by 1 point at the median). In NoSL an event's options whose results their buttons do not show are valued
+/// with the option pending (<see cref="RunView.Pending"/>), and one that stays on the screen as the best of them after
+/// it (MacroBrain), alike.
 /// </summary>
 /// <param name="fights">Values a combat about to start (an event's fight); a state that needs it without it throws.</param>
 public sealed class MacroLeaf(IRunValue value, ICombatLeaf? fights = null)

@@ -59,8 +59,8 @@ def test_logs_read_in_workers_give_the_samples_read_here_in_the_same_order(tmp_p
         return go
 
     combat_lists = lists_of(tmp_path / "c", mkdir_then(lambda p: test_combat.write_runs(p, runs=4)), 5)
-    here, skipped_here = data.read(*combat_lists, "SL", encoder(), 0)
-    there, skipped_there = data.read(*combat_lists, "SL", encoder(), 2)
+    here, skipped_here = data.read(*combat_lists, encoder(), 0)
+    there, skipped_there = data.read(*combat_lists, encoder(), 2)
     assert len(here) == 5 * 4 * 3 and here == there and skipped_here == skipped_there
     assert [s["key"][0] for s in here] == sorted(s["key"][0] for s in here)  # the list's order
 

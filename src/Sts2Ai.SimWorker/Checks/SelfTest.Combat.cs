@@ -42,10 +42,10 @@ internal static partial class SelfTest
     /// </summary>
     private static void PooledMatches(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
-        var brain = new PimcBrain(net.Leaf);
+        var brain = new PimcBrain(net.Leaf.In(PlayEnvironment.NoSL));
         using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
         var pooled = new PooledPimc(workerPool);
-        var engine = new EnginePimc(net.Leaf, workers, workerPool);
+        var engine = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), workers, workerPool);
         for (int i = 0; i < 4; i++)
         {
             var setup = combats.Setup(i, GameSeeds.MakeSeed(seed + 2, i));
@@ -317,7 +317,7 @@ internal static partial class SelfTest
             if (prompt) return;
             using (var worlds = SimWorlds.NoSL(pump, obs, setup.Seed, Alone(obs)))
             {
-                var pimc = new PimcBrain(leaf).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
+                var pimc = new PimcBrain(leaf.In(PlayEnvironment.NoSL)).Decide(obs, legal, worlds, new Budget(Worlds: 2, NodesPerWorld: 300), 1);
                 check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
             }
         }

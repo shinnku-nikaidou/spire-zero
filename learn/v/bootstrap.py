@@ -12,6 +12,10 @@ The frozen V must not have trained on the run it labels: V learns its training r
 value at a later state of such a run would hand the outcome back. So the training runs are cut in two folds by run id
 (the held-out runs, id % 5 == 0, are in neither), a V is trained on each fold alone (`v.train --fold`), and each fold's
 runs are labelled by the other fold's V.
+
+An SL run's event option played out as NoSL plays it (v/data.py) is labelled the same way from where its line left the
+room (`later`), not from its run's later decisions, which SL played: by the other fold's V, and for a held-out run by
+the mean of both, neither of which saw it (`attach_events`).
 """
 
 import array
@@ -47,6 +51,8 @@ def later(samples: list[dict], horizon: int) -> list[int | None]:
         if starts != sorted(starts):
             raise LearnError(f"run {key[1]} of log {key[0]} goes down a floor between its decisions")
         for k in ks:
+            if samples[k].get("event") in ("left", "ended"):  # an SL line's own end, not its run's (attach_events)
+                continue
             j = bisect.bisect_left(starts, samples[k]["start"] + horizon)
             out[k] = own[j][1] if j < len(own) else None
     return out
@@ -98,3 +104,35 @@ def attach(train: list[dict], horizon: int, nets: dict, index: dict, floors: int
         if j is not None:
             s["boot"] = (train[j]["start"], hazards[j])
     return len(points) - points.count(None)
+
+
+def attach_events(samples: list[dict], nets: dict, index: dict, floors: int, batch: int, device: str, workers: int) -> int:
+    """Gives each event option's sample whose line left the room (`later`, v/data.py) its `boot`: the floor where the
+    line ended and the hazards there of the frozen V that did not train on its run, the mean of both for a held-out
+    run. Returns how many got one."""
+    mine = [s for s in samples if "later" in s]
+    if not mine:
+        return 0
+    states = [{"tokens": s["later"]["tokens"], "state": s["later"]["state"], "start": s["later"]["start"],
+               "end": s["later"]["start"], "kind": "censored", "weight": 1.0, "next": []} for s in mine]  # fmt: skip
+    rows = {}
+    for which, (f, model) in nets.items():
+        mean = torch.tensor(f["state"]["mean"], dtype=torch.float64)
+        std = torch.tensor(f["state"]["std"], dtype=torch.float64)
+        build = functools.partial(Batch, index=index, mean=mean, std=std, floors=floors, device="cpu")
+        cuts = [list(range(i, min(i + batch, len(states)))) for i in range(0, len(states), batch)]
+        with torch.no_grad():
+            got = []
+            for b in built(build, ([states[k] for k in cut] for cut in cuts), device, workers):
+                got.append(torch.sigmoid(model(*b.inputs())).float().cpu())
+        rows[which] = torch.cat(got)
+    for k, s in enumerate(mine):
+        which = fold(s["run"])
+        h = rows[other(which)][k] if which is not None else torch.stack([r[k] for r in rows.values()]).mean(0)
+        s["boot"] = (s["later"]["start"], array.array("f", h.tolist()))
+    return len(mine)
+
+
+def other(which: str) -> str:
+    """The fold whose V did not train on fold WHICH's runs."""
+    return next(f for f in FOLDS if f != which)

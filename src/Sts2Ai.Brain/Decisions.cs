@@ -95,10 +95,25 @@ public interface IMacroClone
 /// first; none from a policy that values nothing, or for an answer that was drawn.</param>
 /// <param name="State">SL: the state the answer was given at, as the node's clone keys it, for a host that says which
 /// answers it played (<see cref="IMacroPolicy.Played"/>); null for a policy that keeps no states.</param>
-public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null, ulong? State = null)
+/// <param name="Event">SL, at an event, for a log: where each option whose result its button does not show ends,
+/// played out on the node's clone with NoSL's decisions after it (<see cref="Macro.EventLines"/>); null otherwise.</param>
+public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null, ulong? State = null,
+    IReadOnlyList<EventLine>? Event = null)
 {
     public IReadOnlyList<Candidate> Scored { get; init; } = Scored ?? [];
 }
+
+/// <summary>
+/// An event's option as V learns it in NoSL (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2): its button, and in SL
+/// where it ends played out on the node's clone with NoSL's decisions after it. NoSL logs the option it took, with no end.
+/// </summary>
+/// <param name="Option">The option as its button shows it.</param>
+/// <param name="End">The run where the option's line ends: the room left for the map (<paramref name="Ending"/> "left"),
+/// or the run over ("died"); null where it ends otherwise.</param>
+/// <param name="Ending">How the line ends: "left", "died", "won", "fight" (a combat starts: the combat net values that,
+/// not V), "again" (back at a state already met or decided), "long" (past <see cref="Macro.EventLines.MaxSteps"/>
+/// answers); null in NoSL.</param>
+public sealed record EventLine(EventOptionView Option, RunView? End = null, string? Ending = null);
 
 /// <summary>A choice policy's answer to a card prompt.</summary>
 /// <param name="Picks">Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</param>

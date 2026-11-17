@@ -13,10 +13,15 @@ namespace Sts2Ai.Brain;
 /// <list type="bullet">
 /// <item><c>R</c>, a macro decision: <c>{"run": X}</c>, the run it was shown (<c>run_view</c>) as V reads it
 /// (<see cref="RunNet.Write"/>); when it is a map move (<c>surface</c> "map", <c>chosen</c> "map:C,R") also
-/// <c>"entered": X</c>, the move's afterstate, which is what V reads when it values the move and no log shows;</item>
+/// <c>"entered": X</c>, the move's afterstate, which is what V reads when it values the move and no log shows; when it
+/// logs event options (<c>event</c>, <see cref="EventLine"/>) also <c>"event"</c>, for each in order
+/// <c>{"run": X, "end": X, "ending": E}</c>: the run with the option pending, as V in NoSL reads it, and where its line
+/// ended, so read too (no "end" where it gave none);</item>
 /// <item><c>C</c>, a combat decision: <c>{"tokens": T}</c>, its state (<c>obs</c>) with the combat's record of enemy moves
 /// (<c>history</c>) as the combat net reads them.</item>
 /// </list>
+/// Each is read in the decision's environment (<c>env</c>; SL if none), as its brain read it; an event option's runs in
+/// NoSL, whose V they teach.
 /// A request that cannot be read gets <c>{"error": "..."}</c>. An empty line asks for nothing: the answers so far are
 /// sent, which a trainer that waits for them must ask for. The first line out says who is encoding: the build's commit,
 /// the names of a run's numbers and the combat net's lags. Which decisions are samples, and their labels, stay the
@@ -25,7 +30,8 @@ namespace Sts2Ai.Brain;
 public static class TokenServer
 {
     /// <summary>What a request is read for.</summary>
-    private sealed record Decision(string? Surface, string? Chosen, CombatObservation? Obs, RunView? RunView, IReadOnlyList<EnemyTurns>? History);
+    private sealed record Decision(string? Surface, string? Chosen, CombatObservation? Obs, RunView? RunView, IReadOnlyList<EnemyTurns>? History,
+        string? Env, IReadOnlyList<EventLine>? Event);
 
     public static void Serve(TextReader requests, Stream stdout, string commit)
     {
@@ -73,20 +79,40 @@ public static class TokenServer
     private static void Answer(string request, Utf8JsonWriter json)
     {
         var decision = ProtocolJson.Deserialize<Decision>(request[1..]) ?? throw new InvalidDataException("a request with no decision");
+        var env = decision.Env == null ? PlayEnvironment.SL
+            : Enum.TryParse<PlayEnvironment>(decision.Env, out var named) ? named : throw new InvalidDataException($"no environment {decision.Env}");
         switch (request[0])
         {
             case 'R':
                 var run = decision.RunView ?? throw new InvalidDataException("a macro decision with no run_view");
                 json.WritePropertyName("run");
-                RunNet.Write(json, run);
-                if (decision.Surface != Surfaces.Map || decision.Chosen == null || MacroAction.Parse(decision.Chosen) is not { Verb: MacroAction.Map } move) break;
-                json.WritePropertyName("entered");
-                RunNet.Write(json, ScreenAfterstates.Entered(run, move.Coord));
+                RunNet.Write(json, run, env);
+                if (decision.Surface == Surfaces.Map && decision.Chosen != null && MacroAction.Parse(decision.Chosen) is { Verb: MacroAction.Map } move)
+                {
+                    json.WritePropertyName("entered");
+                    RunNet.Write(json, ScreenAfterstates.Entered(run, move.Coord), env);
+                }
+                if (decision.Event is not { } lines) break;
+                json.WriteStartArray("event");
+                foreach (var line in lines)
+                {
+                    json.WriteStartObject();
+                    json.WritePropertyName("run");
+                    RunNet.Write(json, run with { Pending = line.Option }, PlayEnvironment.NoSL);
+                    if (line.End != null)
+                    {
+                        json.WritePropertyName("end");
+                        RunNet.Write(json, line.End, PlayEnvironment.NoSL);
+                    }
+                    if (line.Ending != null) json.WriteString("ending", line.Ending);
+                    json.WriteEndObject();
+                }
+                json.WriteEndArray();
                 break;
             case 'C':
                 var obs = decision.Obs ?? throw new InvalidDataException("a combat decision with no obs");
                 json.WritePropertyName("tokens");
-                CombatTokens.Of(obs, decision.History ?? [], CombatTokens.Lags).Write(json);
+                CombatTokens.Of(obs, decision.History ?? [], CombatTokens.Lags, env).Write(json);
                 break;
             default:
                 throw new InvalidDataException($"a request starts with R or C, not {request[0]}");

@@ -50,14 +50,20 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             throw new NotSupportedException("l0 plays on the node's clone in SL (--afterstates clone): the screen's predicted afterstates are NoSL's");
         Random Rng(string stream) => new(unchecked((int)ProtocolJson.Hash(hello.Run.RunId + stream)));
         var rng = Rng("");
+        // The nets read every state in the run's environment (env:NoSL in NoSL); the workers' leaves are each search's
+        // own environment's (Serve: pimc's NoSL, the planner's SL).
+        ICombatLeaf InEnv() => Leaf.Leaf.In(env);
         var combat = pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Policy == "plan" ? Engine ? new EnginePlanner(Leaf.Leaf, Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat)
-            : Engine ? new EnginePimc(Leaf.Leaf, Workers, pool).Route(Budget, Combat) : new PooledPimc(pool).Route(Budget, Combat);
+            : Policy == "plan" ? Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat)
+            : Engine ? new EnginePimc(InEnv(), Workers, pool).Route(Budget, Combat) : new PooledPimc(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {
-            var l0 = new MacroBrain(Value!, Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? Leaf.Leaf : null,
-                MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null, hostSaysPlayed: explain);
+            // In SL self-play, each event option NoSL would value pending is played out as NoSL plays it, for V's
+            // training in NoSL (EventLines).
+            var l0 = new MacroBrain(Value!.In(env), Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? InEnv() : null,
+                MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null, hostSaysPlayed: explain,
+                eventLines: log && OnClone ? Value.In(PlayEnvironment.NoSL) : null);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new(L0, l0), new(L0, l0), log,
                 OnClone ? node => new PooledClone(pool!, node) : null, explain);
         }

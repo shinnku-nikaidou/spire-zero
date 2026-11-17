@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Sts2Ai.Brain;
+using Sts2Ai.Brain.Macro;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Harness;
@@ -41,11 +42,14 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Nodes">Where the SL planner planned: the actions its search simulated
 /// (<see cref="CombatDecisionResult.Nodes"/>); absent otherwise.</param>
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
+/// <param name="Event">At an event, for V's training in NoSL: in SL each option whose result its button does not show
+/// with where NoSL's line from it ends (<see cref="MacroAnswer.Event"/>), in NoSL the option taken if it is one.</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     CombatObservation? Obs = null, RunView? RunView = null,
-    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null, int? Nodes = null, int? Turns = null);
+    IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null, int? Nodes = null, int? Turns = null,
+    IReadOnlyList<EventLine>? Event = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null);
@@ -223,9 +227,15 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 answer.Action.ToString(), plan, null, null, seed, ms, RunView: decision.Observation.Run,
-                Explored: Mark(answer.Explored)));
+                Explored: Mark(answer.Explored), Event: answer.Event ?? Taken(decision.Observation.Screen, answer.Action)));
         return (answer, new(macro.Brain, plan, answer.Scored.Count > 0 ? answer.Scored : null));
     }
+
+    /// <summary>NoSL: the event option taken, as its button shows it, if its result was not shown (it was valued
+    /// pending, <see cref="ScreenAfterstates.Pends"/>): V learns it from what followed. Null in SL and otherwise.</summary>
+    private IReadOnlyList<EventLine>? Taken(ScreenView screen, MacroAction action) =>
+        env == PlayEnvironment.NoSL && screen is EventScreen events && ScreenAfterstates.Pends(events, action)
+            ? [new EventLine(events.Options.First(o => o.Index == action.Index))] : null;
 
     /// <summary>SL: a new checkpoint (one of the game's saves); the decisions after it follow.</summary>
     public void Checkpoint(NodeCheckpoint checkpoint)

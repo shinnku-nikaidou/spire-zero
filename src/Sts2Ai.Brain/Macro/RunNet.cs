@@ -5,8 +5,8 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Macro;
 
-/// <summary>A run and the value the trainer computed for it, which loading checks.</summary>
-public sealed record NetTest(RunView Run, double Value);
+/// <summary>A run and the value the trainer computed for it, which loading checks, in its environment (null: SL).</summary>
+public sealed record NetTest(RunView Run, double Value, string? Env = null);
 
 /// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
@@ -35,28 +35,21 @@ public sealed record CardToken(string Id, int Up, IReadOnlyList<string> Modifier
 /// <param name="RelicValues">Each relic's numbers, as the combat net reads them (<see cref="CombatTokens.RelicValuesOf"/>).</param>
 /// <param name="RelicStatus">Each relic's status (<see cref="CombatTokens.RelicStatusOf"/>).</param>
 /// <param name="Held">The cards the relics keep (Pael's Tooth's), by id.</param>
-/// <param name="Context">The character, the act, the boss(es) and the act's ancient.</param>
+/// <param name="Context">The character, the act, the boss(es), the act's ancient, the game mode and dominion, and the
+/// environment (<see cref="CombatTokens.EnvTokens"/>).</param>
 /// <param name="Map">The map points still reachable (<see cref="RunNet.MapTokens"/>).</param>
+/// <param name="Pending">The event option picked and not yet played out (<see cref="RunView.Pending"/>); null for none.</param>
 public sealed record RunTokens(
     IReadOnlyList<CardToken> Cards, IReadOnlyList<string> Relics, IReadOnlyList<IReadOnlyList<double>> RelicValues, IReadOnlyList<string> RelicStatus,
-    IReadOnlyList<string> Held, IReadOnlyList<string> Potions, IReadOnlyList<string> Context, IReadOnlyList<string> Map)
+    IReadOnlyList<string> Held, IReadOnlyList<string> Potions, IReadOnlyList<string> Context, IReadOnlyList<string> Map, PendingTokens? Pending = null)
 {
     /// <summary>The tokens as the trainer reads them (<c>learn/v/net.py</c>'s Batch): an object by the names above in snake
-    /// case; a card an array of its id, upgrade level, modifiers, amounts, and its damage, block and growth as one array.</summary>
+    /// case, "pending" only when there is one; a card as <see cref="Write(Utf8JsonWriter, CardToken)"/> writes it.</summary>
     public void Write(Utf8JsonWriter json)
     {
         json.WriteStartObject();
         json.WriteStartArray("cards");
-        foreach (var c in Cards)
-        {
-            json.WriteStartArray();
-            json.WriteStringValue(c.Id);
-            json.WriteNumberValue(c.Up);
-            TokenJson.Strings(json, c.Modifiers);
-            TokenJson.Numbers(json, c.Amounts);
-            TokenJson.Numbers(json, [c.Damage, c.Block, c.Grown]);
-            json.WriteEndArray();
-        }
+        foreach (var c in Cards) Write(json, c);
         json.WriteEndArray();
         json.WritePropertyName("relics");
         TokenJson.Strings(json, Relics);
@@ -72,6 +65,69 @@ public sealed record RunTokens(
         TokenJson.Strings(json, Context);
         json.WritePropertyName("map");
         TokenJson.Strings(json, Map);
+        if (Pending != null)
+        {
+            json.WritePropertyName("pending");
+            Pending.Write(json);
+        }
+        json.WriteEndObject();
+    }
+
+    /// <summary>A card as the trainer reads it: an array of its id, upgrade level, modifiers, amounts, and its damage,
+    /// block and growth as one array.</summary>
+    public static void Write(Utf8JsonWriter json, CardToken c)
+    {
+        json.WriteStartArray();
+        json.WriteStringValue(c.Id);
+        json.WriteNumberValue(c.Up);
+        TokenJson.Strings(json, c.Modifiers);
+        TokenJson.Numbers(json, c.Amounts);
+        TokenJson.Numbers(json, [c.Damage, c.Block, c.Grown]);
+        json.WriteEndArray();
+    }
+}
+
+/// <summary>
+/// An event option picked and not yet played out (<see cref="RunView.Pending"/>), as V reads it: everything its button
+/// shows. Its key; the cards it names, each as a card of the deck reads, and whether it is one of the player's own;
+/// the relics, each as a relic of the run reads (its numbers and status), and whether the player holds it; the potions,
+/// and whether the belt holds one; and its numbers by "EVENT.Name", each its value / 20, capped at ±20.
+/// </summary>
+public sealed record PendingTokens(
+    string Key, IReadOnlyList<CardToken> Cards, IReadOnlyList<double> CardsOwned,
+    IReadOnlyList<string> Relics, IReadOnlyList<IReadOnlyList<double>> RelicValues, IReadOnlyList<string> RelicStatus, IReadOnlyList<double> RelicsOwned,
+    IReadOnlyList<string> Potions, IReadOnlyList<double> PotionsOwned, IReadOnlyList<string> Numbers, IReadOnlyList<double> NumberValues)
+{
+    /// <summary>An event's numbers, scaled, are capped at ±this: gold up to 400 reads apart.</summary>
+    public const double NumberCap = 20;
+
+    /// <summary>The tokens as the trainer reads them: an object by the names above in snake case, a card as in
+    /// <see cref="RunTokens.Write(Utf8JsonWriter, CardToken)"/>.</summary>
+    public void Write(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteString("key", Key);
+        json.WriteStartArray("cards");
+        foreach (var c in Cards) RunTokens.Write(json, c);
+        json.WriteEndArray();
+        json.WritePropertyName("cards_owned");
+        TokenJson.Numbers(json, CardsOwned);
+        json.WritePropertyName("relics");
+        TokenJson.Strings(json, Relics);
+        json.WritePropertyName("relic_values");
+        TokenJson.Rows(json, RelicValues);
+        json.WritePropertyName("relic_status");
+        TokenJson.Strings(json, RelicStatus);
+        json.WritePropertyName("relics_owned");
+        TokenJson.Numbers(json, RelicsOwned);
+        json.WritePropertyName("potions");
+        TokenJson.Strings(json, Potions);
+        json.WritePropertyName("potions_owned");
+        TokenJson.Numbers(json, PotionsOwned);
+        json.WritePropertyName("numbers");
+        TokenJson.Strings(json, Numbers);
+        json.WritePropertyName("number_values");
+        TokenJson.Numbers(json, NumberValues);
         json.WriteEndObject();
     }
 }
@@ -86,6 +142,10 @@ public sealed record RunTokens(
 /// </summary>
 public sealed class RunNet : IRunValue, IDisposable
 {
+    /// <summary>The environment a <see cref="RunNet"/> reads its runs in when not told (<see cref="In"/>): SL's, which
+    /// marks none.</summary>
+    private const PlayEnvironment Plain = PlayEnvironment.SL;
+
     /// <summary>Upgrade levels above this read as this one.</summary>
     public const int MaxUp = 3;
 
@@ -116,7 +176,7 @@ public sealed class RunNet : IRunValue, IDisposable
         var net = new RunNet(file);
         foreach (var test in file.Tests)
         {
-            double value = net.Value(test.Run);
+            double value = net.Value(test.Run, test.Env is { } env ? Enum.Parse<PlayEnvironment>(env) : Plain);
             // Relative: a "win" net's values are mostly below 0.01. The 1e-6 is the floats' noise on the smallest of them.
             if (Math.Abs(value - test.Value) > Math.Max(1e-3 * Math.Abs(test.Value), 1e-6))
             {
@@ -127,9 +187,24 @@ public sealed class RunNet : IRunValue, IDisposable
         return net;
     }
 
-    public double Value(RunView run)
+    /// <summary>V of a run in SL (<see cref="In"/> for another environment).</summary>
+    public double Value(RunView run) => Value(run, Plain);
+
+    /// <summary>This V reading every run in <paramref name="env"/>: NoSL's runs carry its mark (<see cref="CombatTokens.EnvTokens"/>).</summary>
+    public IRunValue In(PlayEnvironment env) => env == Plain ? this : new Bound(this, env);
+
+    private sealed class Bound(RunNet net, PlayEnvironment env) : IRunValue
     {
-        var hazards = Hazards(run);
+        public string Name => net.Name;
+
+        public double Value(RunView run) => net.Value(run, env);
+
+        public IRunValue In(PlayEnvironment other) => net.In(other);
+    }
+
+    public double Value(RunView run, PlayEnvironment env)
+    {
+        var hazards = Hazards(run, env);
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
         double alive = 1;
         for (int g = from; g < _file.Floors; g++) alive *= 1 - hazards[g];
@@ -142,15 +217,18 @@ public sealed class RunNet : IRunValue, IDisposable
     /// The net's tokens of a run: each card with its modifiers (enchantment, affliction, keywords, what Tinker Time made
     /// of it), its modifiers' amounts, its damage (Osty's for an Osty attack), block and growth, which only its own id's row
     /// reads; each relic, with ":used" once used up, its numbers and its status; each potion; the context: character,
-    /// act, boss(es), the act's ancient, and in the Dread mode the mode and the dominion now on the run; the map (<see cref="MapTokens"/>); and the cards the relics keep (Pael's
-    /// Tooth's). Nothing is computed from the deck: what matters in it is the net's to learn.
+    /// act, boss(es), the act's ancient, in the Dread mode the mode and the dominion now on the run, and the environment
+    /// <paramref name="env"/>'s mark (NoSL's; SL has none); the map (<see cref="MapTokens"/>); the cards the relics keep
+    /// (Pael's Tooth's); and an event option picked and not yet played out (<see cref="PendingOf"/>). Nothing is computed
+    /// from the deck: what matters in it is the net's to learn.
     /// </summary>
-    public static RunTokens Tokens(RunView run)
+    public static RunTokens Tokens(RunView run, PlayEnvironment env)
     {
         var context = new List<string> { "character:" + run.Character, "act:" + run.ActId, "boss:" + run.Map.Boss };
         if (run.Map.SecondBoss != null) context.Add("boss:" + run.Map.SecondBoss);
         if (run.Map.Ancient != null) context.Add("ancient:" + run.Map.Ancient);
         context.AddRange(CombatTokens.ModeTokens(run.Mode, run.Dominion));
+        context.AddRange(CombatTokens.EnvTokens(env));
         return new(
             [.. run.Deck.Select(Card)],
             [.. run.Relics.Select(CombatTokens.RelicId)],
@@ -159,26 +237,48 @@ public sealed class RunNet : IRunValue, IDisposable
             [.. run.Relics.SelectMany(r => r.Cards ?? [])],
             [.. run.Potions.OfType<string>()],
             context,
-            MapTokens(run.Map));
+            MapTokens(run.Map),
+            run.Pending is { } pending ? PendingOf(pending) : null);
+    }
 
-        static CardToken Card(CardView card)
-        {
-            var vars = card.Vars ?? new Dictionary<string, decimal>();
-            decimal damage = vars.TryGetValue("Damage", out var d) ? d : vars.GetValueOrDefault("OstyDamage");
-            return new(card.Id, Math.Min(card.Up ?? 0, MaxUp), Modifiers(card),
-                [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(m => Capped(m.Amount / 10.0))],
-                Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0), Capped((double)(card.Grown ?? 0) / 10.0));
-        }
+    /// <summary>
+    /// An event option's button as V reads it: its key; each card it names, read as a card of the deck is, and whether
+    /// it is the player's own; each relic, read as a relic of the run is, and whether the player holds it; each potion,
+    /// and whether the belt holds one; each number it shows, by "EVENT.Name", its value / 20 capped at ±20.
+    /// </summary>
+    public static PendingTokens PendingOf(EventOptionView option)
+    {
+        var cards = option.Cards ?? [];
+        var relics = option.Relics ?? [];
+        var potions = option.Potions ?? [];
+        var numbers = option.Numbers ?? new Dictionary<string, decimal>();
+        return new(option.Key,
+            [.. cards.Select(c => Card(c.Card))], [.. cards.Select(c => c.Owned == true ? 1.0 : 0.0)],
+            [.. relics.Select(r => CombatTokens.RelicId(r.Relic))], [.. relics.Select(r => CombatTokens.RelicValuesOf(r.Relic))],
+            [.. relics.Select(r => CombatTokens.RelicStatusOf(r.Relic))], [.. relics.Select(r => r.Owned == true ? 1.0 : 0.0)],
+            [.. potions.Select(p => p.Id)], [.. potions.Select(p => p.Owned == true ? 1.0 : 0.0)],
+            [.. numbers.Keys.Order(StringComparer.Ordinal)],
+            [.. numbers.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => Math.Clamp((double)kv.Value / 20.0, -PendingTokens.NumberCap, PendingTokens.NumberCap))]);
+    }
 
-        static IReadOnlyList<string> Modifiers(CardView card)
-        {
-            var ids = new List<string>();
-            if (card.Enchant != null) ids.Add("enchant:" + card.Enchant.Id);
-            if (card.Affliction != null) ids.Add("affliction:" + card.Affliction.Id);
-            ids.AddRange((card.Keywords ?? []).Select(k => "keyword:" + k));
-            if (card.Tinker != null) ids.AddRange(["tinker:" + card.Tinker.Type, "rider:" + card.Tinker.Rider]);
-            return ids;
-        }
+    /// <summary>A card as V reads it: its id, upgrade level, modifiers and their amounts, damage, block and growth.</summary>
+    private static CardToken Card(CardView card)
+    {
+        var vars = card.Vars ?? new Dictionary<string, decimal>();
+        decimal damage = vars.TryGetValue("Damage", out var d) ? d : vars.GetValueOrDefault("OstyDamage");
+        return new(card.Id, Math.Min(card.Up ?? 0, MaxUp), Modifiers(card),
+            [.. new[] { card.Enchant, card.Affliction }.OfType<ModifierView>().Select(m => Capped(m.Amount / 10.0))],
+            Capped((double)damage / 20.0), Capped((double)vars.GetValueOrDefault("Block") / 20.0), Capped((double)(card.Grown ?? 0) / 10.0));
+    }
+
+    private static IReadOnlyList<string> Modifiers(CardView card)
+    {
+        var ids = new List<string>();
+        if (card.Enchant != null) ids.Add("enchant:" + card.Enchant.Id);
+        if (card.Affliction != null) ids.Add("affliction:" + card.Affliction.Id);
+        ids.AddRange((card.Keywords ?? []).Select(k => "keyword:" + k));
+        if (card.Tinker != null) ids.AddRange(["tinker:" + card.Tinker.Type, "rider:" + card.Tinker.Rider]);
+        return ids;
     }
 
     /// <summary>
@@ -235,13 +335,14 @@ public sealed class RunNet : IRunValue, IDisposable
     };
 
     /// <summary>
-    /// A run as the trainer reads it: its tokens and its numbers by name, <c>{"tokens": ..., "state": {NAME: number}}</c>.
+    /// A run as the trainer reads it in <paramref name="env"/>: its tokens and its numbers by name,
+    /// <c>{"tokens": ..., "state": {NAME: number}}</c>.
     /// </summary>
-    public static void Write(Utf8JsonWriter json, RunView run)
+    public static void Write(Utf8JsonWriter json, RunView run, PlayEnvironment env)
     {
         json.WriteStartObject();
         json.WritePropertyName("tokens");
-        Tokens(run).Write(json);
+        Tokens(run, env).Write(json);
         json.WriteStartObject("state");
         foreach (string name in StateNames) json.WriteNumber(name, State(run, name));
         json.WriteEndObject();
@@ -249,12 +350,32 @@ public sealed class RunNet : IRunValue, IDisposable
     }
 
     /// <summary>Per floor, the chance to die there if still alive there: the graph on a batch of one run.</summary>
-    private float[] Hazards(RunView run)
+    private float[] Hazards(RunView run, PlayEnvironment env)
     {
-        var tokens = Tokens(run);
+        var tokens = Tokens(run, env);
+        var inputs = new List<NamedOnnxValue>(CardInputs("", tokens.Cards));
+        inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
+        inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
+        inputs.AddRange(Bag("context", "context_mask", tokens.Context));
+        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
+        var values = new DenseTensor<float>([1, _file.State.Names.Count]);
+        for (int i = 0; i < _file.State.Names.Count; i++)
+            values[0, i] = (float)((State(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
+        inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
+        inputs.AddRange(CombatNet.RelicInputs(tokens.RelicValues, tokens.RelicStatus, status => Index("relic_status", status)));
+        inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
+        inputs.AddRange(PendingInputs(tokens.Pending));
+        using var results = _session.Run(inputs);
+        return [.. results[0].AsEnumerable<float>()];
+    }
+
+    /// <summary>Cards as the graph takes them, by the input names with <paramref name="prefix"/>: their ids, upgrade
+    /// levels, mask, modifiers with their mask and amounts, and numbers (damage, block, growth).</summary>
+    private List<NamedOnnxValue> CardInputs(string prefix, IReadOnlyList<CardToken> tokens)
+    {
         // Every length is at least 1, its padding masked out, as in training.
-        int n = Math.Max(1, tokens.Cards.Count);
-        int m = Math.Max(1, tokens.Cards.Select(c => c.Modifiers.Count).DefaultIfEmpty(0).Max());
+        int n = Math.Max(1, tokens.Count);
+        int m = Math.Max(1, tokens.Select(c => c.Modifiers.Count).DefaultIfEmpty(0).Max());
         var cards = new DenseTensor<long>([1, n]);
         var ups = new DenseTensor<float>([1, n]);
         var cardMask = new DenseTensor<float>([1, n]);
@@ -262,9 +383,9 @@ public sealed class RunNet : IRunValue, IDisposable
         var modMask = new DenseTensor<float>([1, n, m]);
         var modAmounts = new DenseTensor<float>([1, n, m]);
         var numbers = new DenseTensor<float>([1, n, 3]);
-        for (int k = 0; k < tokens.Cards.Count; k++)
+        for (int k = 0; k < tokens.Count; k++)
         {
-            var card = tokens.Cards[k];
+            var card = tokens[k];
             cards[0, k] = Index("cards", card.Id);
             ups[0, k] = card.Up;
             cardMask[0, k] = 1;
@@ -278,25 +399,43 @@ public sealed class RunNet : IRunValue, IDisposable
             numbers[0, k, 1] = (float)card.Block;
             numbers[0, k, 2] = (float)card.Grown;
         }
-        var inputs = new List<NamedOnnxValue>
-        {
-            NamedOnnxValue.CreateFromTensor("cards", cards), NamedOnnxValue.CreateFromTensor("ups", ups),
-            NamedOnnxValue.CreateFromTensor("card_mask", cardMask), NamedOnnxValue.CreateFromTensor("mods", mods),
-            NamedOnnxValue.CreateFromTensor("mod_mask", modMask), NamedOnnxValue.CreateFromTensor("mod_amounts", modAmounts),
-            NamedOnnxValue.CreateFromTensor("numbers", numbers),
-        };
-        inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
-        inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
-        inputs.AddRange(Bag("context", "context_mask", tokens.Context));
-        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
-        var values = new DenseTensor<float>([1, _file.State.Names.Count]);
-        for (int i = 0; i < _file.State.Names.Count; i++)
-            values[0, i] = (float)((State(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
-        inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
-        inputs.AddRange(CombatNet.RelicInputs(tokens.RelicValues, tokens.RelicStatus, status => Index("relic_status", status)));
-        inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
-        using var results = _session.Run(inputs);
-        return [.. results[0].AsEnumerable<float>()];
+        return
+        [
+            NamedOnnxValue.CreateFromTensor(prefix + "cards", cards), NamedOnnxValue.CreateFromTensor(prefix + "ups", ups),
+            NamedOnnxValue.CreateFromTensor(prefix + "card_mask", cardMask), NamedOnnxValue.CreateFromTensor(prefix + "mods", mods),
+            NamedOnnxValue.CreateFromTensor(prefix + "mod_mask", modMask), NamedOnnxValue.CreateFromTensor(prefix + "mod_amounts", modAmounts),
+            NamedOnnxValue.CreateFromTensor(prefix + "numbers", numbers),
+        ];
+    }
+
+    /// <summary>The inputs of an event option picked and not yet played out (<see cref="PendingTokens"/>), all empty for
+    /// none: its key (the table's entry 0 for a key it does not list, a row of zeros), its cards as the deck's with
+    /// whether each is the player's own, its relics as the run's with whether each is held, its potions with whether
+    /// each is held, and its numbers by their rows with their values.</summary>
+    private List<NamedOnnxValue> PendingInputs(PendingTokens? pending)
+    {
+        var inputs = new List<NamedOnnxValue>(Bag("pending", "pending_mask", pending != null ? [pending.Key] : []));
+        inputs.AddRange(CardInputs(Pend, pending?.Cards ?? []));
+        inputs.Add(Row(Pend + "cards_owned", pending?.CardsOwned ?? []));
+        inputs.AddRange(Bag("relics", Pend + "relics", Pend + "relic_mask", pending?.Relics ?? []));
+        inputs.AddRange(CombatNet.RelicInputs(pending?.RelicValues ?? [], pending?.RelicStatus ?? [], status => Index("relic_status", status), Pend));
+        inputs.Add(Row(Pend + "relics_owned", pending?.RelicsOwned ?? []));
+        inputs.AddRange(Bag("potions", Pend + "potions", Pend + "potion_mask", pending?.Potions ?? []));
+        inputs.Add(Row(Pend + "potions_owned", pending?.PotionsOwned ?? []));
+        inputs.AddRange(Bag("event_vars", Pend + "vars", Pend + "var_mask", pending?.Numbers ?? []));
+        inputs.Add(Row(Pend + "var_values", pending?.NumberValues ?? []));
+        return inputs;
+    }
+
+    /// <summary>The prefix of the graph's inputs of an event option picked and not yet played out.</summary>
+    private const string Pend = "pend_";
+
+    /// <summary>Numbers as the graph takes them: padded to at least 1, as their bag is.</summary>
+    private static NamedOnnxValue Row(string input, IReadOnlyList<double> numbers)
+    {
+        var row = new DenseTensor<float>([1, Math.Max(1, numbers.Count)]);
+        for (int k = 0; k < numbers.Count; k++) row[0, k] = (float)numbers[k];
+        return NamedOnnxValue.CreateFromTensor(input, row);
     }
 
     /// <summary>A token table's ids as the graph takes them: padded to at least 1, with their mask.</summary>

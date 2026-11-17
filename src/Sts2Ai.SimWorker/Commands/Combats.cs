@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Relics;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Dread;
@@ -60,6 +61,13 @@ internal static class TablesCommand
             // the game modes besides the standard game, and the Dread mode's dominions (RunView.Mode, RunView.Dominion)
             ["modes"] = Enum.GetValues<GameMode>().Select(Observe.Mode).OfType<string>(),
             ["dominions"] = Entries<DominionModel>(),
+            // the environments a net marks (CombatTokens.EnvTokens): SL marks none
+            ["envs"] = Enum.GetValues<PlayEnvironment>().Where(e => e != PlayEnvironment.SL).Select(e => e.ToString()),
+            // every event option's text key (EventOptionView.Key), as the game's events text table lists them, its event's
+            // id first; the game's test event's left out
+            ["event_options"] = EventActions.OptionKeys.Where(k => Real<EventModel>().Any(e => k.StartsWith(e.Id.Entry + ".", StringComparison.Ordinal))),
+            // every event's numbers a button may show (EventOptionView.Numbers), "EVENT.Name": its variables but its names
+            ["event_vars"] = Real<EventModel>().SelectMany(e => e.DynamicVars.Values.Where(v => v is not StringVar).Select(v => $"{e.Id.Entry}.{v.Name}")),
         };
         var sorted = ids.ToDictionary(kv => kv.Key, kv => kv.Value.Distinct().Order(StringComparer.Ordinal).ToList());
         File.WriteAllText(path, JsonSerializer.Serialize(sorted, Indented) + "\n");

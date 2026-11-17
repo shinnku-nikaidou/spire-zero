@@ -33,8 +33,9 @@ internal static class Serve
     /// <param name="leaf">The leaf to search with; null for a worker that only probes l0's options on the clone.</param>
     private static int Run(Pump pump, TextWriter wire, ICombatLeaf? leaf)
     {
-        var pimc = leaf == null ? null : new PimcBrain(leaf);
-        var planner = leaf == null ? null : new SlPlanner(leaf);
+        // pimc plays in NoSL, the planner in SL: each reads its states in its own environment.
+        var pimc = leaf == null ? null : new PimcBrain(leaf.In(PlayEnvironment.NoSL));
+        var planner = leaf == null ? null : new SlPlanner(leaf.In(PlayEnvironment.SL));
         static Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));

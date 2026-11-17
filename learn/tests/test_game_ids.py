@@ -13,10 +13,14 @@ def test_the_tables_hold_every_character_and_what_the_nets_read():
         assert f"character:{character}" in macro["context"]
         assert f"STRIKE_{character}" in combat["cards"] and f"STRIKE_{character}" in macro["cards"]
     # the encounter says the room and the act
-    assert {i.split(":")[0] for i in combat["context"][1:]} == {"encounter", "character", "mode", "dominion"}
+    assert {i.split(":")[0] for i in combat["context"][1:]} == {"encounter", "character", "mode", "dominion", "env"}
     for tables in (combat, macro):
         assert "mode:Dread" in tables["context"] and "dominion:QUEEN_DOMINION" in tables["context"]
         assert "mode:Standard" not in tables["context"]
+        # NoSL's mark; SL has none
+        assert "env:NoSL" in tables["context"] and "env:SL" not in tables["context"]
+    # an event option's key and its numbers (RunNet.PendingOf)
+    assert "WELLSPRING.pages.INITIAL.options.BATHE" in macro["pending"] and "WELLSPRING.BatheCurses" in macro["event_vars"]
     assert "OSTY" in combat["allies"] and "PLASMA_ORB" in combat["orbs"] and "LIZARD_TAIL:used" in combat["relics"]
     assert "Elite+0:quest" in macro["map"] and "Boss+20" in macro["map"]
 

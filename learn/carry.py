@@ -5,11 +5,13 @@ new input brings new weights. A carried net gives every state its old tables cou
     cd learn && uv run python carry.py v ../weights/all/v9-2.json --name v10-0
 
 An id the old tables lack starts from the old net's row for an id it does not know, which is how the old net read it,
-except a context id of the game mode or the Dread mode's dominion: a state of before has no such token at all, so its row
-starts at zero, and as the context is a sum a carried net values a Dread state as the old net valued it without them.
-A weight the old net lacks is zero: a card's growth, and the columns of a layer that reads more numbers than before
-(the new numbers come last). Everything else is copied. The file's test states are the old file's, valued again; they
-must come to the old values, and the brain checks the same on load.
+except a context id of the game mode, the Dread mode's dominion or the environment: a state of before has no such token
+at all, so its row starts at zero, and as the context is a sum a carried net values a Dread state, or a NoSL one, as the
+old net valued it without them. A weight the old net lacks is zero: a card's growth, and the columns of a layer that
+reads more numbers than before (the new numbers come last), so that V's event-option inputs read as nothing at first.
+Their own tables and rows (FRESH) start as a new net's, random: with both sides zero, neither would ever learn.
+Everything else is copied. The file's test states are the old file's, valued again; they must come to the old values,
+and the brain checks the same on load.
 """
 
 import json
@@ -53,11 +55,16 @@ V_ROWS = {
     **{f"bags.{t}.weight": (t, 1) for t in ("relics", "potions", "context", "map")},
     "relic_counter.weight": ("relics", 1),
     "relic_status.weight": ("relic_status", 1),
+    "pending.weight": ("pending", 1),
+    "event_vars.weight": ("event_vars", 1),
 }
 # The weights a net of before may lack, and the layers that may read more numbers than before.
 NEW = {"card_grown.weight"}
-# The ids whose rows start at zero when new: tokens a state of before never had (CombatTokens.ModeTokens).
-ZERO = ("mode:", "dominion:")
+# The weights a net of before may lack that start as a new net's (random): V's event-option inputs, read through
+# columns of the body that start at zero.
+FRESH = {"pending.weight", "event_vars.weight", "pend_card_owned", "pend_relic_owned", "pend_potion_owned"}
+# The ids whose rows start at zero when new: tokens a state of before never had (CombatTokens.ModeTokens, EnvTokens).
+ZERO = ("mode:", "dominion:", "env:")
 WIDER = {"enemy_scalars.weight", "body.0.weight"}
 
 
@@ -69,6 +76,9 @@ def carried(old: dict[str, torch.Tensor], own: dict[str, torch.Tensor], rows, wa
             out[name] = mine
             continue
         theirs = old.get(name)
+        if theirs is None and name in FRESH:
+            out[name] = mine
+            continue
         if theirs is None and name not in NEW:
             raise LearnError(f"the old net has no weight {name}")
         if name in rows:
@@ -117,7 +127,7 @@ def combat(
     model.eval()
 
     reader = common.Encoder(common.checkout_encoder())
-    asked = [json.dumps({"obs": t["obs"], "history": t["history"]}) for t in old["tests"]]
+    asked = [json.dumps({"obs": t["obs"], "history": t["history"], "env": t.get("env", "SL")}) for t in old["tests"]]
     # The targets are not read here: a batch is only the tests' inputs.
     samples = [
         {
@@ -127,6 +137,7 @@ def combat(
             "class": 0,
             "potion_used": [],
             "share": t["obs"]["player"]["hp"] / max(1, t["obs"]["player"]["max_hp"]),
+            "env": t.get("env", "SL"),
         }
         for t, a in zip(old["tests"], reader.combats(asked), strict=True)
     ]
@@ -157,6 +168,7 @@ def v(
     """V of FILE on this checkout's tables and inputs."""
     old, tables = v_export.read(file), game_ids.macro_tables()
     out_file = out_path(name, out)
+    torch.manual_seed(0)  # the weights that start as a new net's (FRESH): the same each carry
     model = v_net.Net({t: len(ids) for t, ids in tables.items()}, old["floors"])
     model.load_state_dict(
         carried(v_export.stored(old), model.state_dict(), V_ROWS, old["vocab"], tables, ["aux_head."])
@@ -164,7 +176,7 @@ def v(
     model.eval()
 
     reader = common.Encoder(common.checkout_encoder())
-    answers = reader.runs([json.dumps({"run_view": t["run"]}) for t in old["tests"]])
+    answers = reader.runs([json.dumps({"run_view": t["run"], "env": t.get("env", "SL")}) for t in old["tests"]])
     reader.close()
     if old["state"]["names"] != v_spec.STATE:
         raise LearnError(f"the net reads the numbers {old['state']['names']}, this checkout's {v_spec.STATE}")
@@ -183,6 +195,8 @@ def v(
             "kind": "won",
             "weight": 1.0,
             "next": [],
+            "env": t.get("env", "SL"),
+            "pending": "pending" in t["run"],
         }
         for t, a in zip(old["tests"], answers, strict=True)
     ]
