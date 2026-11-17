@@ -1,21 +1,20 @@
-"""A trainer's work done in worker processes, the same as done in the trainer itself, bit for bit and in the same order.
+"""A trainer's work done ahead of it, the same as done in the trainer itself, bit for bit and in the same order.
 
 Reading the logs (`each`): the trainers' readers turned one log after another into samples in Python (v10g1's 40,000 runs
-took 15 min for V and 27 min for the combat net, the Python at a whole core and the encoder at 9 %). Each worker starts
-its own encoder and reads whole logs; the trainer takes the logs' samples back in the list's order.
+took 15 min for V and 27 min for the combat net, the Python at a whole core and the encoder at 9 %). Each worker process
+starts its own encoder and reads whole logs; the trainer takes the logs' samples back in the list's order. Workers are
+forked from a fresh forkserver process, so the trainer's samples and CUDA state stay out of them, and run one torch
+thread each. What goes to them and back goes by pickle: a function is a module's function or a functools.partial of one.
 
 Building batches (`built`): a batch was built in Python while the GPU waited (on pushqkzh a combat batch of 256 took 148
-ms, a training step 4.5 ms). The trainer still draws the order and cuts it into parts; a worker builds each part's batch
-on the CPU, as the trainer's own process would, and the trainer moves it to its device. Since 2026-11-17 a batch's
-tokens are looked up and padded in Rust (learn/batch): on one core of gcpsg a batch of 256 V 17 ms and combat 22 ms,
-where the Python took 170 and 482.
-
-Workers are forked from a fresh forkserver process, so the trainer's samples and CUDA state stay out of them, and run
-one torch thread each. What goes to them and back goes by pickle: a function is a module's function or a
-functools.partial of one.
+ms, a training step 4.5 ms), then in worker processes (2026-11-15). Since 2026-11-17 a batch's tokens are looked up and
+padded in Rust (learn/batch), which lets go of the GIL meanwhile, so threads of the trainer build the batches: the
+worker processes' pickling and 64 KB pipes had become the limit (on pushqkzh, 3 workers 46 ms a V step and 63 ms a
+combat one; threads 10.8 and 12.2 ms, the step itself 5.5 and 6.1). The trainer still draws the order and cuts it into
+parts; a thread builds each part's batch on the CPU and the trainer moves it to its device.
 """
-
 import collections
+import concurrent.futures
 import itertools
 import multiprocessing
 import pickle
@@ -26,16 +25,11 @@ import common
 
 AHEAD = 2  # tasks asked for ahead, per worker
 
-_pool = None  # the batch builders, kept for the trainer's life
 _encoder = None  # a reader's own encoder
 
 
 def _start():
     torch.set_num_threads(1)
-
-
-def _build(build, part):
-    return pickle.dumps(build(part), protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def _start_reader(command):
@@ -72,17 +66,19 @@ def moved(batch, device):
 
 
 def built(build, parts, device, workers):
-    """build(part), a batch built on the CPU, for each part (a list of samples) in order, on DEVICE. WORKERS processes
-    build them ahead of the caller; with 0, this process builds them as they are asked for."""
-    global _pool
+    """build(part), a batch built on the CPU, for each part (a list of samples) in order, on DEVICE. WORKERS threads
+    build them ahead of the caller; with 0, the caller builds them as they are asked for."""
     if not workers:
         for part in parts:
             yield moved(build(part), device)
         return
-    if _pool is None:
-        _pool = multiprocessing.get_context("forkserver").Pool(workers, initializer=_start)
-    for batch in _ordered(_pool, _build, build, parts, workers):
-        yield moved(batch, device)
+    parts = iter(parts)
+    with concurrent.futures.ThreadPoolExecutor(workers) as pool:
+        pending = collections.deque(pool.submit(build, part) for part in itertools.islice(parts, AHEAD * workers))
+        while pending:
+            batch = pending.popleft().result()
+            pending.extend(pool.submit(build, part) for part in itertools.islice(parts, 1))
+            yield moved(batch, device)
 
 
 def each(read, items, encoder, workers):

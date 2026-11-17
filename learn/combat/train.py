@@ -54,7 +54,7 @@ def main(
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[str | None, typer.Option(help="a net file to go on from: its weights, read back from its ONNX")] = None,
     seed: int = 0,
-    workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
+    workers: Annotated[int, typer.Option(help="processes that read the logs, threads that build the batches (0: this one)")] = 8,
 ) -> None:
     out_file = out_path(name, out)
     torch.manual_seed(seed)

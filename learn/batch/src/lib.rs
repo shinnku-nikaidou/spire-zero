@@ -1,6 +1,7 @@
 //! The trainers' batches built from their samples' packed tokens (learn/common.py `pack`: zlib over JSON), for V
 //! (learn/v/net.py) and the combat net (learn/combat/net.py): looked up in the tables and padded, as the Python did
-//! element by element, to the same numbers bit for bit. Each array goes back as a CPU tensor over its own bytes.
+//! element by element, to the same numbers bit for bit. Each array goes back as a CPU tensor over its own bytes. The GIL
+//! is let go while it works, so threads of a trainer build batches side by side and beside its training step.
 //!
 //! What follows Python's rules on purpose: a number stored in a float32 array is the JSON number as a double, then
 //! rounded once (as torch stores a Python int or float); an id a table does not list is row 0, and so is an id that is
@@ -734,16 +735,20 @@ fn run<'py>(
     if tokens.is_empty() {
         return Err(PyValueError::new_err("no samples"));
     }
-    let (mut z, mut buf) = (Decompress::new(true), Vec::new());
-    let toks = tokens
-        .iter()
-        .enumerate()
-        .map(|(i, b)| {
-            unpack(&mut z, &mut buf, b.as_bytes()).map_err(|e| format!("sample {i}: {e}"))
+    // The trainers build batches in threads (learn/workers.py): the GIL is let go while the tokens are unpacked and the
+    // arrays built, which touch no Python object (the bytes stay alive and unchanged in TOKENS meanwhile).
+    let raw: Vec<&[u8]> = tokens.iter().map(|b| b.as_bytes()).collect();
+    let out = py
+        .detach(|| -> R<Out> {
+            let (mut z, mut buf) = (Decompress::new(true), Vec::new());
+            let toks = raw
+                .iter()
+                .enumerate()
+                .map(|(i, b)| unpack(&mut z, &mut buf, b).map_err(|e| format!("sample {i}: {e}")))
+                .collect::<R<Vec<Value>>>()?;
+            build(&index, &toks)
         })
-        .collect::<R<Vec<Value>>>()
         .map_err(PyValueError::new_err)?;
-    let out = build(&index, &toks).map_err(PyValueError::new_err)?;
     let torch = py.import("torch")?;
     let frombuffer = torch.getattr("frombuffer")?;
     let d = PyDict::new(py);

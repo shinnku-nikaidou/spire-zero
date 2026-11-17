@@ -75,7 +75,7 @@ def main(
         ),
     ] = None,
     seed: int = 0,
-    workers: Annotated[int, typer.Option(help="processes that read the logs and build the batches (0: this one)")] = 8,
+    workers: Annotated[int, typer.Option(help="processes that read the logs, threads that build the batches (0: this one)")] = 8,
     fold: Annotated[str | None, typer.Option(help="train on one fold of the training runs alone: A or B")] = None,
     frozen: Annotated[
         str | None,
