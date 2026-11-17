@@ -115,6 +115,8 @@ def main(
         model.eval()
         held = held_out_loss(model)
         logger.info("epoch {}: held-out loss {:.4f}", epoch, held)
+        # each epoch's weights beside the net file, so a training cut short keeps them (the user, 2026-11-17)
+        torch.save({k: v.cpu() for k, v in model.state_dict().items()}, out_file.with_name(f"{out_file.stem}.e{epoch}.pt"))
         if held < best - 1e-4:
             best, best_state, stale = held, {k: v.clone() for k, v in model.state_dict().items()}, 0
         else:
