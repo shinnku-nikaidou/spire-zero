@@ -409,3 +409,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   once the game had closed here, public, three platforms. The commit timed out, but the content had gone through: the
   item updated at 08:25:56Z (396.8 MB) and its change notes carry 0.3.21's. The texts were not sent again: none
   changed since their last upload. Installed in `mods/` over 0.3.20 with the game closed.
+- 2026-11-17 16:46: 0.3.22 at 2693f7e0, three platforms (the VM started and shut down again), uploaded on the user's
+  word ("得最快速度升級版本"), public. 0.3.21 threw at every event in the real game, seen on the Mac ("The type
+  initializer for 'Sts2Ai.GameBridge.Actions.EventActions' threw an exception"): the mod compiles GameBridge's sources
+  into Sts2Ai.dll, but EventTexts.json (embedded since the NoSL shared-nets step, bbdd890a) was a resource of
+  GameBridge's project alone, so the mod's assembly held none; the brain references GameBridge and had it, which is why
+  `run --check` passed. Sts2Ai.Mod.csproj now embeds it too; the brain is 0.3.21's. The commit timed out with the
+  content through (updated 08:46:45Z, 396.9 MB, the change note on the changelog page). Installed in `mods/` over 0.3.21
+  (moved to `tmp/modeng/old-installs/`) with the game closed.
