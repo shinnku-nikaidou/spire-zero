@@ -18,6 +18,8 @@
   <ItemGroup>
     <Compile Include="../Sts2Ai.GameBridge/**/*.cs;../Sts2Ai.Protocol/**/*.cs" Exclude="../*/bin/**;../*/obj/**" />
     <None Include="Sts2Ai.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- GameBridge's sources read their resource from their own assembly, which here is Sts2Ai.dll. -->
+    <EmbeddedResource Include="../Sts2Ai.GameBridge/EventTexts.json" LogicalName="EventTexts.json" />
   </ItemGroup>
 
   <ItemGroup>
