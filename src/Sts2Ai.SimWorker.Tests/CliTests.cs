@@ -50,8 +50,9 @@ public sealed class CliTests : IDisposable
         Assert.False(run.Read(runCommand.Parse([.. plan, "--combat-world", "replay"])).Engine);
         Assert.False(eval.Read(evalCommand.Parse(plan)).Engine);
         Assert.True(eval.Read(evalCommand.Parse([.. plan, "--combat-world", "engine"])).Engine);
-        Assert.True(run.Read(runCommand.Parse(pimc)).Engine);
-        Assert.False(run.Read(runCommand.Parse([.. pimc, "--combat-world", "replay"])).Engine);
+        // pimc searches in the engine whatever the command, so --combat-world is plan's alone.
+        Assert.False(run.Read(runCommand.Parse(pimc)).Engine);
+        Assert.Throws<CliException>(() => run.Read(runCommand.Parse([.. pimc, "--combat-world", "replay"])));
         Assert.False(eval.Read(evalCommand.Parse(pimc)).Engine);
         Assert.False(run.Read(runCommand.Parse(["--policy", "play"])).Engine);
         Assert.Throws<CliException>(() => run.Read(runCommand.Parse(["--policy", "play", "--combat-world", "engine"])));
@@ -122,8 +123,9 @@ public sealed class CliTests : IDisposable
 
         Assert.False(noSl.OnClone);
         Assert.True(sl.OnClone);
-        // Both search in the engine: the SL planner on the live combat SL hosts send, pimc on the worlds its workers build.
-        Assert.True(noSl.Engine);
+        // The SL planner searches in the engine, on the live combat SL hosts send (Engine is plan's world); pimc always
+        // does, on worlds drawn from the live combat.
+        Assert.False(noSl.Engine);
         Assert.True(sl.Engine);
         Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
         Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);

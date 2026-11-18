@@ -135,7 +135,7 @@ public sealed class EngineExportTests : IDisposable
         var written = new EngineExport(Schema()).Write([("Hand", hand), ("Draw", draw), ("Again", hand), ("Text", "not of the schema")], "v-test", new(3));
         string Pile(PileType type) => """{"class":"CardPile","CardPile":{"_cards":[],"type_":TYPE}}""".Replace("TYPE", ((int)type).ToString());
         Assert.Equal(
-            """{"format":1,"game":"v-test","schema":"abc","sim":{"prompts":3},"roots":{"Hand":["card_pile",0],"Draw":["card_pile",1],"Again":["card_pile",0],"Text":["outside","System.String"]},"""
+            """{"format":2,"game":"v-test","schema":"abc","sim":{"prompts":3,"draw_log":[]},"roots":{"Hand":["card_pile",0],"Draw":["card_pile",1],"Again":["card_pile",0],"Text":["outside","System.String"]},"""
             + $"\"arenas\":{{\"card_pile\":[{Pile(PileType.Hand)},{Pile(PileType.Draw)}]}},\"outside\":{{\"System.String from Text\":1}}}}",
             Encoding.UTF8.GetString(written.Bytes));
         Assert.Equal((2, 1), (written.Objects, written.Outside["System.String from Text"]));
