@@ -427,21 +427,22 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// <summary>A line that ended the turn or the combat, as the world stood there, before the leaf has valued it.</summary>
         /// <param name="Bare">At the next turn's start, the key of the state with every potion thrown away: the ends with
         /// the same one differ only by their potions. 0 once the combat is over.</param>
-        private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Bare = 0)
+        private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Shown,
+            ulong Bare = 0)
         {
             public TurnEnd Valued(LeafOutcome outcome) => Light().Valued(outcome);
 
             /// <summary>What is kept of the line once the leaf has valued it: no observation or run.</summary>
             public Priced Light() => new(Actions, Hashes, State.Status, Key, Bare, State.Obs.Potions, State.History,
-                State.Obs.Player.Hp + State.Obs.Player.MaxHp, LifeBound.Reach(State.Obs));
+                State.Obs.Player.Hp + State.Obs.Player.MaxHp, LifeBound.Reach(State.Obs), Shown);
         }
 
         /// <summary>A line the leaf has valued (<see cref="Ended"/>), with the potions <see cref="Thrown"/> compares.</summary>
         private sealed record Priced(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, ulong Key, ulong Bare,
-            IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History, int Life, int Reach)
+            IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History, int Life, int Reach, ulong Shown)
         {
             public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp, Life, Reach,
-                LifeBound.Potions(Potions));
+                LifeBound.Potions(Potions), Shown);
         }
 
         /// <summary>
@@ -462,7 +463,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             var record = new MoveRecord(history);
             if (status == CombatStatus.InProgress) record.Witness(obs);
-            return new(new(status, obs, world.Run(), record.History), [.. actions], [.. hashes], key);
+            return new(new(status, obs, world.Run(), record.History), [.. actions], [.. hashes], key, world.Hash(obs));
         }
 
         /// <summary>The search's line ended here. The search needs no end's value to go on, so the leaf is asked about

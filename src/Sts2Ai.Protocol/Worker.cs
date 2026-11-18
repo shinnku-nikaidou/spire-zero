@@ -101,5 +101,8 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// <param name="Reach">The most HP plus max HP the combat can end with from the state, as the pruning bounds it
 /// (<c>LifeBound.Reach</c>).</param>
 /// <param name="Potions">The potions held at the state, as the pruning tells states apart (<c>LifeBound.Potions</c>).</param>
+/// <param name="Shown">The hash of the observation at the state, card uids and all (<see cref="ProtocolJson.Hash"/>): two
+/// lines to one key whose copies of a card went otherwise hold them under other uids, which the actions after it name.</param>
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value,
-    ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0, int Life = 0, int Reach = 0, string Potions = "");
+    ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0, int Life = 0, int Reach = 0, string Potions = "",
+    ulong Shown = 0);

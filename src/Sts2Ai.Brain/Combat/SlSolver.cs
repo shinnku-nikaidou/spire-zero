@@ -34,9 +34,13 @@ namespace Sts2Ai.Brain.Combat;
 public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1, int batch = 16)
 {
     /// <summary>A state the solver reached: a turn's start, or the root, where the combat stands.</summary>
-    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, ulong moves, long order, int reach, string potions)
+    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, ulong moves, long order, int reach, string potions,
+        ulong shown = 0)
     {
         public readonly ulong Key = key;
+        /// <summary>The observation's hash where its line reaches it (<see cref="TurnEnd.Shown"/>): what it found holds on a
+        /// line that shows the same, the same copies of each card under the same uids.</summary>
+        public readonly ulong Shown = shown;
         /// <summary>The most HP plus max HP the combat can end with from the state (<see cref="LifeBound.Reach"/>).</summary>
         public readonly int Reach = reach;
         /// <summary>The potions held, by which the pruning compares the state (<see cref="LifeBound.Potions"/>).</summary>
@@ -62,8 +66,9 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         public bool Dropped;
     }
 
-    /// <summary>The actions from a state to a state where its turn ends, with the hash of each one's observation.</summary>
-    private sealed record Edge(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key);
+    /// <summary>The actions from a state to a state where its turn ends, with the hash of each one's observation and of
+    /// the observation where it ends.</summary>
+    private sealed record Edge(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Shown);
 
     private Dictionary<ulong, Node> _table = [];
     /// <summary>The records of enemy moves the states hold, each once, by hash.</summary>
@@ -145,8 +150,8 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
     /// <summary>
     /// The combat went on from the root by <paramref name="played"/>, to where its record of enemy moves is
     /// <paramref name="moves"/>: the root moves there, and its turn is searched again by <paramref name="search"/>, from
-    /// there. What it reaches stays with all that was found of it, each state with a line from the new root; the rest
-    /// goes. The seeded line stays if the combat went its way. The bound is the wins' the new root still reaches; where
+    /// there. What it reaches stays with all that was found of it, each state with a line from the new root that holds
+    /// the same copies of its cards (a state reached only otherwise is searched again); the rest goes. The seeded line stays if the combat went its way. The bound is the wins' the new root still reaches; where
     /// that is lower than before, a state whose turn was searched with a higher one is searched again, as one whose ends
     /// went since.
     /// </summary>
@@ -188,19 +193,26 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         (_best, _byFirst, _bounds) = (null, [], []);
         if (_seed is { } carried) Consider(carried.Line, carried.From);
         Expand(_root, search([new PlanJob([], _root.History, new Dictionary<string, int>(_bounds))], SlPlanner.Unlimited, int.MaxValue)[0]);
-        // A state a turn reached may have been dropped since, by the pick's HP (Purge).
+        // A state a turn reached may have been dropped since, by the pick's HP (Purge). A state is one key, the same cards
+        // whichever copy is where, but what was found of it plays the cards its own line left it with, by their uids: it
+        // stays on its line, or takes another that shows the same (Edge.Shown), in the order reached from the root; the
+        // turns only go forward, so every line goes back to the root. Reached only by lines that hold other copies, it is
+        // a state found anew.
         var kept = new Dictionary<ulong, Node>();
         var order = new List<Node> { _root };
+        var reached = new HashSet<Node> { _root };
         for (int i = 0; i < order.Count; i++)
             foreach (var edge in order[i].Edges ?? [])
-                if (_table.TryGetValue(edge.Key, out var next) && kept.TryAdd(edge.Key, next)) order.Add(next);
-        // A state whose line came through one that is gone takes the first state kept that reaches it, in the order
-        // reached from the root; the turns only go forward, so every line goes back to the root.
-        var reached = order.ToHashSet();
-        foreach (var node in order)
-            foreach (var edge in node.Edges ?? [])
-                if (kept.TryGetValue(edge.Key, out var next) && (next.Parent == null || !reached.Contains(next.Parent)))
-                    (next.Parent, next.From) = (node, edge);
+            {
+                if (kept.ContainsKey(edge.Key) || !_table.TryGetValue(edge.Key, out var next)) continue;
+                bool own = next.Parent != null && reached.Contains(next.Parent) && next.Parent.Edges!.Contains(next.From!);
+                if (!own && next.Shown != edge.Shown)
+                    next = new(next.Key, next.Value, next.Turns, next.History, next.Moves, ++_order, next.Reach, next.Potions, edge.Shown);
+                if (!own) (next.Parent, next.From) = (order[i], edge);
+                kept[edge.Key] = next;
+                order.Add(next);
+                reached.Add(next);
+            }
         _table = kept;
         _moves = order.Skip(1).GroupBy(n => n.Moves).ToDictionary(g => g.Key, g => g.First().History);
         _queue.Clear();
@@ -246,11 +258,11 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
                 continue;
             }
             ulong moves = ProtocolJson.Hash(end.History);
-            var edge = new Edge(end.Actions, end.Hashes, SlPlanner.Mix(end.Key, moves));
+            var edge = new Edge(end.Actions, end.Hashes, SlPlanner.Mix(end.Key, moves), end.Shown);
             node.Edges.Add(edge);
             if (_table.ContainsKey(edge.Key)) continue;
             if (!_moves.TryGetValue(moves, out var shared)) _moves[moves] = shared = end.History;
-            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), shared, moves, ++_order, end.Reach, end.Potions)
+            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), shared, moves, ++_order, end.Reach, end.Potions, end.Shown)
                 { Parent = node, From = edge };
             _table[edge.Key] = next;
             _queue.Enqueue(next, (-Worth(next), next.Order));

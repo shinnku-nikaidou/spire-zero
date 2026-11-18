@@ -26,10 +26,14 @@ public class SlPlannerTests
         private readonly string? _potion;
         private bool _held;
 
-        public Toy(int enemyHp = 24, string? potion = null)
+        /// <summary>Whether the cards left in hand stay there at the turn's end, under their uids.</summary>
+        private readonly bool _retain;
+
+        public Toy(int enemyHp = 24, string? potion = null, bool retain = false)
         {
             _enemyHp = enemyHp;
             _potion = potion;
+            _retain = retain;
             Reset();
         }
 
@@ -83,7 +87,7 @@ public class SlPlannerTests
             {
                 _hp -= Math.Max(0, Attack - _block);
                 (_block, _energy, _round) = (0, 2, _round + 1);
-                _hand = [];
+                if (!_retain) _hand = [];
                 Draw();
                 return;
             }
@@ -143,9 +147,9 @@ public class SlPlannerTests
 
     /// <summary>Plays the plan from the start, or after <paramref name="played"/>: each step at the observation it
     /// expects, to the end it claims.</summary>
-    private static void AssertReplays(SlPlan plan, int enemyHp = 24, IReadOnlyList<CombatAction>? played = null)
+    private static void AssertReplays(SlPlan plan, int enemyHp = 24, IReadOnlyList<CombatAction>? played = null, bool retain = false)
     {
-        var world = new Toy(enemyHp);
+        var world = new Toy(enemyHp, retain: retain);
         foreach (var action in played ?? []) world.Execute(action);
         var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
         var hashes = plan.Result.PlanHashes!;
@@ -565,9 +569,9 @@ public class SlPlannerTests
     }
 
     /// <summary>A solver's turn searches, each in a toy of its own where the combat stands after <paramref name="played"/>.</summary>
-    private static TurnSearcher ToySearcher(IReadOnlyList<CombatAction> played, int enemyHp = 24) => (jobs, nodes, keep) => [.. jobs.Select(job =>
+    private static TurnSearcher ToySearcher(IReadOnlyList<CombatAction> played, int enemyHp = 24, bool retain = false) => (jobs, nodes, keep) => [.. jobs.Select(job =>
     {
-        var world = new Toy(enemyHp);
+        var world = new Toy(enemyHp, retain: retain);
         foreach (var action in played.Concat(job.Path)) world.Execute(action);
         return new SlPlanner(Leaf).SearchTurn(world, job.History, nodes, keep, job.LifeBounds);
     })];
@@ -587,9 +591,9 @@ public class SlPlannerTests
     }
 
     /// <summary>A plan's value from its search's toy after <paramref name="played"/>, by trying every line.</summary>
-    private static double Best(IReadOnlyList<CombatAction> played, int enemyHp = 24)
+    private static double Best(IReadOnlyList<CombatAction> played, int enemyHp = 24, bool retain = false)
     {
-        var world = new Toy(enemyHp);
+        var world = new Toy(enemyHp, retain: retain);
         foreach (var action in played) world.Execute(action);
         return BruteForce(world, []);
     }
@@ -689,6 +693,27 @@ public class SlPlannerTests
         Assert.True(there.Proved);
         Assert.Equal(Best(off), there.Value, 9);
         AssertReplays(there, played: off);
+    }
+
+    [Fact]
+    public void TheSolversStatesStayOnLinesThatHoldTheSameCopiesOfACard()
+    {
+        // Cards left in hand stay: a turn that plays the first Strike and one that plays the second end in the same state
+        // by its key, holding the other copy, under its own uid. After the second, a state its turn was searched at by a
+        // line that played the first is searched again, so the plan plays the cards held.
+        const int Hp = 18;
+        var solver = new SlSolver([]);
+        solver.Run(ToySearcher([], Hp, retain: true), long.MaxValue);
+        var strikes = new Toy(Hp, retain: true).Observe().Hand.Where(c => c.Id == "S").ToList();
+        Assert.Equal(2, strikes.Count);
+        CombatAction[] gone = [CombatAction.Play(strikes[1].Uid!.Value, 1)];
+        solver.Advance(gone, Moves(gone), ToySearcher(gone, Hp, retain: true));
+        solver.Run(ToySearcher(gone, Hp, retain: true), long.MaxValue);
+        var plan = solver.Result(1);
+
+        Assert.True(plan.Proved);
+        Assert.Equal(Best(gone, Hp, retain: true), plan.Value, 9);
+        AssertReplays(plan, Hp, gone, retain: true);
     }
 
     [Fact]
