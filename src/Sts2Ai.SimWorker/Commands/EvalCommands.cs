@@ -115,8 +115,8 @@ internal static class GateCommand
 /// commit; the reports are paired by seed and judged together (<see cref="NetGate"/>). The challenger is the champion
 /// file's champion with the nets given (--value, --combat-net), and must be what played its reports. On a pass the
 /// champion file names the challenger: its options with the new nets where they are in weights/all, the challenger's
-/// reports and the gate; every other champion file of the folder takes the same nets (the environments share them) and
-/// loses its reports, which other nets played; and the characters' leaderboards are written again. --look prints the
+/// reports and the gate, and the characters' leaderboards are written again. Each environment has its own nets
+/// (plans/2026-11-18-1340-nosl-v0.md), so no other champion file changes. --look prints the
 /// verdict and writes nothing, and may pair reports of part of the seed set.
 /// </summary>
 internal static class PromoteCommand
@@ -198,16 +198,6 @@ internal static class PromoteCommand
         string since = DateTime.Now.ToString("yyyy-MM-dd");
         Write(championPath, file.Promoted(challenger.Name, options, since, theirs.ToDictionary(c => c.Key, c => c.Value.Path), gate));
         Console.WriteLine($"promoted: {championPath} now names {challenger.Name}");
-        // The environments share one V and one combat net: the folder's other champion files take the new ones.
-        string folder = Path.GetDirectoryName(championPath) is { Length: > 0 } named ? named : ".";
-        foreach (var path in Directory.GetFiles(folder, "*.json").Order())
-        {
-            if (Path.GetFullPath(path) == Path.GetFullPath(championPath)) continue;
-            var siblingFile = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(path));
-            var (sibling, siblingOptions) = With(path, siblingFile, nets);
-            Write(path, siblingFile.Promoted(sibling.Name, siblingOptions, since));
-            Console.WriteLine($"promoted: {path} now names {sibling.Name}, with no report of its own yet");
-        }
         foreach (var character in theirs.Keys) LeaderboardCommand.Write(character);
         return 0;
     }

@@ -13,9 +13,9 @@ value at a later state of such a run would hand the outcome back. So the trainin
 (the held-out runs, id % 5 == 0, are in neither), a V is trained on each fold alone (`v.train --fold`), and each fold's
 runs are labelled by the other fold's V.
 
-An SL run's event option played out as NoSL plays it (v/data.py) is labelled the same way from where its line left the
-room (`later`), not from its run's later decisions, which SL played: by the other fold's V, and for a held-out run by
-the mean of both, neither of which saw it (`attach_events`).
+An event option played out on the node's clone as NoSL plays it (v/data.py) is labelled the same way from where its
+line left the room (`later`), not from its run's later decisions, which followed the option taken: by the other fold's
+V, and for a held-out run by the mean of both, neither of which saw it (`attach_events`).
 """
 
 import array
@@ -51,7 +51,7 @@ def later(samples: list[dict], horizon: int) -> list[int | None]:
         if starts != sorted(starts):
             raise LearnError(f"run {key[1]} of log {key[0]} goes down a floor between its decisions")
         for k in ks:
-            if samples[k].get("event") in ("left", "ended"):  # an SL line's own end, not its run's (attach_events)
+            if samples[k].get("event") in ("left", "ended"):  # a line's own end, not its run's (attach_events)
                 continue
             j = bisect.bisect_left(starts, samples[k]["start"] + horizon)
             out[k] = own[j][1] if j < len(own) else None

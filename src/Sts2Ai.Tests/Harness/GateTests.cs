@@ -163,9 +163,5 @@ public class GateTests
         Assert.Equal(("SL", "new", "2026-02-02", "new.json"), (promoted.Env, promoted.Champion, promoted.Since, promoted.Reports["SILENT"]));
         Assert.Equal(options, promoted.Options);
         Assert.Equal(gate, ProtocolJson.Deserialize<ChampionFile>(ProtocolJson.Serialize(promoted)).Gate! with { Characters = gate.Characters });
-        // Another environment's file that takes the nets has no report of its own yet, and no gate.
-        var sibling = file.Promoted("new", options, "2026-02-02");
-        Assert.Empty(sibling.Reports);
-        Assert.Null(sibling.Gate);
     }
 }

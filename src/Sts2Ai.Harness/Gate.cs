@@ -163,17 +163,14 @@ public static class NetGate
 /// The champion of one environment, every character's, as <c>eval/champions/ENV.json</c> holds it:
 /// the run options that play it (<c>run --champion FILE</c>; a job gives its own character and ascension), its name as
 /// the reports show it, by character its report (a report is one character at one ascension), and the gate its nets
-/// passed (<c>promote</c>; none for a champion that took its nets from another environment's promotion).
+/// passed (<c>promote</c>; none in a file written by hand). Each environment has its own nets
+/// (plans/2026-11-18-1340-nosl-v0.md): a promotion changes its own environment's file only.
 /// </summary>
 public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options,
     IReadOnlyDictionary<string, string> Reports, string Since, NetGate.Result? Gate = null)
 {
-    /// <summary>
-    /// The file after a promotion: the challenger's name, options and reports, and the gate it passed. For another
-    /// environment's file that shares the nets, <paramref name="reports"/> and <paramref name="gate"/> are left out: its
-    /// old reports were played by other nets, and it has none of its own yet.
-    /// </summary>
+    /// <summary>The file after a promotion: the challenger's name, options and reports, and the gate it passed.</summary>
     public ChampionFile Promoted(string champion, IReadOnlyDictionary<string, string> options, string since,
-        IReadOnlyDictionary<string, string>? reports = null, NetGate.Result? gate = null) =>
-        new(Env, champion, options, reports ?? new Dictionary<string, string>(), since, gate);
+        IReadOnlyDictionary<string, string> reports, NetGate.Result gate) =>
+        new(Env, champion, options, reports, since, gate);
 }

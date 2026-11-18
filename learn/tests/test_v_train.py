@@ -349,8 +349,9 @@ def test_a_carried_v_values_a_run_alike_in_both_environments_and_with_an_option_
 
 
 def write_event_runs(tmp_path, runs=10):
-    """write_runs's runs with an event at their second decision: odd runs in NoSL, the option taken; even runs in SL,
-    three options played out, one leaving the room, one dying there and one starting a fight."""
+    """write_runs's runs with an event at their second decision: odd runs in NoSL self-play, three options played out,
+    one leaving the room (the one taken), one dying there and one starting a fight; even runs in SL, with a line as the
+    builds of 2026-11-17 logged there, which teaches nothing since each environment has its own nets."""
     lists = write_runs(tmp_path, runs)
     log = common.lists(lists)[0].split(",")[0]
     rows = [json.loads(line) for line in open(log)]
@@ -359,15 +360,15 @@ def write_event_runs(tmp_path, runs=10):
         if r["decision_id"] != 1:
             r["env"] = ("SL", "NoSL")[i % 2]
             continue
+        later = r["run_view"] | {"floor": r["run_view"]["floor"], "hp": 20}
         if i % 2:
-            r |= {"env": "NoSL", "event": [{"option": OPTION}]}
-        else:
-            later = r["run_view"] | {"floor": r["run_view"]["floor"], "hp": 20}
-            r["event"] = [
-                {"option": OPTION, "end": later, "ending": "left"},
+            r |= {"env": "NoSL", "event": [
+                {"option": OPTION, "end": later, "ending": "left", "taken": True},
                 {"option": OPTION | {"index": 1}, "end": r["run_view"] | {"hp": 0}, "ending": "died"},
                 {"option": OPTION | {"index": 2}, "ending": "fight"},
-            ]
+            ]}
+        else:
+            r["event"] = [{"option": OPTION, "end": later, "ending": "left"}]
     with open(log, "w") as f:
         f.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in rows)
     return lists
@@ -392,7 +393,7 @@ def test_event_options_give_samples_in_noSL_apart_from_their_runs_decisions(tmp_
     assert all(("view" in s) == data.held_out(s["run"]) for s in events)
 
 
-def test_an_sl_line_of_an_event_is_labelled_from_where_it_left_the_room_by_the_v_that_never_saw_its_run(tmp_path):
+def test_a_line_of_an_event_is_labelled_from_where_it_left_the_room_by_the_v_that_never_saw_its_run(tmp_path):
     lists = write_event_runs(tmp_path)
     nets = {}
     for f in bootstrap.FOLDS:

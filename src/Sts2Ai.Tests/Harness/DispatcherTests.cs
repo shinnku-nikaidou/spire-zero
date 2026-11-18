@@ -94,6 +94,57 @@ public class DispatcherTests
     public void RefusesNodeStepsInNoSL() =>
         Assert.Throws<InvalidOperationException>(() => Make(CombatRoute.Of("test", new EndTurns())).Steps(["event event:1"]));
 
+    /// <summary>A macro side that keeps the decisions it is given and takes the first legal action.</summary>
+    private sealed class Seen : IMacroPolicy, IChoicePolicy
+    {
+        public readonly List<MacroDecision> Decisions = [];
+
+        public MacroAnswer Choose(MacroDecision decision)
+        {
+            Decisions.Add(decision);
+            return new(decision.Legal[0]);
+        }
+
+        public ChoiceAnswer Choose(ChoiceDecision decision) => new([]);
+    }
+
+    private sealed class Unplayed : IMacroClone
+    {
+        public IReadOnlyList<Afterstate> After(IReadOnlyList<IReadOnlyList<MacroAction>> paths) => throw new InvalidOperationException("not played");
+    }
+
+    [Fact]
+    public void NoSlSelfPlayTakesNodesForItsEventLinesAlone()
+    {
+        NodeClone? made = null;
+        var macro = new Seen();
+        var dispatcher = new Dispatcher("run-1", PlayEnvironment.NoSL, new("test", (_, _, clone, _) =>
+        {
+            Assert.Null(clone);
+            return new(CombatAction.EndTurn, [], []);
+        }), new("l0", macro), new("l0", macro), log: true, clones: node =>
+        {
+            made = node;
+            return new Unplayed();
+        });
+        Assert.True(dispatcher.TakesNodes);
+        dispatcher.Checkpoint(new(0, "{}"));
+        dispatcher.Steps(["map map:0,1"]);
+        dispatcher.Choose(Decision(Fixtures.Slugs()));
+        var screen = new EventScreen { Id = "TOY", Options = [new() { Index = 0, Key = "A" }, new() { Index = 1, Key = "B" }], Finished = false };
+        var obs = new Observation { Run = Fixtures.Floor1(), Screen = screen };
+        dispatcher.Steps(["map map:0,1", "rewards reward:0"]);
+        dispatcher.Choose(new MacroDecision(Surfaces.Event, Fixtures.Acts("event:0", "event:1"), () => obs));
+        // The macro side gets the node's clone for the lines alone, never one its answer is valued on.
+        var given = macro.Decisions.Single();
+        Assert.Null(given.Clone);
+        Assert.NotNull(given.Lines);
+        Assert.True(made is { Save: "{}" } && made.Trace.SequenceEqual(["map map:0,1", "rewards reward:0"]));
+        // The option taken is logged, marked as taken; this side played no line out.
+        Assert.Equal([(0, true, (string?)null)], dispatcher.Log[^1].Event!.Select(l => (l.Option.Index, l.Taken == true, l.Ending)));
+        Assert.Throws<InvalidDataException>(() => dispatcher.Steps(null));
+    }
+
     private static readonly CardChoice Asked = new()
     {
         Options = [new CardView { Id = "A" }, new CardView { Id = "B" }, new CardView { Id = "C" }],

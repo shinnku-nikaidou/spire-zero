@@ -31,6 +31,9 @@ internal static class RunCommand
     private static readonly Option<bool> Obs = Opt.Of("--obs", false, "prints every observation");
     private static readonly Option<string?> Log = Opt.Maybe<string?>("--log", "writes Harness's decision log, one JSON line per decision");
     private static readonly Option<string?> Records = Opt.Maybe<string?>("--records", "writes one run record per line");
+    private static readonly Option<bool> EventLines = Opt.Of("--event-lines", false,
+        "NoSL self-play with --log (pimc, l0): each event option whose result its button does not show is also played out on the node's clone " +
+        "as NoSL plays it, for V's training; the answers never read the clone (plans/2026-11-18-1340-nosl-v0.md, 3.3)");
     private static readonly Option<string?> AutoWin = Opt.Maybe<string?>("--auto-win",
         "acts, numbered from 1 as the game shows them, such as 1,2: their plain monster fights, an event's included, are won at their start " +
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
@@ -42,7 +45,7 @@ internal static class RunCommand
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, AutoWin, Mode], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, EventLines, AutoWin, Mode], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -68,16 +71,20 @@ internal static class RunCommand
         using var logFile = r.GetValue(Log) is { } logPath ? new StreamWriter(logPath) { AutoFlush = true } : null;
         using var records = r.GetValue(Records) is { } recordsPath ? new StreamWriter(recordsPath) { AutoFlush = true } : null;
         bool log = check || logFile != null;
+        bool eventLines = r.GetValue(EventLines);
         var champion = Champion.Read(r);
         if (champion.Policy == "plan" && env != PlayEnvironment.SL) throw new CliException("plan plays in SL only (--env SL)");
-        using var workerPool = champion.Pool();
-        var harness = champion.Harness(workerPool, log);
+        if (eventLines && (env != PlayEnvironment.NoSL || !champion.LogsEventLines || !log))
+            throw new CliException("--event-lines is NoSL self-play's (--env NoSL, pimc and l0) and goes with --log or --check");
+        using var workerPool = champion.Pool(eventLines);
+        var harness = champion.Harness(workerPool, log, eventLines: eventLines);
         // --check plays each seed again over the wire, to a brain server in this process with the same champion, whose
         // decision log is compared too.
         Dispatcher? served = null;
         using var checkWire = check ? BrainConnection.InProcess(new BrainServer(hello => (served = harness(hello), champion.Shown))) : null;
         Func<Hello, IRunBrain> firstBrain = hello => new LocalBrain(harness(hello));
-        IRunBrain secondBrain(Hello hello) => WireBrain.Start(checkWire!.Wire, hello);
+        // The brain over the wire is the same champion's, which takes nodes as the one here does.
+        IRunBrain secondBrain(Hello hello) => WireBrain.Start(checkWire!.Wire, hello, nodes: env == PlayEnvironment.SL || eventLines);
         string character = Loadout.Character(r);
         var loadout = Loadout.Loadout(r);
 
@@ -254,7 +261,7 @@ internal static class RunCommand
         try
         {
             brain = brains(hello);
-            var export = env == PlayEnvironment.SL ? new NodeExport(brain) : null;
+            var export = brain.TakesNodes ? new NodeExport(brain) : null;
             Action<Observation>? observed = !observe ? null : obs =>
             {
                 var json = ProtocolJson.Serialize(obs);

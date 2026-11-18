@@ -42,8 +42,9 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Nodes">Where the SL planner planned: the actions its search simulated
 /// (<see cref="CombatDecisionResult.Nodes"/>); absent otherwise.</param>
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
-/// <param name="Event">At an event, for V's training in NoSL: in SL each option whose result its button does not show
-/// with where NoSL's line from it ends (<see cref="MacroAnswer.Event"/>), in NoSL the option taken if it is one.</param>
+/// <param name="Event">NoSL, at an event, for V's training: in self-play each option whose result its button does not
+/// show with where NoSL's line from it ends (<see cref="MacroAnswer.Event"/>), and the option taken if it is one
+/// (<see cref="EventLine.Taken"/>).</param>
 public sealed record DecisionEntry(
     string Run, int DecisionId, string Env, string Surface, string Brain, string ObsHash, int Legal, string Chosen,
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
@@ -61,9 +62,14 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// A card prompt asked during a combat is the combat brain's, as a decision of the combat (<see cref="CombatRoute"/>);
 /// any other goes to the macro side.
 ///
-/// In SL the host also sends the current node's checkpoint and each decision taken in it, which
-/// make the node's clone for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it
-/// opened at each of its decisions (<see cref="MacroDecision.Clone"/>). In NoSL they are refused.
+/// In SL the host also sends the current node's checkpoint and each decision taken in it, which make the node's clone
+/// for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it opened at each of its
+/// decisions (<see cref="MacroDecision.Clone"/>).
+///
+/// In NoSL self-play with <paramref name="clones"/> the host sends them too, for the log alone: at an event the macro
+/// side gets the node's clone as <see cref="MacroDecision.Lines"/>, on which it plays the options out for V's training
+/// (<see cref="Sts2Ai.Brain.Macro.EventLines"/>); no answer is valued on it, and the combat brain gets none. Without
+/// <paramref name="clones"/> NoSL refuses them (<see cref="TakesNodes"/>).
 ///
 /// With <paramref name="explain"/> (a host that shows the answers: the mod), each map option the macro brain scored
 /// carries the route it would take after it.
@@ -217,6 +223,7 @@ public sealed class Dispatcher(
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         if (MacroClone() is { } node) decision = decision.With(node);
+        else if (LinesClone(decision) is { } lines) decision = decision.WithLines(lines);
         var answer = macro.Policy.Choose(decision);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (!decision.Legal.Contains(answer.Action)) throw new InvalidOperationException($"{macro.Brain} chose {answer.Action} on {decision.Surface}, which is not legal");
@@ -227,41 +234,61 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), decision.Surface, macro.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 answer.Action.ToString(), plan, null, null, seed, ms, RunView: decision.Observation.Run,
-                Explored: Mark(answer.Explored), Event: answer.Event ?? Taken(decision.Observation.Screen, answer.Action)));
+                Explored: Mark(answer.Explored), Event: Events(decision.Observation.Screen, answer)));
         return (answer, new(macro.Brain, plan, answer.Scored.Count > 0 ? answer.Scored : null));
     }
 
-    /// <summary>NoSL: the event option taken, as its button shows it, if its result was not shown (it was valued
-    /// pending, <see cref="ScreenAfterstates.Pends"/>): V learns it from what followed. Null in SL and otherwise.</summary>
-    private IReadOnlyList<EventLine>? Taken(ScreenView screen, MacroAction action) =>
-        env == PlayEnvironment.NoSL && screen is EventScreen events && ScreenAfterstates.Pends(events, action)
-            ? [new EventLine(events.Options.First(o => o.Index == action.Index))] : null;
+    /// <summary>
+    /// NoSL, at an event, for the log: the lines of the options played out (<see cref="MacroAnswer.Event"/>), and the
+    /// option taken if its result was not shown (it was valued pending, <see cref="ScreenAfterstates.Pends"/>), marked
+    /// <see cref="EventLine.Taken"/>: V learns it from what followed in the run. Null in SL and otherwise.
+    /// </summary>
+    private IReadOnlyList<EventLine>? Events(ScreenView screen, MacroAnswer answer)
+    {
+        if (env != PlayEnvironment.NoSL || screen is not EventScreen events) return null;
+        var lines = answer.Event ?? [];
+        if (!ScreenAfterstates.Pends(events, answer.Action)) return lines.Count > 0 ? lines : null;
+        int taken = answer.Action.Index;
+        return lines.Any(l => l.Option.Index == taken)
+            ? [.. lines.Select(l => l.Option.Index == taken ? l with { Taken = true } : l)]
+            : [.. lines, new EventLine(events.Options.First(o => o.Index == taken), Taken: true)];
+    }
 
-    /// <summary>SL: a new checkpoint (one of the game's saves); the decisions after it follow.</summary>
+    /// <summary>
+    /// Whether the host sends the node's checkpoints and the steps since (<see cref="Checkpoint"/>, <see cref="Steps"/>):
+    /// in SL always; in NoSL only for the event lines of self-play's log (<c>clones</c>).
+    /// </summary>
+    public bool TakesNodes => env == PlayEnvironment.SL || clones != null;
+
+    /// <summary>A new checkpoint (one of the game's saves); the decisions after it follow.</summary>
     public void Checkpoint(NodeCheckpoint checkpoint)
     {
-        if (env != PlayEnvironment.SL) throw new InvalidOperationException($"a node checkpoint in {env}");
+        if (!TakesNodes) throw new InvalidOperationException($"a node checkpoint in {env}");
         if (checkpoint.NodeIndex <= (_node?.NodeIndex ?? -1)) throw new InvalidDataException($"node {checkpoint.NodeIndex} after node {_node!.NodeIndex}");
         _node = checkpoint;
         _nodeTrace = [];
     }
 
     /// <summary>
-    /// The steps taken since the latest checkpoint, whole, before a decision (<see cref="DecisionRequest.Trace"/>): an SL
-    /// decision always comes with them, a NoSL one never.
+    /// The steps taken since the latest checkpoint, whole, before a decision (<see cref="DecisionRequest.Trace"/>): a
+    /// decision comes with them when the host sends nodes (<see cref="TakesNodes"/>), and never otherwise.
     /// </summary>
     public void Steps(IReadOnlyList<string>? steps)
     {
-        if (env == PlayEnvironment.SL) _nodeTrace = steps ?? throw new InvalidDataException("an SL decision without the steps since its checkpoint");
+        if (TakesNodes) _nodeTrace = steps ?? throw new InvalidDataException($"a decision in {env} without the steps since its checkpoint");
         else if (steps != null) throw new InvalidOperationException($"node steps in {env}");
     }
 
     /// <summary>SL with <c>clones</c>: the node's clone at this decision, for the macro side.</summary>
     private IMacroClone? MacroClone() => env == PlayEnvironment.SL && clones != null ? clones(Clone()) : null;
 
+    /// <summary>NoSL with <c>clones</c>, at an event: the node's clone for the log's event lines alone.</summary>
+    private IMacroClone? LinesClone(MacroDecision decision) =>
+        env == PlayEnvironment.NoSL && clones != null && decision.Observation.Screen is EventScreen ? clones(Clone()) : null;
+
     private NodeClone Clone()
     {
-        var node = _node ?? throw new InvalidOperationException("an SL decision before any node checkpoint");
+        var node = _node ?? throw new InvalidOperationException($"a decision in {env} before any node checkpoint");
         return new(node.Checkpoint, [.. _nodeTrace], node.AutoWin);
     }
 

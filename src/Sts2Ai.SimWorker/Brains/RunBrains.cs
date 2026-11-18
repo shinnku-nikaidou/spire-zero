@@ -23,10 +23,14 @@ internal interface IRunBrain : ICombatPolicy, IChoicePolicy, IMacroPolicy
     /// <summary>Harness's <see cref="Dispatcher.Search"/>, when Harness is in this process.</summary>
     PlanTally? Search { get; }
 
-    /// <summary>SL: a new checkpoint.</summary>
+    /// <summary>Whether it takes the node's checkpoints and steps (<see cref="Dispatcher.TakesNodes"/>): in SL, and in
+    /// NoSL self-play's event lines.</summary>
+    bool TakesNodes { get; }
+
+    /// <summary>With <see cref="TakesNodes"/>: a new checkpoint.</summary>
     void Checkpoint(NodeCheckpoint checkpoint);
 
-    /// <summary>SL: the steps taken since the latest checkpoint, whole, before each decision.</summary>
+    /// <summary>With <see cref="TakesNodes"/>: the steps taken since the latest checkpoint, whole, before each decision.</summary>
     void Steps(IReadOnlyList<string> steps);
 
     /// <summary>Once, when the run is over; <paramref name="failure"/> if it failed.</summary>
@@ -41,6 +45,7 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
     public IReadOnlyList<DecisionEntry> Log => harness.Log;
     public int Replans => harness.Replans;
     public PlanTally? Search => harness.Search;
+    public bool TakesNodes => harness.TakesNodes;
     public CombatAction Choose(CombatDecision decision) => harness.Choose(decision);
     public ChoiceAnswer Choose(ChoiceDecision decision) => harness.Choose(decision);
     public MacroAnswer Choose(MacroDecision decision) => harness.Choose(decision);
@@ -50,8 +55,9 @@ internal sealed class LocalBrain(Dispatcher harness) : IRunBrain
 }
 
 /// <summary>
-/// SL: before each decision, tells the brain the current node's checkpoint on arrival if it has not had it, then the
-/// decisions taken in the node since, card prompts included. <see cref="Session"/> is the run, set once it has started.
+/// For a brain that takes nodes (<see cref="IRunBrain.TakesNodes"/>): before each decision, tells it the current node's
+/// checkpoint on arrival if it has not had it, then the decisions taken in the node since, card prompts included.
+/// <see cref="Session"/> is the run, set once it has started.
 /// </summary>
 internal sealed class NodeExport(IRunBrain brain) : IRunBrain
 {
@@ -65,6 +71,7 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
     public IReadOnlyList<DecisionEntry> Log => brain.Log;
     public int Replans => brain.Replans;
     public PlanTally? Search => brain.Search;
+    public bool TakesNodes => brain.TakesNodes;
 
     public CombatAction Choose(CombatDecision decision)
     {
@@ -110,23 +117,25 @@ internal sealed class NodeExport(IRunBrain brain) : IRunBrain
 internal sealed class WireBrain : IRunBrain
 {
     private readonly WireStream _wire;
-    private readonly bool _sl;
+    private readonly bool _nodes;
     private readonly Dictionary<string, int> _brains = [];
     private long _next;
     private (long Id, string Action)? _pending;
     private IReadOnlyList<string>? _steps;
 
-    private WireBrain(WireStream wire, string champion, bool sl)
+    private WireBrain(WireStream wire, string champion, bool nodes)
     {
         _wire = wire;
         Champion = champion;
-        _sl = sl;
+        _nodes = nodes;
     }
 
-    public static WireBrain Start(WireStream wire, Hello hello)
+    /// <param name="nodes">Whether the brain at the other end takes the node's checkpoints and steps
+    /// (<see cref="IRunBrain.TakesNodes"/>).</param>
+    public static WireBrain Start(WireStream wire, Hello hello, bool nodes)
     {
         wire.Send(hello);
-        return new WireBrain(wire, wire.Expect<Ready>().Champion, hello.Env == nameof(PlayEnvironment.SL));
+        return new WireBrain(wire, wire.Expect<Ready>().Champion, nodes);
     }
 
     public string Champion { get; }
@@ -134,6 +143,7 @@ internal sealed class WireBrain : IRunBrain
     public IReadOnlyList<DecisionEntry> Log => [];
     public int Replans => 0;
     public PlanTally? Search => null;
+    public bool TakesNodes => _nodes;
 
     /// <summary>With the live combat too, as the mod sends it: the brain searches on it in the engine (SL's plan as it
     /// is, NoSL's pimc with what the player cannot see drawn again).</summary>
@@ -171,7 +181,7 @@ internal sealed class WireBrain : IRunBrain
         Report(null);
         long id = _next++;
         string hash = DecisionRequest.HashOf(obs);
-        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal, export, _sl ? _steps ?? [] : null));
+        _wire.Send(new DecisionRequest(id, hash, surface, obs, legal, export, _nodes ? _steps ?? [] : null));
         var answer = _wire.Expect<Recommendation>();
         if (answer.DecisionId != id || answer.ObsHash != hash)
             throw new InvalidDataException($"a recommendation for decision {answer.DecisionId} ({answer.ObsHash}), not {id} ({hash})");

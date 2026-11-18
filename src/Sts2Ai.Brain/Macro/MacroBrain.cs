@@ -23,9 +23,10 @@ namespace Sts2Ai.Brain.Macro;
 /// </summary>
 /// <param name="hostSaysPlayed">Whether the host says which answers it played (<see cref="Played"/>): the mod, whose
 /// player may act instead of an answer. Otherwise every answer is played.</param>
-/// <param name="eventLines">SL, logging for V's training in NoSL: V in NoSL, with which each event option whose result
-/// its button does not show is played out on the node's clone as NoSL plays it (<see cref="EventLines"/>,
-/// <see cref="MacroAnswer.Event"/>); null for none.</param>
+/// <param name="eventLines">NoSL self-play, logging for V's training: V in NoSL, with which each event option whose
+/// result its button does not show is played out on the clone a decision brings for it (<see cref="MacroDecision.Lines"/>,
+/// <see cref="EventLines"/>, <see cref="MacroAnswer.Event"/>); null for none. The lines are logged, never valued for the
+/// answer.</param>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
     bool hostSaysPlayed = false, IRunValue? eventLines = null)
     : IMacroPolicy, IChoicePolicy
@@ -73,9 +74,11 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         else pick = _draws.Pick(values, ref explored);
         var option = options[pick];
         _opened = option.Opens;
-        // The lines are the decided states' as the search saw them: before this one is counted as decided.
-        var lines = eventLines != null && decision.Clone is { } clone && obs.Screen is EventScreen
+        // The answer is taken: the lines, played out on the clone for the log only, cannot change it. They see the
+        // states decided before this one, which is counted as decided after them.
+        var lines = eventLines != null && decision.Lines is { } clone && obs.Screen is EventScreen
             ? new EventLines(eventLines, clone, _decided).All(Root(decision), decision.Legal) : null;
+        if (decision.Lines != null) _decided.Add(CloneSearch.Key(Root(decision)));
         ulong? state = decision.Clone != null ? Answered(CloneSearch.Key(Root(decision))) : null;
         return new(option.Action, explored, explored ? [] : Rank(options.Select(o => (o.Action, o.Value, o.Line)), option.Action), state,
             lines is { Count: > 0 } ? lines : null);

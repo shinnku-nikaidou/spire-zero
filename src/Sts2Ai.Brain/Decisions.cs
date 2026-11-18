@@ -35,20 +35,32 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 /// <summary>
 /// What a macro policy gets at each out-of-combat decision: the surface, its legal actions ("map:3,5", "reward:0",
 /// "leave", ...), and the observation on request. In SL, Harness may add the
-/// node's clone at the decision (<paramref name="clone"/>).
+/// node's clone at the decision (<paramref name="clone"/>); in NoSL self-play, at an event, the node's clone for the
+/// log's event lines alone (<paramref name="lines"/>).
 /// </summary>
-public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> legal, Func<Observation> observe, IMacroClone? clone = null)
+public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> legal, Func<Observation> observe, IMacroClone? clone = null,
+    IMacroClone? lines = null)
 {
     private Observation? _observation;
 
     public string Surface { get; } = surface;
     public IReadOnlyList<MacroAction> Legal { get; } = legal;
 
-    /// <summary>SL: the node's clone at this decision; null in NoSL.</summary>
+    /// <summary>SL: the node's clone at this decision, which the answer is valued on; null in NoSL.</summary>
     public IMacroClone? Clone { get; } = clone;
+
+    /// <summary>
+    /// NoSL self-play at an event: the node's clone on which each event option is played out as NoSL plays it, for
+    /// V's training (<see cref="Macro.EventLines"/>). Nothing valued for the answer may read it: the answer is NoSL's,
+    /// from the screen. Null otherwise.
+    /// </summary>
+    public IMacroClone? Lines { get; } = lines;
 
     /// <summary>The same decision with <paramref name="node"/>'s clone.</summary>
     public MacroDecision With(IMacroClone node) => new(Surface, Legal, () => Observation, node);
+
+    /// <summary>The same decision with <paramref name="node"/>'s clone for the event lines alone.</summary>
+    public MacroDecision WithLines(IMacroClone node) => new(Surface, Legal, () => Observation, lines: node);
 
     /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
     public Observation Observation => _observation ??= observe();
@@ -95,8 +107,8 @@ public interface IMacroClone
 /// first; none from a policy that values nothing, or for an answer that was drawn.</param>
 /// <param name="State">SL: the state the answer was given at, as the node's clone keys it, for a host that says which
 /// answers it played (<see cref="IMacroPolicy.Played"/>); null for a policy that keeps no states.</param>
-/// <param name="Event">SL, at an event, for a log: where each option whose result its button does not show ends,
-/// played out on the node's clone with NoSL's decisions after it (<see cref="Macro.EventLines"/>); null otherwise.</param>
+/// <param name="Event">NoSL self-play, at an event, for a log: where each option whose result its button does not show
+/// ends, played out on the node's clone with NoSL's decisions after it (<see cref="Macro.EventLines"/>); null otherwise.</param>
 public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IReadOnlyList<Candidate>? Scored = null, ulong? State = null,
     IReadOnlyList<EventLine>? Event = null)
 {
@@ -104,16 +116,18 @@ public sealed record MacroAnswer(MacroAction Action, bool Explored = false, IRea
 }
 
 /// <summary>
-/// An event's option as V learns it in NoSL (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2): its button, and in SL
-/// where it ends played out on the node's clone with NoSL's decisions after it. NoSL logs the option it took, with no end.
+/// An event's option as V learns it in NoSL (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2;
+/// plans/2026-11-18-1340-nosl-v0.md, 3.3), as NoSL's self-play logs it: its button; where it ends, played out on the
+/// node's clone with NoSL's decisions after it; and whether it is the option the run took.
 /// </summary>
 /// <param name="Option">The option as its button shows it.</param>
 /// <param name="End">The run where the option's line ends: the room left for the map (<paramref name="Ending"/> "left"),
 /// or the run over ("died"); null where it ends otherwise.</param>
 /// <param name="Ending">How the line ends: "left", "died", "won", "fight" (a combat starts: the combat net values that,
 /// not V), "again" (back at a state already met or decided), "long" (past <see cref="Macro.EventLines.MaxSteps"/>
-/// answers); null in NoSL.</param>
-public sealed record EventLine(EventOptionView Option, RunView? End = null, string? Ending = null);
+/// answers); null for an option not played out.</param>
+/// <param name="Taken">True for the option the run took (V learns it from what followed in the run); null otherwise.</param>
+public sealed record EventLine(EventOptionView Option, RunView? End = null, string? Ending = null, bool? Taken = null);
 
 /// <summary>A choice policy's answer to a card prompt.</summary>
 /// <param name="Picks">Indexes into <see cref="CardChoice.Options"/>; must satisfy <see cref="CardChoice.Accepts"/>.</param>

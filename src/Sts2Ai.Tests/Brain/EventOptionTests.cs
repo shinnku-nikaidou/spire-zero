@@ -1,12 +1,11 @@
 using Sts2Ai.Brain;
-using Sts2Ai.Brain.Combat;
 using Sts2Ai.Brain.Macro;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests.Brain;
 
-/// <summary>NoSL's event options valued pending, and SL's lines of them played out as NoSL plays them
-/// (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2).</summary>
+/// <summary>NoSL's event options valued pending, and its self-play's lines of them played out as NoSL plays them on the
+/// node's clone (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2; plans/2026-11-18-1340-nosl-v0.md, 3.3).</summary>
 public class EventOptionTests
 {
     /// <summary>A V that is the sum of what each relic is worth, a potion 0.1 each, and an option pending by its key.</summary>
@@ -90,20 +89,31 @@ public class EventOptionTests
         Assert.Equal(("died", 0), (lines[2].Ending, lines[2].End!.Hp));
     }
 
-    /// <summary>A combat leaf that values every fight at nothing.</summary>
-    private sealed class Even : ICombatLeaf
-    {
-        public LeafOutcome Outcome(CombatStatus status, CombatObservation obs, RunView run, IReadOnlyList<EnemyTurns> history) => new(0, 0, 0);
-    }
-
     [Fact]
-    public void SlLogsTheLinesOfAnEventsOptionsOnlyWhenAskedTo()
+    public void NoSlLogsTheLinesOfAnEventsOptionsOnlyWhenAskedTo()
     {
         var toy = new Toy();
         var root = toy.After([[]])[0];
-        MacroDecision Decision() => new(root.Surface!, root.Legal, () => new Observation { Run = root.Run, Screen = root.Screen! }, toy);
-        Assert.Null(new MacroBrain(V, fights: new Even()).Choose(Decision()).Event);
-        var answer = new MacroBrain(V, fights: new Even(), eventLines: V).Choose(Decision());
+        MacroDecision Decision() => new(root.Surface!, root.Legal, () => new Observation { Run = root.Run, Screen = root.Screen! }, lines: toy);
+        Assert.Null(new MacroBrain(V).Choose(Decision()).Event);
+        var answer = new MacroBrain(V, eventLines: V).Choose(Decision());
         Assert.Equal(3, answer.Event!.Count);
+    }
+
+    [Fact]
+    public void TheLinesClonesTrueResultsNeverChangeNoSlsAnswer()
+    {
+        // From the screen the three options pend; the lines play them out on the clone, where each ends otherwise.
+        // NoSL's answer is the screen's: the same with the lines or without, valued the same, with no clone state kept.
+        var toy = new Toy();
+        var root = toy.After([[]])[0];
+        var obs = new Observation { Run = root.Run, Screen = root.Screen! };
+        var plain = new MacroBrain(V).Choose(new MacroDecision(root.Surface!, root.Legal, () => obs));
+        var logged = new MacroBrain(V, eventLines: V).Choose(new MacroDecision(root.Surface!, root.Legal, () => obs, lines: toy));
+        Assert.Equal(plain.Action, logged.Action);
+        Assert.Equal(plain.Scored, logged.Scored);
+        Assert.Equal(plain.Explored, logged.Explored);
+        Assert.Null(logged.State);
+        Assert.Equal(3, logged.Event!.Count);
     }
 }

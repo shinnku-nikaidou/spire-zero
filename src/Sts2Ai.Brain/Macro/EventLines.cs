@@ -3,16 +3,17 @@ using Sts2Ai.Protocol;
 namespace Sts2Ai.Brain.Macro;
 
 /// <summary>
-/// SL, for V's training in NoSL (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2): where an event's option ends when
-/// NoSL takes it. The option is played on the node's clone, and every decision after it inside the room (an event's
-/// next page, a card prompt, a reward) is answered as NoSL answers it: from what the screen shows, with
-/// <paramref name="noSl"/>, V in NoSL, and no exploring. The line ends where the room is left for the map, or where the
-/// run ends; V's label for the option is V in NoSL there. A line that starts a combat, comes back to a state already
-/// met or decided, or runs past <see cref="MaxSteps"/> answers gives no end: V learns no label from it.
+/// NoSL self-play, for V's training (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2; plans/2026-11-18-1340-nosl-v0.md,
+/// 3.3): where an event's option ends when NoSL takes it, every option the run could have taken. The option is played
+/// on the node's clone, which the simulator has and NoSL's own answers never read, and every decision after it inside
+/// the room (an event's next page, a card prompt, a reward) is answered as NoSL answers it: from what the screen
+/// shows, with <paramref name="noSl"/>, V in NoSL, and no exploring. The line ends where the room is left for the map,
+/// or where the run ends; V's label for the option is V in NoSL there. A line that starts a combat, comes back to a
+/// state already met or decided, or runs past <see cref="MaxSteps"/> answers gives no end: V learns no label from it.
 ///
-/// SL's own search takes the best of every answer after an option, each played for real; a later step whose result
-/// is hidden (a card to transform) would then be the best of several true results, which NoSL cannot have. So the
-/// line is NoSL's, not SL's.
+/// The line is NoSL's, not SL's: SL's search takes the best of every answer after an option, each played for real, and
+/// a later step whose result is hidden (a card to transform) would then be the best of several true results, which
+/// NoSL cannot have.
 /// </summary>
 /// <param name="decided">The keys of the states decided before the event's decision (<see cref="CloneSearch.Key"/>).</param>
 public sealed class EventLines(IRunValue noSl, IMacroClone clone, IReadOnlySet<ulong> decided)

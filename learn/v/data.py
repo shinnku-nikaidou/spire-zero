@@ -10,14 +10,17 @@ V reads when it values a map option, which no logged view shows.
 A run is read by the simulator's code, not here (common.Encoder): its tokens and its numbers, and a map move's
 afterstate, are what RunNet feeds V in play, each in its line's environment (`env`: a NoSL run carries env:NoSL).
 
-Event options (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2) teach V in NoSL what an option whose result its button
-does not show is worth, read with the option pending (RunNet.PendingOf), in NoSL. Two kinds of sample, apart from the
-decisions (`event`, and each weighs EVENT_WEIGHT of one decision of its run, not counted among them):
-- NoSL's runs: the option taken, with the run's own outcome, as a map move's afterstate is;
-- SL's runs: every such option of an event, played out on the node's clone as NoSL plays it to where the room is left
-  (EventLines). One whose line left the room is labelled from there by a frozen V in NoSL (`later`, which v/bootstrap.py
-  values: without --bootstrap these are left out); one whose run ended there died on that floor; one whose line started
-  a combat, came back or ran long gives no sample.
+Event options (plans/2026-11-17-0306-nosl-shared-nets.md, 3.2; plans/2026-11-18-1340-nosl-v0.md, 3.3) teach V in
+NoSL what an option whose result its button does not show is worth, read with the option pending (RunNet.PendingOf), in
+NoSL. NoSL's logs give two kinds of sample, apart from the decisions (`event`, and each weighs EVENT_WEIGHT of one
+decision of its run, not counted among them):
+- the option taken (`taken`), with the run's own outcome, as a map move's afterstate is;
+- in self-play (run --event-lines), every such option of an event, played out on the node's clone as NoSL plays it to
+  where the room is left (EventLines). One whose line left the room is labelled from there by a frozen V in NoSL
+  (`later`, which v/bootstrap.py values: without --bootstrap these are left out); one whose run ended there died on
+  that floor; one whose line started a combat, came back or ran long gives no sample.
+SL's logs give none: the lines builds of 2026-11-17 logged there taught the pair both environments shared then, and
+since 2026-11-18 each has its own.
 """
 
 import functools
@@ -31,7 +34,7 @@ from workers import each
 AUX = 6  # the next combats whose HP cost the second head learns
 DECISION = re.compile(r'\{"run":"\w+","decision_id":(\d+)')  # a log line's decision number in its run
 EVENT_WEIGHT = 1.0  # an event option's sample, in decisions of its run
-ENDS = {"left", "died", "won"}  # how an SL line of an event option ends that gives a sample (EventLine.Ending)
+ENDS = {"left", "died", "won"}  # how a line of an event option ends that gives a sample (EventLine.Ending)
 
 
 def held_out(run_id: str) -> bool:
@@ -105,32 +108,35 @@ def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[d
             # own: the decision's own view, which a multi-step target may start from (v/bootstrap.py)
             samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt, "decision": decision, "own": x is s, "env": env})
         for option, answer in zip(logged.get("event", []) if logged else [], read.get("event", []), strict=True):
-            e = event_sample(run, env, answer, floors, r["floor"], kind)
-            if e is None:
-                continue
-            if held_out(run):
-                e["view"] = pack(logged["run_view"] | {"pending": option["option"]})
-            samples.append(e | {"key": (i, run), "floor": r["floor"], "next": [], "decision": decision, "own": False})
+            for e in event_samples(run, env, option, answer, floors, r["floor"], kind):
+                if held_out(run):
+                    e["view"] = pack(logged["run_view"] | {"pending": option["option"]})
+                samples.append(e | {"key": (i, run), "floor": r["floor"], "next": [], "decision": decision, "own": False})
     return samples, list(runs.values())
 
 
-def event_sample(run: str, env: str, answer: dict, floors: int, reached: int, kind: str) -> dict | None:
-    """An event option's sample (the module's doc), from the encoder's answer for it: the run with the option pending
-    in NoSL, and in SL where its line ended. None for a line that gives none."""
-    if env == "NoSL":  # the option taken: the run's own outcome
-        return sample(run, answer["run"], floors, reached, kind) | {"env": "NoSL", "event": "taken", "pending": True}
-    if answer.get("ending") not in ENDS:
-        return None
+def event_samples(run: str, env: str, option: dict, answer: dict, floors: int, reached: int, kind: str) -> list[dict]:
+    """An event option's samples (the module's doc), from its logged line (`option`) and the encoder's answer for it:
+    the run with the option pending, in NoSL; if it was taken, labelled by the run's own outcome, and if its line was
+    played out, by where the line ended. None from SL's logs."""
+    if env != "NoSL":
+        return []
+    out = []
+    if option.get("taken"):
+        out.append(sample(run, answer["run"], floors, reached, kind) | {"env": "NoSL", "event": "taken", "pending": True})
+    ending = answer.get("ending")
+    if ending not in ENDS:
+        return out
     end = answer["end"]
-    end_floor = int(end["state"]["floor"])
-    if answer["ending"] != "left":  # the run ended in the room
-        ended = {"died": "died", "won": "won"}[answer["ending"]]
-        return sample(run, answer["run"], floors, end_floor, ended) | {"env": "NoSL", "event": "ended", "pending": True}
+    if ending != "left":  # the run ended in the room
+        out.append(sample(run, answer["run"], floors, int(end["state"]["floor"]), ending) | {"env": "NoSL", "event": "ended", "pending": True})
+        return out
     later = sample(run, end, floors)
-    return sample(run, answer["run"], floors) | {
+    out.append(sample(run, answer["run"], floors) | {
         "env": "NoSL", "event": "left", "pending": True,
         "later": {"tokens": later["tokens"], "state": later["state"], "start": later["start"]},
-    }
+    })
+    return out
 
 
 def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -> tuple[list[dict], list[dict]]:

@@ -610,6 +610,8 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
                     options |= {"macro-explore": f"{tau:g}"} if tau else {}
                     options |= {"auto-win": ",".join(map(str, sorted(g["auto_win"])))} if g["auto_win"] else {}
                     options |= {"mode": g["mode"]} if g.get("mode") else {}
+                    # NoSL self-play plays every event option out on the node's clone for V's training (run --event-lines)
+                    options |= {"event-lines": "true"} if env == "nosl" else {}
                     start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + used[character]
                     used[character] += count
                     jobs.append({"job": job, "env": env, "character": character, "asc": asc, "game": row["game"], "eps": eps, "tau": tau,
