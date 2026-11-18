@@ -194,6 +194,7 @@ pub fn start(history: Arc<History>) -> TurnEnd {
         reach: 0,
         potions: String::new(),
         shown: 0,
+        exact: 0,
     }
 }
 

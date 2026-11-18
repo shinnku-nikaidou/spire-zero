@@ -297,6 +297,7 @@ impl WorldSearch<'_> {
                     reach: 0,
                     potions: String::new(),
                     shown: state.hash,
+                    exact: 0,
                 })
             })?;
             firsts.push(First {

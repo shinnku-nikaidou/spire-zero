@@ -58,6 +58,9 @@ pub struct TurnEnd {
     pub potions: String,
     /// The hash of the observation at the state.
     pub shown: u64,
+    /// The world at the state exactly (`State::exact`), which the solver moves a state to another line by; 0 for a line
+    /// whose states no solver keeps (one read from the C# side, PIMC's).
+    pub exact: u64,
 }
 
 /// C#: TurnSearch.
@@ -151,6 +154,7 @@ struct Ended {
     hashes: Vec<u64>,
     key: u64,
     shown: u64,
+    exact: u64,
     /// At the next turn's start, the key of the state with every potion thrown away; 0 once the combat is over.
     bare: u64,
 }
@@ -167,6 +171,7 @@ struct Priced {
     life: i32,
     reach: i32,
     shown: u64,
+    exact: u64,
 }
 
 impl Ended {
@@ -183,6 +188,7 @@ impl Ended {
             key: self.key,
             bare: self.bare,
             shown: self.shown,
+            exact: self.exact,
         }
     }
 }
@@ -202,6 +208,7 @@ impl Priced {
             life: self.life,
             reach: self.reach,
             shown: self.shown,
+            exact: self.exact,
         }
     }
 }
@@ -260,6 +267,7 @@ fn end_of(leaf: &dyn Leaf, history: &Arc<History>, state: &mut State, actions: &
         hashes: hashes.to_vec(),
         key: key_of(state),
         shown: state.hash,
+        exact: state.exact(),
         bare: 0,
     };
     let outcome = leaf.outcome(&ended.state)?;
@@ -336,6 +344,7 @@ impl Dfs<'_> {
                 hashes: self.hashes.clone(),
                 key: 0,
                 shown: state.hash,
+                exact: state.hash,
                 bare: 0,
             };
             self.ended.push(ended);
@@ -361,6 +370,7 @@ impl Dfs<'_> {
             hashes: self.hashes.clone(),
             key,
             shown: state.hash,
+            exact: state.exact(),
             bare,
         };
         self.ended.push(ended);

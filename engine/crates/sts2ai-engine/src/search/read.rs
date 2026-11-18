@@ -109,6 +109,7 @@ pub fn end(json: &[u8]) -> Result<TurnEnd, String> {
         reach: end.reach,
         potions: end.potions,
         shown: end.shown,
+        exact: 0,
     })
 }
 

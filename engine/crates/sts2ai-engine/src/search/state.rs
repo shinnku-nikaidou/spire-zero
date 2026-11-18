@@ -323,6 +323,48 @@ impl State {
     pub fn round(&self) -> i32 {
         self.obs.round
     }
+
+    /// The world exactly, as far as a line played on from here depends on it: the observation's hash; every card of the
+    /// player's piles (hand, draw, discard, exhaust, play) by its id, in each pile's order; and the counters that name
+    /// what comes later: the card prompts asked so far (a prompt's number orders its options that look the same, so the
+    /// same `pick` takes another copy), the next card's id and the next creature's. The two keys tell copies of a card
+    /// apart by nothing and hold none of the counters, and the observation shows the uid of a card in hand only, so two
+    /// lines can reach one key and one observation with the copies laid out otherwise in the draw pile, or after another
+    /// number of prompts; a line played on from one then plays a copy the other does not hold. Where the search keeps no
+    /// world (a prompt crossed on the clone, a toy) or the combat is over, the observation's hash.
+    pub fn exact(&mut self) -> u64 {
+        use crate::r#gen as g;
+        use crate::protocol::Sink as _;
+        let World::Engine(world) = &mut self.world else {
+            return self.hash;
+        };
+        if self.status != Status::InProgress {
+            return self.hash;
+        }
+        let c = world.combat();
+        let (st, player) = crate::ffi::live(c);
+        let mut hash = Fnv(self.hash);
+        let pcs = g::entities_players::player::player_combat_state(player, c);
+        let db = g::game_actions_multiplayer::net_combat_card_db::instance(c);
+        hash.put(&c.x.prompts.to_le_bytes());
+        hash.put(&g::state::NetCombatCardDbData::of(db, c)._next_id.to_le_bytes());
+        hash.put(&g::state::CombatStateData::of(st, c)._next_creature_id.to_le_bytes());
+        let piles = [
+            g::entities_players::player_combat_state::hand(pcs, c),
+            g::entities_players::player_combat_state::draw_pile(pcs, c),
+            g::entities_players::player_combat_state::discard_pile(pcs, c),
+            g::entities_players::player_combat_state::exhaust_pile(pcs, c),
+            g::entities_players::player_combat_state::play_pile(pcs, c),
+        ];
+        for pile in piles {
+            for card in g::entities_cards::card_pile::cards(pile, c) {
+                let (known, id) = g::game_actions_multiplayer::net_combat_card_db::try_get_card_id(db, card, c);
+                hash.put(&(if known { id } else { u32::MAX }).to_le_bytes());
+            }
+            hash.put(b"|");
+        }
+        hash.0
+    }
 }
 
 /// A combat's public record of enemy moves (C#: MoveRecord's History): what each living enemy showed at the first

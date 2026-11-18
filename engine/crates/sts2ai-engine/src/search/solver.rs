@@ -8,8 +8,10 @@
 //! their turn. One table over the combat holds every state reached, by its key: the observation and the full hidden
 //! state, and the record of enemy moves, which the leaf reads. A state is searched once however many lines reach it. The
 //! states that wait are most of them, so a record of enemy moves is held once, however many states share it: the ends of
-//! a turn mostly do. A state keeps its own line, or takes another line to its key only where that line's end shows the
-//! same observation (`shown`): a key is the same cards whichever copy is where, and a moved root would otherwise replay
+//! a turn mostly do. A state keeps its own line, or takes another line to its key only where that line's end is the same
+//! world (`exact`: the observation, and every card of the player's piles by its id in its place): a key is the same
+//! cards whichever copy is where, and the observation shows a card's uid in hand only, so a line to the same key and
+//! observation can hold the copies in the draw pile otherwise, and the turns searched below the state would then replay
 //! a card not in hand.
 //!
 //! The pick is the beam's (`beam.rs`): the best end of the combat by worth, wins worth the same by fewer potions drunk and
@@ -40,18 +42,20 @@ use super::state::{self, Action, History, Status};
 use super::turn::{self, TurnEnd, TurnSearch};
 
 /// C#: SlSolver.Edge. The actions from a state to where its turn ends, the hash of each one's observation, the key of the
-/// state there and the hash of its observation. Told apart by identity, as C# tells its records with their own lists.
+/// state there and the world there exactly (`State::exact`). Told apart by identity, as C# tells its records with their
+/// own lists.
 struct Edge {
     actions: Vec<Action>,
     hashes: Vec<u64>,
     key: u64,
-    shown: u64,
+    exact: u64,
 }
 
 /// C#: SlSolver.Node. A state the solver reached: a turn's start, or the root.
 struct Node {
     key: u64,
-    shown: u64,
+    /// The world at the state exactly, as its own line reaches it.
+    exact: u64,
     reach: i32,
     potions: String,
     value: f64,
@@ -68,10 +72,12 @@ struct Node {
 }
 
 impl Node {
-    fn new(key: u64, value: f64, turns: i32, history: Arc<History>, moves: u64, order: i64, reach: i32, potions: String, shown: u64) -> Node {
+    fn new(
+        key: u64, value: f64, turns: i32, history: Arc<History>, moves: u64, order: i64, reach: i32, potions: String, exact: u64,
+    ) -> Node {
         Node {
             key,
-            shown,
+            exact,
             reach,
             potions,
             value,
@@ -330,7 +336,7 @@ impl Solver {
         };
         let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
         self.expand(root, found);
-        // What the root reaches, each state on its own line or one that shows the same, in the order reached.
+        // What the root reaches, each state on its own line or one to the same world, in the order reached.
         let mut kept: HashMap<u64, usize> = HashMap::new();
         let mut order = vec![root];
         let mut reached: HashSet<usize> = HashSet::from([root]);
@@ -355,10 +361,10 @@ impl Solver {
                         _ => false,
                     }
                 };
-                if !own && self.nodes_of[next].shown != edge.shown {
+                if !own && self.nodes_of[next].exact != edge.exact {
                     let n = &self.nodes_of[next];
                     self.order += 1;
-                    let fresh = Node::new(n.key, n.value, n.turns, n.history.clone(), n.moves, self.order, n.reach, n.potions.clone(), edge.shown);
+                    let fresh = Node::new(n.key, n.value, n.turns, n.history.clone(), n.moves, self.order, n.reach, n.potions.clone(), edge.exact);
                     self.nodes_of.push(fresh);
                     next = self.nodes_of.len() - 1;
                 }
@@ -471,7 +477,7 @@ impl Solver {
                 actions: end.actions.clone(),
                 hashes: end.hashes.clone(),
                 key: turn::mix(end.key, moves),
-                shown: end.shown,
+                exact: end.exact,
             });
             self.nodes_of[n].edges.as_mut().expect("just set").push(edge.clone());
             if self.table.contains_key(&edge.key) {
@@ -480,7 +486,7 @@ impl Solver {
             let shared = self.moves.entry(moves).or_insert_with(|| end.history.clone()).clone();
             self.order += 1;
             let turns = self.nodes_of[n].turns + end_turns(&end.actions);
-            let mut next = Node::new(edge.key, end.value, turns, shared, moves, self.order, end.reach, end.potions, end.shown);
+            let mut next = Node::new(edge.key, end.value, turns, shared, moves, self.order, end.reach, end.potions, end.exact);
             next.parent = Some(n);
             next.from = Some(edge.clone());
             self.nodes_of.push(next);
