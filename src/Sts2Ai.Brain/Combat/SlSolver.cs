@@ -12,7 +12,8 @@ namespace Sts2Ai.Brain.Combat;
 /// are new states, and none is dropped: the combat net only orders them, the state it values highest (by worth, as the
 /// pick compares lines) searched next, the rest waiting their turn. One table over the combat holds every state reached,
 /// by its key: the observation and the full hidden state (<see cref="TurnEnd.Key"/>), and the record of enemy moves, which
-/// the leaf reads. A state is searched once however many lines reach it.
+/// the leaf reads. A state is searched once however many lines reach it. The states that wait are most of them, so a
+/// record of enemy moves is held once, however many states share it: the ends of a turn mostly do.
 ///
 /// The pick is the beam's (<see cref="SlPlanner"/>): the best end of the combat by worth, wins worth the same by fewer
 /// potions drunk and then fewer turns, and losses, all 0, by the value of the turn start they died from. Until a line
@@ -29,7 +30,7 @@ namespace Sts2Ai.Brain.Combat;
 public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1, int batch = 16)
 {
     /// <summary>A state the solver reached: a turn's start, or the root, where the combat stands.</summary>
-    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, long order)
+    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, ulong moves, long order)
     {
         public readonly ulong Key = key;
         /// <summary>The leaf's value of the state; 0 at the root, as a turn start the beam has not valued.</summary>
@@ -37,6 +38,8 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         /// <summary>The turns ended to the state since the solver began, for its worth.</summary>
         public readonly int Turns = turns;
         public readonly IReadOnlyList<EnemyTurns> History = history;
+        /// <summary>The hash of <see cref="History"/>, by which states share it.</summary>
+        public readonly ulong Moves = moves;
         /// <summary>When the state was reached: states worth the same are searched in that order.</summary>
         public readonly long Order = order;
         /// <summary>The state the line to this one comes from, null at the root, and the actions from there.</summary>
@@ -53,8 +56,10 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
     private sealed record Edge(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key);
 
     private Dictionary<ulong, Node> _table = [];
+    /// <summary>The records of enemy moves the states hold, each once, by hash.</summary>
+    private Dictionary<ulong, IReadOnlyList<EnemyTurns>> _moves = [];
     private readonly PriorityQueue<Node, (double Worth, long Order)> _queue = new();
-    private Node _root = new(0, 0, 0, history, 0);
+    private Node _root = new(0, 0, 0, history, 0, 0);
     private long _order, _nodes;
     private int _searched, _cuts;
     private (TurnEnd Line, SlPlanner.Rank Rank)? _best;
@@ -113,7 +118,7 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
     public void Advance(IReadOnlyList<CombatAction> played, IReadOnlyList<EnemyTurns> moves, TurnSearcher search)
     {
         if (played.Count == 0) return;
-        _root = new(0, 0, _root.Turns + EndTurns(played), moves, ++_order);
+        _root = new(0, 0, _root.Turns + EndTurns(played), moves, 0, ++_order);
         if (_seed is { } seed)
             _seed = seed.Line.Actions.Count > played.Count && seed.Line.Actions.Take(played.Count).SequenceEqual(played)
                 ? (seed.Line with { Actions = [.. seed.Line.Actions.Skip(played.Count)], Hashes = [.. seed.Line.Hashes.Skip(played.Count)] }, seed.From)
@@ -156,6 +161,7 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
                 if (kept[edge.Key] is var next && (next.Parent == null || !reached.Contains(next.Parent)))
                     (next.Parent, next.From) = (node, edge);
         _table = kept;
+        _moves = order.Skip(1).GroupBy(n => n.Moves).ToDictionary(g => g.Key, g => g.First().History);
         _queue.Clear();
         (_cuts, _best, _byFirst) = (0, null, []);
         if (_seed is { } seed) Consider(seed.Line, seed.From);
@@ -184,10 +190,12 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
                 Consider(Line(node, end), node.Value);
                 continue;
             }
-            var edge = new Edge(end.Actions, end.Hashes, SlPlanner.Mix(end.Key, ProtocolJson.Hash(end.History)));
+            ulong moves = ProtocolJson.Hash(end.History);
+            var edge = new Edge(end.Actions, end.Hashes, SlPlanner.Mix(end.Key, moves));
             node.Edges.Add(edge);
             if (_table.ContainsKey(edge.Key)) continue;
-            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), end.History, ++_order) { Parent = node, From = edge };
+            if (!_moves.TryGetValue(moves, out var shared)) _moves[moves] = shared = end.History;
+            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), shared, moves, ++_order) { Parent = node, From = edge };
             _table[edge.Key] = next;
             _queue.Enqueue(next, (-Worth(next), next.Order));
         }
