@@ -1,8 +1,34 @@
-//! The SL planner as a solver (C#: SlSolver, where the reasons are; plans/2026-11-18-1412-max-solver.md): the rest of
-//! the combat searched with no state dropped, a little at a time, the state the net values highest searched next; one
-//! table over the combat by key; the root moves along as the combat goes on.
+//! The SL planner as a solver (plans/2026-11-18-1412-max-solver.md): the rest of the combat searched with no state
+//! dropped, a little at a time (`run`), so that its best line so far can be played whenever it is asked for, and only
+//! gets better the longer it searches.
 //!
-//! The states live in an arena, by index; what the root no longer reaches is let go when the root moves (`start`).
+//! Its states are the turns' starts. Each is searched to the end of its turn with no limit (`UNLIMITED`): every state of
+//! the turn, every answer of every prompt, every end kept. The ends are new states, and none is dropped: the combat net
+//! only orders them, the state it values highest (by worth, as the pick compares lines) searched next, the rest waiting
+//! their turn. One table over the combat holds every state reached, by its key: the observation and the full hidden
+//! state, and the record of enemy moves, which the leaf reads. A state is searched once however many lines reach it. The
+//! states that wait are most of them, so a record of enemy moves is held once, however many states share it: the ends of
+//! a turn mostly do. A state keeps its own line, or takes another line to its key only where that line's end shows the
+//! same observation (`shown`): a key is the same cards whichever copy is where, and a moved root would otherwise replay
+//! a card not in hand.
+//!
+//! The pick is the beam's (`beam.rs`): the best end of the combat by worth, wins worth the same by fewer potions drunk and
+//! then fewer turns, and losses, all 0, by the value of the turn start they died from. Until a line ends the combat, the
+//! line to the state valued highest. A line another search found (the beam's, `seed`) is a candidate too, so the
+//! solver's pick is never worse than it. When no state is left and no turn's search was cut (a cycle, `loops.rs`, is),
+//! the pick is proved: there is no better line under these rules.
+//!
+//! The combat goes on under it (`advance`): the root moves to where it went, the states that can still be reached stay
+//! with all that was found of them, and the rest go. The states live in an arena, by index; what the root no longer
+//! reaches is let go when the root moves (`start`).
+//!
+//! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
+//! of a win found with the same potions is dropped, in a turn's search as soon as a line reaches it, and among the states
+//! waiting when a win raises its potions' bound. The states searched at a time (`batch`) are a turn's search each, run
+//! apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs.
+//!
+//! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
+//! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -158,6 +184,11 @@ impl Solver {
         if self.started { self.queue.len() } else { 1 }
     }
 
+    /// C#: Bounds. By the potions held at a win's end, the most HP plus max HP a win found ends the combat with.
+    pub fn bounds(&self) -> &Bounds {
+        &self.bounds
+    }
+
     pub fn proved(&self) -> bool {
         self.started && self.queue.is_empty() && self.cuts == 0 && self.best.is_some()
     }
@@ -253,7 +284,7 @@ impl Solver {
         self.start(search)
     }
 
-    /// C#: Result, up to the plan C#'s Picked makes of it.
+    /// C#: Result, up to the plan C#'s PlanOf.Found makes of it.
     pub fn result(&self) -> Result<Found, String> {
         if !self.started {
             return Err("the solver has not searched the root's turn".into());

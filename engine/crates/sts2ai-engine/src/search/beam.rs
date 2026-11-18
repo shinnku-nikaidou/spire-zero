@@ -1,6 +1,41 @@
-//! The beam over turns (C#: SlPlanner.Search and its Beam, where the reasons are): a greedy dive first, a beam of one
-//! whose turns are searched in full and kept, then the full beam; the pick by worth (C#: SlPlanner.Rank). The plan made
-//! of the pick, with the candidates, stays C#'s (SlPlanner.Picked).
+//! The SL combat brain's beam over turns: deterministic planning over the whole combat in the one exact world. Nothing
+//! is hidden there and nothing is random, so the best line is the answer, with no average over worlds; it is planned
+//! once and then played as planned (the C# route follows it with a TurnPlan).
+//!
+//! Each state kept is searched to the end of its turn (`turn.rs`): a depth-first search over the turn's actions, ending
+//! the turn an option at every step, one action of each that are the same, and transpositions merged by the state as
+//! search tells it (the same cards in another order, or another copy of one, are one state) and the world's full hidden
+//! state. Each distinct state where the turn ends, after the enemies' turn, is scored by the leaf (the combat net, which
+//! reads the observation alone); the best `beam` of all the states' ends, distinct by key, are the next turn's states. A
+//! line that ends the combat is scored by the leaf at its end. The beam stops when no state is left, or after
+//! `MAX_TURNS` turns. The leaf prices a win by V on the run the combat leaves, which a line can still raise past winning
+//! now with what the state holds (max HP or gold gained, a card grown), so no state's value caps its lines'; one rule
+//! written by hand does, for speed (`bound.rs`). A greedy dive, a beam of one, goes first, each of its turns searched in
+//! full and kept for the full beam, which takes them from there; when the dive wins, the full beam keeps `easy_beam`
+//! states, if set: it only improves a win already found.
+//!
+//! The pick (`Rank`): every loss is worth the same, so among losing lines the one that died from the turn start the leaf
+//! valued highest is the pick. Among wins worth exactly the same, the one that drinks the fewest potions is, then the one
+//! with the fewest turns ended: a combat no line loses HP in has many, and the dive, which goes first, often finds a slow
+//! one. A turn costs nothing in the game, so a win worth less is never taken for being sooner, unless the budget has a
+//! turn decay (C#'s Budget.TurnDecay, a player's 0.999): then the pick compares each line's value times the decay to the
+//! number of turns it ended.
+//!
+//! A potion is not drunk where not drinking it loses no more HP (the user, 2026-11-16). The game lets a potion be thrown
+//! away at any time for nothing, so a belt is never worth less than the belt with fewer potions: V prices a win so
+//! (FreeDisposal, `leaf.rs`), and a turn's end takes the value of any end of that turn that is the same state with only
+//! fewer potions (`turn.rs`). A line that drank a potion for nothing is then worth no more than the line that kept it,
+//! which is searched first (the potions come last, `order.rs`) and wins the tie. A losing plan that is not proved is
+//! played for its first `replan` turns only, then planned again (C#'s PlanOf), from where a beam reaches deeper.
+//!
+//! Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the plan
+//! replays exactly in the world it was searched in. A card prompt is a state like any other, and its answers are its
+//! actions: every prompt of a line is a branch, and a line ends only where the player can play again. A cycle goes to
+//! `loops.rs`. The turns' searches are independent, so a turn is one `Searcher` call that can run them apart
+//! (`threads.rs`). The plan made of the pick, with the candidates, is the C# side's (PlanOf).
+//!
+//! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
+//! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -35,7 +70,7 @@ pub struct Budget {
     pub turn_decay: f64,
 }
 
-/// What the beam found, for C#'s SlPlanner.Picked: the line picked, the value of the turn start a losing pick died
+/// What the beam found, for C#'s PlanOf.Found: the line picked, the value of the turn start a losing pick died
 /// from, the best line after each first action in the order first found, and how the search went.
 pub struct Found {
     pub pick: TurnEnd,
@@ -312,7 +347,7 @@ impl Beam<'_> {
         Ok(found.into_iter().map(|f| f.expect("every state searched")).collect())
     }
 
-    /// C#: Beam.Result, up to the plan C#'s Picked makes of it.
+    /// C#: Beam.Result, up to the plan C#'s PlanOf.Found makes of it.
     fn result(mut self) -> Result<Found, String> {
         let left = std::mem::take(&mut self.left);
         for state in &left {

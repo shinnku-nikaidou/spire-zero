@@ -11,23 +11,9 @@ public sealed record WorkerHello(string Game);
 
 /// <summary>A request, with its type; its reply carries the same id.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[JsonDerivedType(typeof(SlTurnRequest), "sl_turn")]
 [JsonDerivedType(typeof(SlMacroRequest), "sl_macro")]
 [JsonDerivedType(typeof(SlPromptRequest), "sl_prompt")]
 public abstract record WorkerRequest(long Id);
-
-/// <summary>
-/// The SL planner's search of one turn from one state of a combat decision in a run:
-/// <see cref="Node"/> loaded and replayed is the real combat at the decision, and <see cref="Path"/> played from there
-/// reaches the state. The reply's <see cref="WorkerReply.Turn"/> holds the best ends of that turn: up to
-/// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, searched with <see cref="Nodes"/>
-/// nodes. <see cref="History"/> is the record of enemy moves up to the state, for the leaves.
-/// </summary>
-/// <param name="LifeBounds">By the potions held (<c>LifeBound.Potions</c>), the most HP plus max HP a win found so far
-/// ends the combat with: a line stops at a state holding those potions that cannot end it with as much
-/// (<c>LifeBound.Reach</c>); none, or no bound for its potions, prunes nothing.</param>
-public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
-    IReadOnlyList<EnemyTurns> History, IReadOnlyDictionary<string, int>? LifeBounds = null) : WorkerRequest(Id);
 
 /// <summary>
 /// L0's probes of a decision outside combat in a run: <see cref="Node"/> loaded and replayed
@@ -54,10 +40,9 @@ public sealed record SlPromptRequest(long Id, NodeClone Node, IReadOnlyList<Comb
 public sealed record PromptStep(CombatStatus Status, CombatObservation Observation, RunView Run, ulong HiddenKey = 0, string? Export = null);
 
 /// <param name="GameErrors">The game's Log.Error lines while serving the request.</param>
-/// <param name="Turn">The answer to an <see cref="SlTurnRequest"/>.</param>
 /// <param name="Afters">The answer to an <see cref="SlMacroRequest"/>.</param>
 /// <param name="Crossed">The answer to an <see cref="SlPromptRequest"/>.</param>
-public sealed record WorkerReply(long Id, string? Error, IReadOnlyList<string> GameErrors, TurnSearch? Turn = null,
+public sealed record WorkerReply(long Id, string? Error, IReadOnlyList<string> GameErrors,
     IReadOnlyList<Afterstate>? Afters = null, PromptStep? Crossed = null);
 
 /// <summary>
@@ -76,13 +61,6 @@ public sealed record Afterstate(RunView Run, string? Surface, ScreenView? Screen
 /// <param name="Repeats">Whether the line repeats a cycle the search found.</param>
 public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actions, int Nodes = 0, IReadOnlyList<ulong>? Hashes = null, bool Repeats = false);
 
-/// <summary>What the SL planner's search of one turn found.</summary>
-/// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
-/// <param name="Nodes">The actions the search simulated.</param>
-/// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>
-/// <param name="Pruned">The lines the search left at a state below its potions' bound (<see cref="SlTurnRequest.LifeBounds"/>).</param>
-public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, int Pruned = 0);
-
 /// <summary>
 /// A state where a turn of the SL planner's line ends: at the next turn's first decision, after the enemies' turn, or
 /// where the combat ended. As a whole line, the same from the planner's decision.
@@ -97,10 +75,10 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// <param name="Win">The chance to win the combat from the state, as the leaf predicts it: 1 or 0 once the combat is over.</param>
 /// <param name="Hp">The HP held at the end of a win from the state, as the leaf expects it: the HP held once the combat is won.</param>
 /// <param name="Life">The player's HP plus max HP at the state: at a win's end, the bound the planner's pruning keeps
-/// lines with the same potions up to (<see cref="SlTurnRequest.LifeBounds"/>).</param>
+/// lines with the same potions up to (the engine's search/bound.rs).</param>
 /// <param name="Reach">The most HP plus max HP the combat can end with from the state, as the pruning bounds it
-/// (<c>LifeBound.Reach</c>).</param>
-/// <param name="Potions">The potions held at the state, as the pruning tells states apart (<c>LifeBound.Potions</c>).</param>
+/// (search/bound.rs, <c>reach</c>).</param>
+/// <param name="Potions">The potions held at the state, as the pruning tells states apart (search/bound.rs, <c>potions</c>).</param>
 /// <param name="Shown">The hash of the observation at the state, card uids and all (<see cref="ProtocolJson.Hash"/>): two
 /// lines to one key whose copies of a card went otherwise hold them under other uids, which the actions after it name.</param>
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value,

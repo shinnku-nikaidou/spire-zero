@@ -456,8 +456,8 @@ internal static partial class SelfTest
 
     /// <summary>
     /// A run with random policies, stopped at the first decision of its second combat. The SL planner plans the rest of
-    /// that combat on the node's clone (here, and with <paramref name="workers"/> in a pool too, which must plan the
-    /// same). A hallway fight at full HP: the plan must win it. The clone, played to the plan's end, must end the combat as
+    /// that combat in the engine, on the node's clone written out (in one thread, and with <paramref name="workers"/>
+    /// threads too, which must plan the same). A hallway fight at full HP: the plan must win it. The clone, played to the plan's end, must end the combat as
     /// planned and refuse to step past it. Then the run is played again to the decision and follows the plan: each step
     /// must find the observation the plan expects, and the combat must end where the plan ends, as the plan says (docs:
     /// combat-brain §7, test 6).
@@ -486,9 +486,17 @@ internal static partial class SelfTest
 
         SlPlan plan;
         RunView planned;
+        var planner = (int threads) => new EnginePlanner((CombatNet)net.Leaf.In(PlayEnvironment.SL), threads);
         using (var world = new NodeWorld(pump, clone))
         {
-            plan = new SlPlanner(net.Leaf).Plan(world, budget, history);
+            var export = world.Export();
+            plan = planner(1).Plan(export, budget, history);
+            if (workers > 0)
+            {
+                var threaded = planner(workers).Plan(export, budget, history);
+                check("the planner plans the same on any number of threads", Show(threaded) == Show(plan),
+                    $"{label}: one {Show(plan)}; {workers} {Show(threaded)}");
+            }
             world.Restore(new([]));
             foreach (var step in plan.Result.Plan.Prepend(plan.Result.First)) world.Execute(step);
             check("SL world ends its combat as planned", plan.End == CombatStatus.Won && world.Status == plan.End, $"{label}: {world.Status}, planned {plan.End}");
@@ -496,13 +504,6 @@ internal static partial class SelfTest
             double worth = net.Leaf.Value(world.Status, world.Observe(), planned, history);
             check("SL plan is worth V of the run its combat leaves", Math.Abs(worth - plan.Value) < 1e-9, $"{label}: {worth:F6}, planned {plan.Value:F6}");
             check("SL world refuses to step past its combat", world.Legal().Count == 0 && Throws(() => world.Execute(CombatAction.EndTurn)), label);
-        }
-        if (workers > 0)
-        {
-            using var workerPool = new WorkerPool(Program.SelfCommand(), workers, net.WorkerOptions());
-            var pooled = new PooledPlanner(workerPool).Plan(clone, budget, history);
-            check("pooled planner plans what the planner plans here", Show(pooled) == Show(plan), $"{label}: here {Show(plan)}; pooled {Show(pooled)}");
-            check("no game errors in workers", workerPool.TakeGameErrors() is [], label);
         }
 
         var steps = new Queue<CombatAction>(plan.Result.Plan.Prepend(plan.Result.First));

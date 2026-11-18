@@ -83,8 +83,6 @@ internal static unsafe partial class Native
     [LibraryImport(Library)] internal static partial void sz_net_free(nint net);
     [LibraryImport(Library)] internal static partial int sz_net_outcome(NetHandle net, WorldHandle world, byte* history, nuint len, ulong @base,
         delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, double* outcome);
-    [LibraryImport(Library)] internal static partial int sz_turn_search(NetHandle net, WorldHandle world, byte* asked, nuint len, ulong @base,
-        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int* stop, Buf* result);
     [LibraryImport(Library)] internal static partial SolverHandle sz_solver_new(byte* history, nuint len, double decay, int batch);
     [LibraryImport(Library)] internal static partial void sz_solver_free(nint solver);
     [LibraryImport(Library)] internal static partial int sz_solver_seed(SolverHandle solver, byte* line, nuint len, double from);

@@ -3,35 +3,25 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Combat;
 
-/// <summary>The combat a solver begins on, taken in where a decision stands (<see cref="SolverRoute"/>).</summary>
-/// <param name="After">Turn searches from there after the actions given. Once the token is cancelled they stop, with an
-/// <see cref="OperationCanceledException"/>.</param>
+/// <summary>The combat a solver begins on, taken in where a decision stands (<see cref="SolverRoute"/>): in the engine,
+/// where the search runs (plans/2026-11-18-2132-sl-search-rust.md).</summary>
 /// <param name="Observe">The combat's observation from there after the actions given.</param>
-/// <param name="Plan">The beam's plan from there (<see cref="SlPlanner.Search"/>); by default on <paramref name="After"/>.</param>
-/// <param name="Solver">A solver from there, with the record of enemy moves there and the pick's turn decay; by default
-/// <see cref="SlSolver"/> on <paramref name="After"/>.</param>
-public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CancellationToken, TurnSearcher> After,
-    Func<IReadOnlyList<CombatAction>, CombatObservation> Observe,
-    Func<Budget, IReadOnlyList<EnemyTurns>, SlPlan>? Plan = null,
-    Func<IReadOnlyList<EnemyTurns>, double, ICombatSolver>? Solver = null)
-{
-    public SlPlan PlanFrom(Budget budget, IReadOnlyList<EnemyTurns> history) =>
-        Plan?.Invoke(budget, history) ?? SlPlanner.Search(budget, history, After([], CancellationToken.None));
-
-    public ICombatSolver SolverFrom(IReadOnlyList<EnemyTurns> history, double decay) =>
-        Solver?.Invoke(history, decay) ?? new SearchingSolver(new SlSolver(history, decay), After);
-}
+/// <param name="Plan">The beam's plan from there.</param>
+/// <param name="Solver">A solver from there, with the record of enemy moves there and the pick's turn decay.</param>
+public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CombatObservation> Observe,
+    Func<Budget, IReadOnlyList<EnemyTurns>, SlPlan> Plan,
+    Func<IReadOnlyList<EnemyTurns>, double, ICombatSolver> Solver);
 
 /// <summary>
-/// max's combat route (plans/2026-11-18-1412-max-solver.md, 2.3–2.5): one <see cref="SlSolver"/> a combat, which
+/// max's combat route (plans/2026-11-18-1412-max-solver.md, 2.3–2.5): one solver a combat (<see cref="ICombatSolver"/>), which
 /// searches <see cref="Budget.Solve"/> more nodes at each decision, then answers with its pick (the user, 2026-11-18,
 /// of the ways auto-play could wait for it: 「第二種」). The same budget gives the same decisions, so self-play and the
 /// tests measure what max plays; the mod's brain may give a decision more, never less.
 ///
 /// The solver begins where the combat stands, taken in once (<c>start</c>), from the beam's plan that the rest of the
-/// budget makes there (<see cref="SlPlanner.Search"/>), so its pick is never worse than the beam's. At each decision
+/// budget makes there (<see cref="TakenCombat.Plan"/>), so its pick is never worse than the beam's. At each decision
 /// after, if the combat went the pick's way, the observation being the one its line expected before its next step, the
-/// solver's root moves along it (<see cref="SlSolver.Advance"/>) and keeps what it found below. Otherwise (the player
+/// solver's root moves along it (<see cref="ICombatSolver.Advance"/>) and keeps what it found below. Otherwise (the player
 /// moved elsewhere, a new combat began, the engine played a step otherwise) a new solver begins. A decision with one
 /// thing to do is answered without search, and the root moves at the next one. Where the combat cannot be taken in
 /// (a card prompt off the line) the beam decides.
@@ -152,8 +142,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         if (start() is not { } from) return false;
         Drop();
-        var solver = from.SolverFrom(history, budget.TurnDecay);
-        var seed = from.PlanFrom(budget.For(observation.Room) with { Solve = 0 }, history);
+        var solver = from.Solver(history, budget.TurnDecay);
+        var seed = from.Plan(budget.For(observation.Room) with { Solve = 0 }, history);
         solver.Seed(seed);
         nodes += seed.Nodes;
         Begun++;

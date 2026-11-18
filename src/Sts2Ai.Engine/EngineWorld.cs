@@ -196,34 +196,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     }
 
     /// <summary>
-    /// One turn's search in the engine (<c>SlPlanner.SearchTurn</c>, moved there line for line) from where this world
-    /// stands with <paramref name="path"/> played, its ends priced by <paramref name="net"/> and V (<paramref name="value"/>,
-    /// asked from this thread). This world stays where it stands. Once <paramref name="stop"/> is cancelled the search
-    /// stops where it stands with an <see cref="OperationCanceledException"/>.
-    /// </summary>
-    /// <exception cref="EngineException">The search failed in the engine.</exception>
-    public TurnSearch SearchTurn(EngineNet net, Func<RunView, double> value, IReadOnlyList<CombatAction> path, IReadOnlyList<EnemyTurns> history,
-        int nodes, int keep, IReadOnlyDictionary<string, int>? lifeBounds, CancellationToken stop = default)
-    {
-        var asked = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(new TurnAsked(path, history, nodes, keep, lifeBounds)));
-        // Where the engine reads whether to stop; pinned through the call, set from the token's callback.
-        var flag = new int[1];
-        using var told = stop.Register(() => Volatile.Write(ref flag[0], 1));
-        return new Pricer(RunOf, value).With(ctx =>
-        {
-            Native.Buf buf;
-            int said;
-            fixed (byte* bytes = asked)
-            fixed (int* halt = flag)
-                said = Native.sz_turn_search(net.Handle, _at.Handle, bytes, (nuint)asked.Length, _base.Value, Pricer.Callback, ctx, halt, &buf);
-            if (said == 2) throw new OperationCanceledException(stop);
-            if (said != 0) throw Native.Failed("sz_turn_search");
-            return ProtocolJson.Deserialize<TurnSearch>(Native.Take(buf));
-        });
-    }
-
-    /// <summary>
-    /// The SL planner's beam over turns in the engine (<c>SlPlanner.Search</c>, moved there line for line) from where
+    /// The SL planner's beam over turns in the engine (search/beam.rs) from where
     /// this world stands, with the budget's members of these names, its turns searched in <paramref name="threads"/> of the
     /// engine's threads, which ask V (<paramref name="value"/>) any number at once. This world stays where it stands.
     /// Once <paramref name="stop"/> is cancelled the search stops where it stands with an

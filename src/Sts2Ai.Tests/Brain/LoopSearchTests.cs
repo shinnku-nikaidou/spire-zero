@@ -167,17 +167,6 @@ public class LoopSearchTests
     private static readonly ICombatLeaf Leaf = new ToyLeaf();
     private static readonly CombatAction R = CombatAction.Play(1), H = CombatAction.Play(2, 1);
 
-    private static SlPlan Plan(Loop world)
-    {
-        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
-        // The search lets go of every state it leaves, a cycle's start once the cycle is run; the toy refuses a
-        // snapshot that was forgotten.
-        Assert.Equal(0, world.Open);
-        return plan;
-    }
-
-    private static List<CombatAction> Line(SlPlan plan) => [plan.Result.First, .. plan.Result.Plan];
-
     /// <summary>Plays the line on a new world, each step at the observation it expects.</summary>
     private static Loop Replayed(CombatDecisionResult result, Func<Loop> make)
     {
@@ -200,89 +189,6 @@ public class LoopSearchTests
     }
 
     [Fact]
-    public void TheCycleIsRepeatedUntilItKillsInOneTurn()
-    {
-        // 44 strength and H: 50 damage. A plain search spends its 300 nodes on R and never gets to H.
-        var plan = Plan(new Loop(50));
-
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal([.. Enumerable.Repeat(R, 44), H], Line(plan));
-        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, () => new Loop(50)).Status);
-    }
-
-    [Fact]
-    public void WhatTheCycleDoesToThePilesDoesNotStopIt()
-    {
-        var plan = Plan(new Loop(50, junkEvery: 6));
-
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal(44, Line(plan).Count(a => a == R));
-    }
-
-    [Fact]
-    public void ACycleEndsWhereTheGameEndsIt()
-    {
-        // A full hand sends R to the discard pile: 4 junk in a hand of 6 is 12 plays. Lethal before that, and not after it.
-        var plan = Plan(new Loop(15, junkEvery: 3, handCap: 6));
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-
-        var far = new Loop(10_000, junkEvery: 3, handCap: 6);
-        var line = Line(Plan(far));
-        int end = line.IndexOf(CombatAction.EndTurn);
-        Assert.Contains(H, line.Take(end));
-        Assert.Equal(15, line.Take(end).Count(a => a == R));
-    }
-
-    [Fact]
-    public void ACardThatRunsOutIsAnOrdinaryLine()
-    {
-        // R stops coming back after its third play, too soon to be taken for a cycle, and the search plays it out as always.
-        var plan = Plan(new Loop(9, runsOut: 3));
-
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal([R, R, R, H], Line(plan));
-    }
-
-    [Fact]
-    public void CardsThatUseThemselvesUpAreAnOrdinaryLine()
-    {
-        // Each R is exhausted and draws the next of 8, as a Soul does: one fewer is left each time, so it is no cycle.
-        var cycle = new Loop(15);
-        var souls = new Loop(15, souls: 8);
-        var (before, soulsBefore) = (cycle.Observe(), souls.Observe());
-        cycle.Execute(R);
-        souls.Execute(R);
-        Assert.True(LoopSearch.Recurs(before, cycle.Observe()));
-        Assert.False(LoopSearch.Recurs(soulsBefore, souls.Observe()));
-
-        // The search plays the nine R and H out on its nodes.
-        var plan = Plan(new Loop(15, souls: 8));
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-    }
-
-    [Fact]
-    public void APowerThatCountsDownTheReturnsIsAnOrdinaryLine()
-    {
-        // R comes back eight times, more than the probe repeats, and each return takes one off the count its power shows:
-        // a chain that spends the power, not a cycle.
-        var world = new Loop(15, returns: 8);
-        var before = world.Observe();
-        world.Execute(R);
-        Assert.Contains(world.Observe().Hand, c => c.Id == "R");
-        Assert.False(LoopSearch.Recurs(before, world.Observe()));
-
-        // The search plays the nine R and H out on its nodes: 6 plus 9 strength.
-        var plan = Plan(new Loop(15, returns: 8));
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Equal([.. Enumerable.Repeat(R, 9), H], Line(plan));
-    }
-
-    [Fact]
     public void CopiesInTheHandDoNotMakeACycle()
     {
         // The first R comes back once, as Music Box copies the first attack of a turn; three more R in the hand would let
@@ -299,75 +205,31 @@ public class LoopSearchTests
     }
 
     [Fact]
-    public void ACycleWithNoLethalStaysOnItsBudget()
-    {
-        var world = new Loop(1_000_000);
-        var plan = new SlPlanner(Leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 1));
-
-        Assert.NotEqual(CombatStatus.Won, plan.End);
-        Assert.InRange(world.Played, 1, plan.Turns * (2 * LoopSearch.Moves + 400));
-    }
-
-    [Fact]
-    public void AnotherAnswerToAPromptThatOpensACycleIsTaken()
-    {
-        static Loop make() => new(50, prompted: Loop.Prompted.GivesR);
-        var plan = Plan(make());
-
-        // Plan.Turns counts the turns the beam looks at past the win too.
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.DoesNotContain(CombatAction.EndTurn, Line(plan));
-        Assert.Equal([CombatAction.Potion(0), CombatAction.Pick([2])], Line(plan).Take(2));
-        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
-    }
-
-    [Fact]
-    public void EveryAnswerToAPromptIsSearched()
+    public void EveryAnswerToAPromptIsSearchedByPimc()
     {
         // The third answer wins at once; the first loses the fight.
         static Loop make() => new(50, prompted: Loop.Prompted.GivesStrike);
-        var plan = Plan(make());
-
-        Assert.Equal(CombatStatus.Won, plan.End);
-        Assert.Contains(CombatAction.Pick([2]), Line(plan));
-        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
         var pimc = Pimc(2, make);
         Assert.Contains(CombatAction.Pick([2]), pimc.Plan.Prepend(pimc.First));
     }
 
     [Fact]
-    public void EveryPromptOfAnActionIsSearched()
+    public void EveryPromptOfAnActionIsSearchedByPimc()
     {
         // The potion asks twice, and only the third answer to its second prompt wins.
         static Loop make() => new(50, prompted: Loop.Prompted.AsksTwice);
-        var plan = Plan(make());
-
-        Assert.Equal(CombatStatus.Won, plan.End);
-        var line = Line(plan);
-        int potion = line.IndexOf(CombatAction.Potion(0));
-        Assert.Equal(CombatActionKind.Pick, line[potion + 1].Kind);
-        Assert.Equal(CombatAction.Pick([2]), line[potion + 2]);
-        Assert.Equal(CombatStatus.Won, Replayed(plan.Result, make).Status);
         var pimc = Pimc(2, make);
         Assert.Equal(CombatStatus.Won, Replayed(pimc, make).Status);
     }
 
     [Fact]
-    public void AnUnlimitedTurnSearchAtAPromptTriesEveryAnswer()
+    public void AnUnlimitedBudgetTakesEveryAnswerOfAPrompt()
     {
-        // The turn's search starts at the first of two prompts, three answers each; only the second prompt's third answer
-        // wins (the others change nothing, so they are one state). Unlimited, the search tries every answer of both and
-        // finds the win; 2 nodes split over the first prompt leave the second one answer, its first.
+        // A prompt of three answers: with no limit on the nodes, all three are tried, nothing cut.
         var world = new Loop(50, prompted: Loop.Prompted.AsksTwice);
         world.Execute(CombatAction.Potion(0));
         Assert.Equal(3, PromptAnswers.Of(world.Observe().Prompt!, SlPlanner.Unlimited, out bool cut).Count);
         Assert.False(cut);
-        var found = new SlPlanner(Leaf).SearchTurn(world, [], SlPlanner.Unlimited, int.MaxValue);
-        Assert.False(found.Cut);
-        Assert.Contains(found.Ends, e => e.Status == CombatStatus.Won && e.Actions[1] == CombatAction.Pick([2]));
-        var narrow = new SlPlanner(Leaf).SearchTurn(world, [], 2, int.MaxValue);
-        Assert.True(narrow.Cut);
-        Assert.DoesNotContain(narrow.Ends, e => e.Status == CombatStatus.Won);
     }
 
     [Fact]

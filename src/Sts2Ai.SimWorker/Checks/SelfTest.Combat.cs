@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.Brain;
+using Sts2Ai.Engine;
 using Sts2Ai.GameBridge;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
@@ -267,6 +268,40 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The combat net is read and run on both sides (plans/2026-11-18-2132-sl-search-rust.md, 2.4): in the engine for SL's
+    /// search, and in C# for NoSL's PIMC, two copies of the tokens, the tensors and the pricing. So at each state of
+    /// combats played at random in the engine, the net's outcome of the state in SL is the same to the bit on both sides.
+    /// </summary>
+    private static void TheNetsOutcomeIsTheEngines(Pump pump, List<EncounterModel> pool, int act, ICombatLeaf leaf, Action<string, bool, string> check)
+    {
+        var net = (CombatNet)leaf.In(PlayEnvironment.SL);
+        using var engine = EngineNet.Load(Convert.FromBase64String(net.File.Onnx), ProtocolJson.Serialize(net.File with { Onnx = "", Tests = [] }));
+        foreach (string character in new[] { "SILENT", "REGENT" })
+            for (int e = 0; e < Math.Min(3, pool.Count); e++)
+            {
+                var setup = new CombatSetup(character, pool[e], act, GameSeeds.MakeSeed(e, 1));
+                string label = $"{character} {pool[e].Id.Entry}";
+                CombatExport export;
+                using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+                    export = new CombatExport(LiveCombat.Bytes(), Alone(session.Observation()));
+                using var world = EngineWorld.Import(export.Bytes, export.Run);
+                var record = new MoveRecord();
+                var rng = new Random(e);
+                for (int step = 0; step < 60 && world.Status == CombatStatus.InProgress; step++)
+                {
+                    var obs = world.Observe();
+                    record.Witness(obs);
+                    var mine = net.Outcome(world.Status, obs, world.Run(), record.History);
+                    var theirs = world.Outcome(engine, net.RunValue, record.History);
+                    check("the combat net's outcome is the engine's, to the bit", (mine.Value, mine.Win, mine.Hp) == theirs,
+                        $"{label} at step {step}: {mine.Value:R} {mine.Win:R} {mine.Hp:R} against {theirs.Value:R} {theirs.Win:R} {theirs.Hp:R}");
+                    var actions = obs.Prompt is { } prompt ? PromptAnswers.Of(prompt, 3, out _) : world.Legal();
+                    world.Execute(actions[rng.Next(actions.Count)]);
+                }
+            }
+    }
+
+    /// <summary>
     /// On the real game, with --combat-net's leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
     /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
     /// of the cycle, in SL: Particle Wall costs stars this character has none of until Touch of Insanity makes it free,
@@ -297,7 +332,7 @@ internal static partial class SelfTest
             using (var worlds = SimWorlds.SL(pump, root, Alone(obs)))
             {
                 var world = worlds.Worlds(1, 0)[0];
-                var plan = new SlPlanner(leaf).Plan(world, new Budget(NodesPerWorld: 300, Beam: 8));
+                var plan = new EnginePlanner((CombatNet)leaf.In(PlayEnvironment.SL), 2).Plan(export, new Budget(NodesPerWorld: 300, Beam: 8), []);
                 var line = plan.Result.Plan.Prepend(plan.Result.First).ToList();
                 int ends = line.Count(a => a.Kind == CombatActionKind.EndTurn);
                 bool cycled = prompt ? line.Zip(line.Skip(1)).Any(p => p.First.Kind == CombatActionKind.UsePotion && p.Second.Kind == CombatActionKind.Pick)

@@ -15,27 +15,21 @@ namespace Sts2Ai.SimWorker.Commands;
 /// </summary>
 internal static class Serve
 {
-    private static readonly LeafArgs Leaf = new();
-
     public static Command Command()
     {
-        var command = Opt.Command("serve", "a worker: JSON lines on stdin and stdout", Leaf.Options);
+        var command = Opt.Command("serve", "a worker: JSON lines on stdin and stdout");
         command.SetAction(r =>
         {
             // stdout is the wire: keep it, and send everything else that is printed to stderr from the start.
             var wire = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
             Console.SetOut(Console.Error);
-            return Cli.Game((_, pump) => Run(pump, wire, Leaf.Read(r).Net))(r);
+            return Cli.Game((_, pump) => Run(pump, wire))(r);
         });
         return command;
     }
 
-    /// <param name="leaf">The leaf to search with; null for a worker that only probes l0's options on the clone.</param>
-    private static int Run(Pump pump, TextWriter wire, ICombatLeaf? leaf)
+    private static int Run(Pump pump, TextWriter wire)
     {
-        // The planner plays in SL and reads its states there (pimc searches in the engine, in the run's own process).
-        var planner = leaf == null ? null : new SlPlanner(leaf.In(PlayEnvironment.SL));
-        static Exception NoLeaf() => new InvalidOperationException("a search request to a worker with no --combat-net");
         HeadlessGame.TakeErrors();
         wire.WriteLine(ProtocolJson.Serialize(new WorkerHello(HeadlessGame.GameVersion)));
         while (Console.In.ReadLine() is { } line)
@@ -47,7 +41,6 @@ internal static class Serve
                 id = request.Id;
                 var reply = request switch
                 {
-                    SlTurnRequest turn => new WorkerReply(id, null, [], SearchTurn(pump, planner ?? throw NoLeaf(), turn)),
                     SlMacroRequest macro => new WorkerReply(id, null, [], Afters: NodeProbe.After(pump, macro.Node, macro.Paths)),
                     SlPromptRequest prompt => new WorkerReply(id, null, [], Crossed: Cross(pump, prompt)),
                     _ => throw new InvalidDataException($"no search for {request.GetType().Name}"),
@@ -85,13 +78,5 @@ internal static class Serve
         bool going = status == CombatStatus.InProgress;
         return new(status, shown, world.Run(), going ? world.HiddenKey() : 0,
             going && shown.Prompt == null ? Convert.ToBase64String(world.Export().Bytes) : null);
-    }
-
-    /// <summary>The SL planner's turn from a state of the node's clone: the clone at the decision, then the path.</summary>
-    private static TurnSearch SearchTurn(Pump pump, SlPlanner planner, SlTurnRequest r)
-    {
-        using var world = new NodeWorld(pump, r.Node);
-        foreach (var action in r.Path) world.Execute(action);
-        return planner.SearchTurn(world, r.History, r.Nodes, r.Keep, r.LifeBounds);
     }
 }

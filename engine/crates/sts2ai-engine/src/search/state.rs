@@ -124,6 +124,35 @@ pub enum Place {
 enum World {
     Engine(Box<Live>),
     Crossed(Arc<Crossed>, Arc<dyn Crossing>),
+    #[cfg(test)]
+    Toy(Box<dyn ToyWorld>),
+}
+
+/// A combat written by hand for the search's tests (C#: the tests' ICombatWorld toys, SlPlannerTests.Toy and
+/// LoopSearchTests.Loop): what the search reads of a world, and its plays.
+#[cfg(test)]
+pub trait ToyWorld: Send + Sync {
+    /// C#: ICombatWorld.Observe, with the prompt the combat waits on.
+    fn observe(&self) -> CombatObservation;
+    /// C#: ICombatWorld.Status.
+    fn status(&self) -> Status;
+    /// C#: ICombatWorld.HiddenKey.
+    fn hidden_key(&self) -> u64;
+    /// C#: ICombatWorld.Legal.
+    fn legal(&self) -> Vec<Action>;
+    /// C#: ICombatWorld.Execute: an error where the combat does not take the action.
+    fn execute(&mut self, action: &Action) -> Result<(), String>;
+    /// C#: ICombatWorld.Run.
+    fn run(&self) -> RunChange;
+    /// A copy that goes on apart from this one.
+    fn boxed(&self) -> Box<dyn ToyWorld>;
+}
+
+#[cfg(test)]
+impl Clone for Box<dyn ToyWorld> {
+    fn clone(&self) -> Self {
+        self.boxed()
+    }
 }
 
 /// A state the search reached, and what it reads of it.
@@ -196,6 +225,23 @@ impl State {
         }
     }
 
+    /// The state a toy world stands at, read as `new` reads the engine's.
+    #[cfg(test)]
+    pub fn toy(world: Box<dyn ToyWorld>) -> State {
+        let obs = world.observe();
+        let status = world.status();
+        let going = status == Status::InProgress;
+        State {
+            hash: hash_of(&obs),
+            state_key: if going { protocol::state_key(&obs) } else { 0 },
+            hidden_key: if going { world.hidden_key() } else { 0 },
+            obs: Arc::new(obs),
+            status,
+            sample: false,
+            world: World::Toy(world),
+        }
+    }
+
     /// The state after `action`, made from this one, which stays as it is (C#: ICombatWorld.Execute on a world whose
     /// snapshot stays). At a prompt crossed on the clone, the action is an answer to it.
     pub fn step(&mut self, action: &Action) -> Result<State, String> {
@@ -220,6 +266,12 @@ impl State {
                 let crossing = crossing.clone();
                 Ok(State::at(crossing.at(&path)?, &crossing))
             }
+            #[cfg(test)]
+            World::Toy(world) => {
+                let mut after = world.boxed();
+                after.execute(action)?;
+                Ok(State::toy(after))
+            }
         }
     }
 
@@ -240,6 +292,10 @@ impl State {
     /// The plays the game allows where the player can play, in the game's order; none at a prompt or once the combat
     /// is over (C#: ICombatWorld.Legal).
     pub fn legal(&mut self) -> Vec<Action> {
+        #[cfg(test)]
+        if let World::Toy(world) = &self.world {
+            return world.legal();
+        }
         let World::Engine(world) = &mut self.world else {
             return Vec::new();
         };
@@ -258,6 +314,8 @@ impl State {
                 observe::run(player, c)
             }
             World::Crossed(crossed, _) => crossed.run.clone(),
+            #[cfg(test)]
+            World::Toy(world) => world.run(),
         }
     }
 

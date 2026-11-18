@@ -22,8 +22,4 @@ internal sealed record LeafChoice(CombatNet? Net, string? NetPath, IRunValue? Va
     public string Suffix => Net != null ? $" {Net.Name}" : "";
 
     public ICombatLeaf Leaf => Net ?? throw new InvalidOperationException("no combat net: pimc and plan need --combat-net");
-
-    /// <summary>The options that give workers the same leaf: they start from the same folder, by full path anyway.</summary>
-    public IReadOnlyList<string>? WorkerOptions() =>
-        NetPath != null ? ["--combat-net", Path.GetFullPath(NetPath), "--value", Path.GetFullPath(ValuePath!)] : null;
 }

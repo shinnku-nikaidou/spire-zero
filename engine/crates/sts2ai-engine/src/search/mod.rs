@@ -28,3 +28,9 @@ pub mod state;
 pub mod threads;
 pub mod tokens;
 pub mod turn;
+
+/// The search's tests, on toy worlds (C#: SlPlannerTests, LoopSearchTests).
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod toy;

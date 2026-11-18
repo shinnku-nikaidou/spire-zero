@@ -57,12 +57,11 @@ internal static class OnnxRuntime
 
 /// <summary>What the engine's beam over turns found (<see cref="EngineWorld.Plan"/>): the line picked, the value of the
 /// turn start a losing pick died from, the best line after each first action in the order first found, whether the pick
-/// is proved, and the nodes and turns searched; <c>SlPlanner.Picked</c> makes the plan of it.</summary>
+/// is proved, and the nodes and turns searched; <c>PlanOf.Found</c> makes the plan of it.</summary>
 public sealed record PlanFound(TurnEnd Pick, double From, IReadOnlyList<TurnEnd> ByFirst, bool Proved, int Nodes, int Turns);
 
 /// <summary>
-/// The SL planner's solver in the engine (<c>SlSolver</c>, moved there line for line;
-/// plans/2026-11-18-2132-sl-search-rust.md, C): the rest of the combat searched a little at a time, from a root that
+/// The SL planner's solver in the engine (search/solver.rs; plans/2026-11-18-2132-sl-search-rust.md, C): the rest of the combat searched a little at a time, from a root that
 /// moves along as the combat goes on. It owns a world where its root stands, its turns searched from there in
 /// <paramref name="threads"/> of the engine's threads, which ask V (<paramref name="value"/>) any number at once. One
 /// thread uses it at a time.
@@ -115,7 +114,7 @@ public sealed unsafe class EngineSolver : IDisposable
         }
     }
 
-    /// <summary>The pick so far, for <c>SlPlanner.Picked</c>.</summary>
+    /// <summary>The pick so far, for <c>PlanOf.Found</c>.</summary>
     public PlanFound Result()
     {
         Native.Buf buf;
@@ -252,9 +251,6 @@ internal sealed record SolverMoved(IReadOnlyList<CombatAction> Played, IReadOnly
 /// <summary>A plan asked of the engine, as <c>search/read.rs</c> reads it.</summary>
 internal sealed record PlanAsked(IReadOnlyList<EnemyTurns> History, int NodesPerWorld, int Beam, int EasyBeam, double TurnDecay);
 
-/// <summary>A turn's search asked of the engine, as <c>search/read.rs</c> reads it.</summary>
-internal sealed record TurnAsked(IReadOnlyList<CombatAction> Path, IReadOnlyList<EnemyTurns> History, int Nodes, int Keep,
-    IReadOnlyDictionary<string, int>? LifeBounds);
 
 /// <summary>V as a search in the engine asks it (<c>sz_price</c>): of the run given at a world's import with the change
 /// the engine writes over it. A failure of V is kept and thrown once the engine's call is back.</summary>

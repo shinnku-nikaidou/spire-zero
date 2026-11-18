@@ -5,7 +5,7 @@ namespace Sts2Ai.Tests.Harness;
 
 public class WorkerPoolTests
 {
-    private static readonly WorkerRequest Request = new SlTurnRequest(0, new NodeClone("", []), [], 1, 1, []);
+    private static readonly WorkerRequest Request = new SlPromptRequest(0, new NodeClone("", []), []);
 
     /// <summary>A worker as a shell script: it says hello, then runs <paramref name="script"/> on its first request.</summary>
     private static WorkerPool Pool(string script) =>

@@ -1,7 +1,28 @@
-//! One turn searched depth first from a state to its ends (C#: SlPlanner.SearchTurn and its TurnDfs, where the
-//! reasons are): every action from each state once, transpositions merged by the state key and the full hidden key,
-//! the nodes shared over the first actions, each state where the turn or the combat ends valued by the leaf, `CHUNK`
-//! at a time, a potion thrown away for nothing worth no more than one kept, and cycles set aside for `Loops`.
+//! One turn searched depth first from a state to its ends: every action from each state once, transpositions merged by
+//! the state key and the full hidden key, each state where the turn or the combat ends valued by the leaf.
+//!
+//! Every action from the current state is tried, once per state: the plays where the player is on this turn
+//! (`order.rs`), the answers where a card prompt waits. At the turn's start the nodes are shared over the actions, each
+//! with an even share plus what the ones before it left, so every first action is looked at however many states the
+//! turn has; a prompt that one of them raises shares that action's nodes over its answers the same way. Below, a subtree
+//! spends its share depth first. A line ends with the combat, or where the player can play again after the turn's end: a
+//! prompt the end of the turn or the next turn's start raises is answered first, so the leaf reads a state the combat
+//! net knows. A move back to a state on the path with something gained is a cycle, which would spend every node on its
+//! own repeats: it goes to `Loops` instead of down.
+//!
+//! The search needs no end's value to go on, so the leaf is asked about a turn's ends together, `CHUNK` at a time; a
+//! state another line already ended at is not asked about again. A turn has had 169 thousand ends (a Regent's second
+//! turn of 9 cards and 4 energy, with Toasty Mittens' exhaust after it), each held with its observation and its run
+//! until asked, which took gigabytes; `CHUNK` is a multiple of the net's batch, so the leaf is asked in the same batches
+//! as about them all together.
+//!
+//! A potion can be thrown away in a fight too, for nothing: a state is worth at least the same state with fewer potions.
+//! So each end of the turn at the next turn's start takes the outcome of the best end that differs from it only by
+//! holding fewer of its potions, if the leaf values that one higher: where a potion drunk changed nothing else, the end
+//! that kept it is worth as much.
+//!
+//! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
+//! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

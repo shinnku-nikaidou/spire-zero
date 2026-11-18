@@ -28,11 +28,11 @@ Three rules follow from the goal and decide everything below.
 Nothing derived from the game is in git: not the generated Rust, not the schema, not dumped tables. They are built from
 the user's own copy of the game, like `tmp/gamebin`.
 
-`sim run`'s planner searches in the engine (`--combat-world engine`, its default): the run's own process holds the live
-game, so each plan imports the combat there. `--combat-world replay`, the node's clone in the worker processes, stays for
-checks. Over the wire an SL host sends the live combat with each combat decision between actions (the mod from the
-real game, `run --check`'s host from its own), so `sim brain` (the mod's brain) and `run --check` plan in the engine
-too; a card prompt is crossed on the node's clone in the search workers, as in `sim run`. A NoSL host sends none.
+`sim run`'s planner searches in the engine, the search itself too (`src/search/`, below): the run's own process holds
+the live game, so each plan imports the combat there. Over the wire an SL host sends the live combat with each combat
+decision between actions (the mod from the real game, `run --check`'s host from its own), so `sim brain` (the mod's
+brain) and `run --check` plan in the engine too; a card prompt is crossed on the node's clone in the workers, as in
+`sim run`. A NoSL host sends none.
 
 NoSL's PIMC (`--policy pimc`) searches only in the engine (`EnginePimc`), in the run's own process, with no search
 workers. Its worlds are drawn from the real combat: the host sends the live combat in NoSL too, the engine takes it in
@@ -623,13 +623,15 @@ cards, in the pile's own order) and reads only the random streams, the monsters'
 
 ## The search
 
-`src/search/` is the SL planner's search, moved from the C# brain line for line (plans/2026-11-18-2132-sl-search-rust.md):
-the beam over turns (`beam.rs`, C#: `SlPlanner.Search`), the solver (`solver.rs`, `SlSolver`), one turn searched depth
-first (`turn.rs`, `TurnDfs`) with its cycles (`loops.rs`, `LoopSearch`), the actions' order (`order.rs`), the pruning by
-HP (`bound.rs`, `LifeBound`), the combat net's tokens and inputs (`tokens.rs`, `CombatTokens` and `CombatNet.Feed`) and its
-endings priced (`leaf.rs`, `CombatNet.Priced`, `FreeDisposal`). The same search gives the same plans to the last bit:
-the same nodes, the same ends in the same order, the same values. The C# side keeps the route, V and the crossing of a
-card prompt on the node's clone, and `--combat-search check` holds the two searches against each other.
+`src/search/` is the SL planner's search, moved from the C# brain line for line and held against it to the last bit
+(the same nodes, the same ends in the same order, the same values; plans/2026-11-18-2132-sl-search-rust.md), then the
+C# search deleted (2026-11-19): the beam over turns (`beam.rs`), the solver (`solver.rs`), one turn searched depth
+first (`turn.rs`) with its cycles (`loops.rs`), the actions' order (`order.rs`), the pruning by HP (`bound.rs`), the
+combat net's tokens and inputs (`tokens.rs`) and its endings priced (`leaf.rs`). Each module's head gives its rules and
+their reasons. NoSL's PIMC keeps its C# copies of the cycles (`LoopSearch`), the tokens (`CombatTokens`) and the net
+(`CombatNet`, `FreeDisposal`), so a change to those is made on both sides. The C# side keeps the route, V and the
+crossing of a card prompt on the node's clone. Its tests are the search's (`toy.rs`, `tests.rs`): a small exact combat
+and toy leaves.
 
 A state of the search is a world standing where the player is asked, with what is read of it once (the observation,
 the two keys, the observation's hash). A plan rooted at a card prompt stands on the node's clone until the player can
@@ -650,10 +652,8 @@ typedef int32_t (*sz_cross)(void *ctx, const uint8_t *path, size_t len, void *si
 uint64_t sz_net_load(const uint8_t *graph, size_t graph_len, const uint8_t *file, size_t file_len, const uint8_t *ort, size_t ort_len);
 void     sz_net_free(uint64_t net);
 int32_t  sz_net_outcome(uint64_t net, uint64_t world, const uint8_t *history, size_t len, uint64_t base, sz_price price, void *ctx, double *out);
-int32_t  sz_turn_search(uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx,
-                        const int32_t *stop, sz_buf *out);   // SlPlanner.SearchTurn; 2 where told to stop
 int32_t  sz_plan(uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx, int32_t threads,
-                 const int32_t *stop, sz_buf *out);          // SlPlanner.Search, up to SlPlanner.Picked
+                 const int32_t *stop, sz_buf *out);          // the beam, up to C#'s PlanOf.Found; 2 where told to stop
 int32_t  sz_plan_crossed(uint64_t net, sz_cross cross, void *cross_ctx, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
                          void *ctx, int32_t threads, const int32_t *stop, sz_buf *out);   // the same from a card prompt on the clone
 void     sz_sink_put(void *sink, const uint8_t *bytes, size_t len);
@@ -668,9 +668,9 @@ int32_t  sz_solver_result(uint64_t solver, sz_buf *out);
 int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved
 ```
 
-What goes across is JSON in `ProtocolJson`'s form (`search/read.rs`): what is asked, and what was found (a
-`TurnSearch`, or the pick, its value's turn start, the best line after each first action, whether it is proved, the
-nodes and turns), which C#'s `SlPlanner.Picked` makes the plan of. `base` is the hash of the run given at the import,
+What goes across is JSON in `ProtocolJson`'s form (`search/read.rs`): what is asked, and what was found (the pick, its
+value's turn start, the best line after each first action, whether it is proved, the nodes and turns), which C#'s
+`PlanOf.Found` makes the plan of. `base` is the hash of the run given at the import,
 which tells apart the runs the net's prices are kept for.
 
 ## The lockstep check

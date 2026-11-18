@@ -4,9 +4,8 @@
 use serde::Deserialize;
 
 use super::beam::{Budget, Found};
-use super::bound::Bounds;
 use super::state::{Action, History, Status};
-use super::turn::{TurnEnd, TurnSearch};
+use super::turn::TurnEnd;
 use crate::protocol::{self, EnemyTurn, EnemyTurns, IntentView, Sink};
 use crate::rt::Str;
 
@@ -65,37 +64,6 @@ fn record(enemies: Vec<EnemyJson>) -> History {
                 .collect(),
         })
         .collect()
-}
-
-/// A turn's search asked for (C#: PlanJob, with the nodes and the states kept).
-pub struct TurnAsked {
-    pub path: Vec<Action>,
-    pub history: History,
-    pub nodes: i32,
-    pub keep: usize,
-    pub bounds: Bounds,
-}
-
-#[derive(Deserialize)]
-struct AskedJson {
-    path: Vec<String>,
-    history: Vec<EnemyJson>,
-    nodes: i32,
-    keep: i32,
-    #[serde(default)]
-    life_bounds: Option<std::collections::HashMap<String, i32>>,
-}
-
-/// `{"path":[ACTION…],"history":[…],"nodes":N,"keep":K,"life_bounds":{POTIONS:BOUND…}}`.
-pub fn asked(json: &[u8]) -> Result<TurnAsked, String> {
-    let asked: AskedJson = serde_json::from_slice(json).map_err(|e| format!("a turn's search asked for: {e}"))?;
-    Ok(TurnAsked {
-        path: asked.path.iter().map(|a| Action::parse(a)).collect::<Result<_, _>>()?,
-        history: record(asked.history),
-        nodes: asked.nodes,
-        keep: asked.keep.max(0) as usize,
-        bounds: asked.life_bounds.unwrap_or_default(),
-    })
 }
 
 #[derive(Deserialize)]
@@ -220,18 +188,6 @@ fn double(x: f64, out: &mut Vec<u8>) {
 
 fn string(s: &str, out: &mut Vec<u8>) {
     out.extend_from_slice(serde_json::to_string(s).expect("a string").as_bytes());
-}
-
-/// The turn's search as ProtocolJson reads a `TurnSearch`.
-pub fn write(found: &TurnSearch, out: &mut Vec<u8>) {
-    out.put(b"{\"ends\":[");
-    for (i, end) in found.ends.iter().enumerate() {
-        if i > 0 {
-            out.put(b",");
-        }
-        end_json(end, out);
-    }
-    out.put(format!("],\"nodes\":{},\"cut\":{},\"pruned\":{}}}", found.nodes, found.cut, found.pruned).as_bytes());
 }
 
 fn end_json(end: &TurnEnd, out: &mut Vec<u8>) {

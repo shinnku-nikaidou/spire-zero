@@ -10,7 +10,7 @@ namespace Sts2Ai.SimWorker.Commands;
 /// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
 /// --sl-policy's (the SL planner by default), with the same macro brain, whose afterstates
 /// the environment sets (<see cref="Champions"/>), so one champion file serves both. The SL planner searches in the
-/// engine (--combat-world engine, as run's), on the live combat an SL host sends with each combat decision
+/// engine, on the live combat an SL host sends with each combat decision
 /// (<see cref="DecisionRequest.Export"/>), and crosses a card prompt on the node's clone in the search workers. A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
 /// budget. Prints a line per run on stderr, with the game errors of its search workers.
@@ -21,7 +21,7 @@ internal static class BrainCommand
     private static readonly Option<string?> Wire = Opt.Maybe<string?>("--wire", "writes every message the hosts send, one JSON line each (what clones replays)");
     private static readonly Option<string> SlPolicy = Opt.Of("--sl-policy", "plan", "the combat brain of SL hosts; --policy is NoSL hosts'")
         .AcceptOnlyFromAmong(["pimc", "plan", .. Policies.CombatNames]);
-    private static readonly ChampionArgs Champion = new(file: true, world: "engine");
+    private static readonly ChampionArgs Champion = new(file: true);
 
     public static Command Command()
     {

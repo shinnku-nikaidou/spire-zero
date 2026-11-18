@@ -11,7 +11,7 @@ namespace Sts2Ai.SimWorker.Commands;
 
 /// <summary>
 /// run: whole runs through Harness. --policy picks the brain of every decision of a combat, its card prompts among
-/// them; --macro picks the brain of every decision outside combat. plan searches in the engine unless --combat-world replay.
+/// them; --macro picks the brain of every decision outside combat. plan searches in the engine.
 /// --check plays each seed again over the wire, to a brain in this process, and compares: observations, records and
 /// decision logs included (each observation must survive a JSON round trip); and replays each node from its
 /// checkpoint (the SL clone), and from each save the game made inside a finished room, which the game's Continue loads.
@@ -39,7 +39,7 @@ internal static class RunCommand
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
     private static readonly Option<string?> Mode = Opt.Maybe<string?>("--mode",
         "the game mode: dread, which the game plays at ascension 10 only (--asc 10); the standard game if not given");
-    private static readonly ChampionArgs Champion = new(file: true, world: "engine");
+    private static readonly ChampionArgs Champion = new(file: true);
     private static readonly LoadoutArgs Loadout = new();
 
     public static Command Command()

@@ -205,9 +205,7 @@ internal sealed class ChampionFileOption : Option<string?>
 
 /// <summary>The options that name a champion: its brains, the search's budget and workers, and weights files.</summary>
 /// <param name="file">Whether the command also takes --champion FILE to play (run, brain; gate's --champion is the one to beat).</param>
-/// <param name="world">The world plan searches in when --combat-world is not given: engine for run and brain, replay for
-/// the eval commands'. pimc searches in the engine.</param>
-internal sealed class ChampionArgs(bool file, string world = "replay")
+internal sealed class ChampionArgs(bool file)
 {
     private readonly ChampionFileOption? _file = file ? new() : null;
     private readonly Option<string> _policy = Opt.Of("--policy", "play", "the combat brain: pimc, plan (SL only), or a placeholder policy")
@@ -217,16 +215,6 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
     private readonly BudgetArgs _budget = new();
     private readonly Option<int?> _workers = Opt.Maybe<int?>("--workers", "pimc's search threads, and plan's search worker processes (default: one per world, --worlds)");
     private readonly LeafArgs _leaf = new();
-    private readonly Option<string> _world = Opt.Of("--combat-world", world,
-            "the world plan searches in: engine, the Rust engine in threads of this process, on the live combat that the run's own process " +
-            "writes out or that an SL host sends over the wire (brain, run --check); replay, the node's clone replayed in the worker processes, " +
-            "for checks. The champion is the same one on both. pimc searches in the engine, on worlds drawn from the live combat")
-        .AcceptOnlyFromAmong("replay", "engine");
-    private readonly Option<string> _search = Opt.Of("--combat-search", "engine",
-            "with --combat-world engine, where plan searches: engine, all of it in the engine (the beam, the solver, every turn, the combat net); " +
-            "cs, the C# search on the engine's world; check, both, held against each other turn by turn, plan by plan and at each step of the solver, " +
-            "and a difference in anything stops the run with what differs")
-        .AcceptOnlyFromAmong("engine", "cs", "check");
     private readonly Option<string> _afterstates = Opt.Of("--afterstates", "screen",
             "l0's afterstates: screen predicts them from the screen; clone, in SL only, plays each option on the node's clone")
         .AcceptOnlyFromAmong("screen", "clone");
@@ -251,7 +239,7 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
     }
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _world, _search, _afterstates, .. _leaf.Options, _explore, _macroExplore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -274,13 +262,6 @@ internal sealed class ChampionArgs(bool file, string world = "replay")
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
         if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
-        // The world is the search's: a placeholder plays as it does whatever the default, and refuses the engine asked for by name.
-        bool engine = r.GetValue(_world) == "engine", given = r.GetResult(_world) is { Implicit: false };
-        if (given && policy != "plan") throw new CliException("--combat-world is plan's; it needs --policy plan (pimc searches in the engine)");
-        var search = r.GetValue(_search) switch { "cs" => TurnSearchIn.CSharp, "check" => TurnSearchIn.Check, _ => TurnSearchIn.Engine };
-        if (r.GetResult(_search) is { Implicit: false } && !(engine && policy == "plan"))
-            throw new CliException("--combat-search is plan's in the engine; it needs --policy plan and --combat-world engine");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore,
-            engine && policy == "plan", search);
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore);
     }
 }

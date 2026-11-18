@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use super::state::State;
 use super::threads::{Stop, Threads};
-use super::{beam, read, turn};
+use super::{beam, read};
 use crate::ffi::{SzBuf, call, engine_world, give, text};
 use crate::protocol::{self, RunChange};
 
@@ -141,54 +141,20 @@ pub unsafe extern "C" fn sz_net_outcome(
     })
 }
 
-/// One turn's search (C#: SlPlanner.SearchTurn) from the state `world` stands at with the path played, as `asked`
-/// gives it (`read::asked`'s JSON); `out` gets what it found in the form C# reads a `TurnSearch` in. `base`, `price` and
-/// `ctx` as for `sz_net_outcome`. The search stops where it stands once the int at `stop` is not 0 (none: null), and
-/// says 2. 0 when it worked, 1 on error.
-///
-/// # Safety
-/// As for `sz_net_outcome`; `asked` points at `len` readable bytes; `stop` is null or an int that lives through the
-/// call; `out` points at an `sz_buf` to fill.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn sz_turn_search(
-    net: u64, world: u64, asked: *const u8, len: usize, base: u64, price: SzPrice, ctx: *mut c_void, stop: *const AtomicI32,
-    out: *mut SzBuf,
-) -> i32 {
-    if out.is_null() {
-        return call(1, || Err("no buffer to fill: a null pointer".into()));
-    }
-    unsafe { *out = SzBuf::EMPTY };
-    let result = with_stop(stop, || call(1, || {
-        let net = unsafe { self::net(net) }?;
-        let (world, sample) = unsafe { engine_world(world) }?;
-        let asked = read::asked(unsafe { text(asked, len, "the search asked for") }?.as_bytes())?;
-        let mut root = State::new(world.clone(), sample);
-        for action in &asked.path {
-            root = root.step(action)?;
-        }
-        let price = pricer(price, ctx);
-        let leaf = net.leaf(base, &price);
-        let found = turn::search(&mut root, &Arc::new(asked.history), asked.nodes, asked.keep, &asked.bounds, &leaf as &dyn Leaf)?;
-        let mut json = Vec::with_capacity(4096);
-        read::write(&found, &mut json);
-        give(json, out);
-        Ok(0)
-    }));
-    if result != 0 && stopped_by(stop) { 2 } else { result }
-}
-
 /// Whether the int at `stop` says to stop.
 fn stopped_by(stop: *const AtomicI32) -> bool {
     !stop.is_null() && unsafe { &*stop }.load(Ordering::Relaxed) != 0
 }
 
-/// The SL planner's plan (C#: SlPlanner.Search) from the state `world` stands at, as `asked` gives it
-/// (`read::plan_asked`'s JSON), its turns searched in `threads` threads; `out` gets what the beam found
-/// (`read::write_found`), which C#'s SlPlanner.Picked makes the plan of. The rest as for `sz_turn_search`: V is asked
-/// through `price` from the search's threads, any number at once.
+/// The SL planner's plan (`beam::search`) from the state `world` stands at, as `asked` gives it (`read::plan_asked`'s
+/// JSON), its turns searched in `threads` threads; `out` gets what the beam found (`read::write_found`), which C#'s
+/// PlanOf.Found makes the plan of. `base`, `price` and `ctx` as for `sz_net_outcome`: V is asked through `price` from
+/// the search's threads, any number at once. The search stops where it stands once the int at `stop` is not 0 (none:
+/// null), and says 2. 0 when it worked, 1 on error.
 ///
 /// # Safety
-/// As for `sz_turn_search`.
+/// As for `sz_net_outcome`; `asked` points at `len` readable bytes; `stop` is null or an int that lives through the
+/// call; `out` points at an `sz_buf` to fill.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_plan(
     net: u64, world: u64, asked: *const u8, len: usize, base: u64, price: SzPrice, ctx: *mut c_void, threads: i32, stop: *const AtomicI32,
@@ -447,7 +413,7 @@ pub unsafe extern "C" fn sz_solver_advance(
     if result != 0 && stopped_by(stop) { 2 } else { result }
 }
 
-/// C#: SlSolver.Result, up to C#'s Picked: `out` gets what the solver found, as `sz_plan` gives it.
+/// C#: SlSolver.Result, up to C#'s PlanOf.Found: `out` gets what the solver found, as `sz_plan` gives it.
 ///
 /// # Safety
 /// `solver` is live, used by no other thread during the call; `out` points at an `sz_buf` to fill.

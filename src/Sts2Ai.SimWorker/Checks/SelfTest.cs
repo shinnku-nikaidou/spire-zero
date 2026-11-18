@@ -21,8 +21,9 @@ namespace Sts2Ai.SimWorker.Checks;
 ///    SL world of a run's combat shows the run's observation, plays on as the run did, and restores;
 ///  - SL seal: a node's clone stops at the node's exit and refuses to step past it, and the SL world refuses to step
 ///    past the end of its combat;
-///  - SL plan: the planner's plan of a run's combat holds in the real run, step for step, to the end it planned (and,
-///    with --workers N, the pooled planner plans the same);
+///  - SL plan: the planner's plan of a run's combat, made in the engine, holds in the real run, step for step, to the end
+///    it planned (and, with --workers N, the planner on N threads plans the same);
+///  - the combat net: its outcome of a state is the same to the bit in the engine (SL's search) and in C# (NoSL's PIMC);
 ///  - speed patches: the pooled hook listener iterators yield what the game's own iterators yield;
 ///  - protocol: observations and actions survive a round trip through their wire form (the brain's and harness's
 ///    assemblies reaching no game assembly is a unit test, BoundaryTests);
@@ -37,7 +38,7 @@ internal static partial class SelfTest
 
     private static readonly Option<int> Seed = Opt.Of("--seed", 1, "the seed base");
 
-    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "also checks plan's pool of this many worker processes, and pimc on this many threads");
+    private static readonly Option<int> Workers = Opt.Of("--workers", 0, "also checks that plan and pimc plan the same on this many threads as on one");
 
     private static readonly PoolArgs Pool = new();
 
@@ -152,6 +153,7 @@ internal static partial class SelfTest
         FoulPotionAtMerchants(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
+        TheNetsOutcomeIsTheEngines(pump, pool, act, net.Leaf, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         NodeWorldStandsAtTheEntrysPrompt(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);
