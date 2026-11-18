@@ -427,3 +427,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   04:46:01Z, 397.1 MB, the change note on the changelog page); the texts were not sent again (none changed). The
   listing's numbers are still v11-0-td4 + c11-0's. Installed in `mods/` over 0.3.22 (moved to `tmp/modeng/old-installs/`)
   with the game closed.
+- 2026-11-18 12:48: the listing's numbers are the champion d2's (the user: "換成 d2 的"), from test v12-1's reports at
+  high: A0 / A10 / Dread, Ironclad 199 / 175 / 92 of 199, Silent 198 / 151 / 50, Defect 199 / 161 / 61 of 198, Regent
+  196 / 144 / 43, Necrobinder 193 / 127 / 40, the Fool 187 / 74 / 15 (of 200 but where named). Texts sent without
+  `--content`, the 17 languages, all OK; checked on the public page in English, Traditional Chinese and German. The
+  item stays 0.3.23.
