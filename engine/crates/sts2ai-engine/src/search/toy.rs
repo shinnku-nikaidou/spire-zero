@@ -653,7 +653,7 @@ impl Searcher for Replay<'_> {
         jobs.iter()
             .map(|job| {
                 let mut state = super::threads::start(&self.root, job)?;
-                let mut found = turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, job.crossing, self.leaf)?;
+                let mut found = turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, job.crossing, self.leaf, None)?;
                 found.start = Some(state);
                 Ok(found)
             })

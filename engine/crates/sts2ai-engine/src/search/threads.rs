@@ -1,7 +1,8 @@
 //! Turns searched in threads (C#: EnginePlanner's Searcher): each job's state is the job's path played from the world it
 //! starts at (one kept from an earlier turn's search, `Worlds`, else the root), searched in a thread of its own; a
 //! thread that is done takes the next job, and the results come back in job order, so a plan is the same on any number
-//! of threads.
+//! of threads. Threads fewer jobs leave over (the greedy dive's one job) step states ahead of the jobs' searches
+//! (helpers.rs), which changes nothing the searches find.
 
 use std::collections::{HashMap, VecDeque};
 use std::panic::{self, AssertUnwindSafe};
@@ -10,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 
 use super::beam::{Job, Searcher};
 use super::ffi;
+use super::helpers::Helpers;
 use super::leaf::{Net, Price};
 use super::state::{Action, State};
 use super::turn::{self, TurnSearch};
@@ -37,10 +39,11 @@ unsafe impl Sync for Stop {}
 impl Threads<'_> {
     /// One job's turn: the job's path played from where it starts (`Job::from`, else the root), searched; with the world
     /// it was searched from.
-    fn job(&self, root: &State, job: &Job, nodes: i32, keep: usize) -> Result<TurnSearch, String> {
+    /// `helpers`: the call's spare threads, if it has any.
+    fn job(&self, root: &State, job: &Job, nodes: i32, keep: usize, helpers: Option<&Helpers>) -> Result<TurnSearch, String> {
         let mut state = start(root, job)?;
         let leaf = self.net.leaf(self.base, self.price);
-        let mut found = turn::search(&mut state, &job.history, nodes, keep, &job.bounds, job.crossing, &leaf)?;
+        let mut found = turn::search(&mut state, &job.history, nodes, keep, &job.bounds, job.crossing, &leaf, helpers)?;
         found.start = Some(state);
         Ok(found)
     }
@@ -139,10 +142,22 @@ impl Searcher for Threads<'_> {
         let stop = self.stop;
         // Each thread its own copy of the root: a world is one thread's at a time.
         let roots: Vec<State> = (0..count).map(|_| self.root.copy()).collect();
+        // The threads fewer jobs leave over step states ahead of the jobs' searches (helpers.rs).
+        let spare = self.threads.saturating_sub(count);
+        let helpers = Helpers::new();
+        let helping = (spare > 0).then_some(&helpers);
         std::thread::scope(|scope| {
+            for _ in 0..spare {
+                let helpers = &helpers;
+                scope.spawn(move || {
+                    let stop = stop;
+                    ffi::with_stop(stop.0, || helpers.work())
+                });
+            }
+            let mut searching = Vec::with_capacity(count);
             for root in roots {
                 let (results, next, failed) = (&results, &next, &failed);
-                scope.spawn(move || {
+                searching.push(scope.spawn(move || {
                     let stop = stop;
                     ffi::with_stop(stop.0, || {
                         loop {
@@ -150,7 +165,7 @@ impl Searcher for Threads<'_> {
                             if i >= jobs.len() || failed.load(Ordering::Relaxed) {
                                 break;
                             }
-                            let found = panic::catch_unwind(AssertUnwindSafe(|| self.job(&root, &jobs[i], nodes, keep)))
+                            let found = panic::catch_unwind(AssertUnwindSafe(|| self.job(&root, &jobs[i], nodes, keep, helping)))
                                 .unwrap_or_else(|payload| Err(ffi::panic_text(payload)));
                             if found.is_err() {
                                 failed.store(true, Ordering::Relaxed);
@@ -158,8 +173,13 @@ impl Searcher for Threads<'_> {
                             *results[i].lock().expect("a result") = Some(found);
                         }
                     })
-                });
+                }));
             }
+            for thread in searching {
+                // A panic is caught inside; the thread's end is all that is waited for.
+                let _ = thread.join();
+            }
+            helpers.finish();
         });
         let mut found = Vec::with_capacity(jobs.len());
         for result in results {

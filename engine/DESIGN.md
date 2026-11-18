@@ -651,7 +651,9 @@ runs one thread at a time with the C# session's options (one thread a call); the
 the C# side: the leaf asks it through `sz_price` with what the combat has changed of the run (`sz_world_run`'s form),
 from whichever thread searches, and keeps its values by the run without its HP and potions, the HP and the belt. The
 turns of a plan are searched in `std::thread::scope` threads, a job each, the results in job order, so a plan is the
-same on any number of threads. A search stops at its next step once the int it was given is not 0.
+same on any number of threads. Threads a call has more of than jobs (the greedy dive's one at a time) step the states a
+job's search comes to next while it goes down another action (`helpers.rs`): the search still visits, values and
+batches as one thread would. A search stops at its next step once the int it was given is not 0.
 
 ```c
 typedef int32_t (*sz_price)(void *ctx, const uint8_t *change, size_t len, double *value);   // V of the run with the change over it; 0 ok

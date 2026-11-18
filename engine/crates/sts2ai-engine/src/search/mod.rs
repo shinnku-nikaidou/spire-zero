@@ -20,6 +20,7 @@
 pub mod beam;
 pub mod bound;
 pub mod ffi;
+pub mod helpers;
 pub mod leaf;
 pub mod loops;
 pub mod order;

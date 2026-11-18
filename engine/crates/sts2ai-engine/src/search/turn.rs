@@ -29,6 +29,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::bound::{self, Bounds};
+use super::helpers::{Ahead, Helpers};
 use super::leaf::{Leaf, LeafOutcome, LeafState};
 use super::loops::{LoopPoint, Loops};
 use super::order;
@@ -96,6 +97,7 @@ pub const CHUNK: usize = 16 * super::leaf::BATCH;
 /// first state where the player can play.
 pub fn search(
     root: &mut State, history: &Arc<History>, nodes: i32, keep: usize, bounds: &Bounds, crossing: bool, leaf: &dyn Leaf,
+    helpers: Option<&Helpers>,
 ) -> Result<TurnSearch, String> {
     let round = root.round();
     let mut dfs = Dfs {
@@ -120,8 +122,9 @@ pub fn search(
         loops: Loops::new(round),
         records: Vec::new(),
         crossing,
+        helpers,
     };
-    dfs.visit(root, Some(nodes))?;
+    dfs.visit(root, Some(nodes), None)?;
     dfs.value();
     let found = {
         let leaf = dfs.leaf;
@@ -253,6 +256,8 @@ struct Dfs<'a> {
     records: Vec<Arc<History>>,
     /// The root is a prompt between its turn's end and the next turn's start (`search`).
     crossing: bool,
+    /// The call's spare threads, which step states ahead of the search (helpers.rs).
+    helpers: Option<&'a Helpers>,
 }
 
 /// The state reached here, for the leaf (C#: Reached's LeafState): its record of enemy moves goes on from the
@@ -294,11 +299,14 @@ fn end_of(leaf: &dyn Leaf, history: &Arc<History>, state: &mut State, actions: &
 impl Dfs<'_> {
     /// C#: Visit. Tries every action from the state, once per state; at a state given `share_to`, the nodes up to it
     /// are shared over its actions evenly (and what the ones before left), below, a subtree spends its share depth first.
-    fn visit(&mut self, state: &mut State, share_to: Option<i32>) -> Result<(), String> {
+    /// `ahead`: the state's actions with their steps, queued by a helper before the search came here.
+    fn visit(&mut self, state: &mut State, share_to: Option<i32>, ahead: Option<Ahead>) -> Result<(), String> {
         if !self.seen.insert((state.state_key, state.hidden_key)) {
+            if let Some(ahead) = ahead {
+                ahead.drop_steps();
+            }
             return Ok(());
         }
-        let hash = state.hash;
         // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.
         let plays = state.obs.prompt.is_none();
         if plays {
@@ -309,10 +317,43 @@ impl Dfs<'_> {
             });
         }
         let most = share_to.unwrap_or(self.limit).wrapping_sub(self.nodes);
-        let (todo, left) = order::actions(state, most as i64);
+        // The steps queued for helpers: of every action but the first, which the search makes now; or of all of them,
+        // queued by the helper that made this state (only where the player plays, whose actions take no `most`).
+        let (todo, left, slots, first) = match ahead {
+            Some(ahead) => (ahead.actions, false, ahead.slots, 0),
+            None => {
+                let (todo, left) = order::actions(state, most as i64);
+                let slots = match self.helpers {
+                    Some(helpers) if todo.len() > 1 => helpers.queue(state, &todo[1..], super::helpers::AHEAD),
+                    _ => Vec::new(),
+                };
+                (todo, left, slots, 1)
+            }
+        };
         self.cut |= left;
         let from = self.nodes;
         let mut moved = false;
+        // The slots taken so far; the rest are dropped when the search leaves the state.
+        let mut taken = 0;
+        let result = self.actions_of(state, share_to, &todo, &slots, first, from, &mut moved, &mut taken);
+        for slot in &slots[taken..] {
+            slot.drop_step();
+        }
+        result?;
+        if plays {
+            self.path.pop();
+        }
+        Ok(())
+    }
+
+    /// The search of each action of `state` in turn, `share_to` as for `visit`; the step of action i is `slots[i -
+    /// first]` where there is one.
+    #[allow(clippy::too_many_arguments)]
+    fn actions_of(
+        &mut self, state: &mut State, share_to: Option<i32>, todo: &[Action], slots: &[std::sync::Arc<super::helpers::Slot>], first: usize,
+        from: i32, moved: &mut bool, taken: &mut usize,
+    ) -> Result<(), String> {
+        let hash = state.hash;
         for (i, action) in todo.iter().enumerate() {
             let mut to = None;
             if let Some(end) = share_to {
@@ -320,13 +361,19 @@ impl Dfs<'_> {
                 let at = (self.nodes + 1).max(share as i32);
                 self.limit = at;
                 to = Some(at);
-            } else if moved && self.nodes >= self.limit {
+            } else if *moved && self.nodes >= self.limit {
                 self.cut = true;
                 break;
             }
-            moved = true;
+            *moved = true;
             self.nodes += 1;
-            let mut after = state.step(action)?;
+            let (mut after, mut ahead) = match i.checked_sub(first).and_then(|at| slots.get(at)) {
+                Some(slot) => {
+                    *taken = i - first + 1;
+                    slot.take(self.helpers.expect("helpers where steps were queued"))?
+                }
+                None => (state.step(action)?, None),
+            };
             self.actions.push(action.clone());
             self.hashes.push(hash);
             let status = after.status;
@@ -337,17 +384,17 @@ impl Dfs<'_> {
             } else if status != Status::InProgress {
                 self.ends(&mut after)?;
             } else if after.obs.prompt.is_some() {
-                self.visit(&mut after, to)?;
+                self.visit(&mut after, to, None)?;
             } else if action.is_end_turn() || after.round() != self.round || self.crossing {
                 self.ends(&mut after)?;
             } else if !self.loops.intercept(&self.path, &after, &self.actions, &self.hashes)? {
-                self.visit(&mut after, None)?;
+                self.visit(&mut after, None, ahead.take())?;
+            }
+            if let Some(ahead) = ahead {
+                ahead.drop_steps();
             }
             self.actions.pop();
             self.hashes.pop();
-        }
-        if plays {
-            self.path.pop();
         }
         Ok(())
     }

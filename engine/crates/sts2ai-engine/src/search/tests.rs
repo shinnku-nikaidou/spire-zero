@@ -67,7 +67,7 @@ fn outcome(state: &mut State) -> LeafOutcome {
 
 /// C#: SlPlanner.SearchTurn from the state, with no record of enemy moves.
 fn search(state: &mut State, leaf: &dyn Leaf, nodes: i32, keep: usize, bounds: &Bounds) -> TurnSearch {
-    turn::search(state, &none(), nodes, keep, bounds, false, leaf).expect("the turn's search")
+    turn::search(state, &none(), nodes, keep, bounds, false, leaf, None).expect("the turn's search")
 }
 
 /// C#: SlPlanner.Plan, the plan of an unproved loss stopping after `replan` turns.
@@ -223,6 +223,24 @@ fn an_unlimited_turn_search_ends_at_every_state_the_turn_can_reach() {
 }
 
 #[test]
+fn helpers_stepping_ahead_change_nothing_a_turns_search_finds() {
+    let helpers = crate::search::helpers::Helpers::new();
+    std::thread::scope(|scope| {
+        for _ in 0..3 {
+            scope.spawn(|| helpers.work());
+        }
+        for nodes in [1, 4, 30, 300, UNLIMITED] {
+            let alone = search(&mut toy(24), &ToyLeaf, nodes, usize::MAX, &Bounds::new());
+            let helped = turn::search(&mut toy(24), &none(), nodes, usize::MAX, &Bounds::new(), false, &ToyLeaf, Some(&helpers))
+                .expect("the turn's search");
+            assert_eq!((alone.nodes, alone.cut, alone.pruned), (helped.nodes, helped.cut, helped.pruned), "{nodes} nodes");
+            assert_eq!(format!("{:?}", alone.ends), format!("{:?}", helped.ends), "{nodes} nodes");
+        }
+        helpers.finish();
+    });
+}
+
+#[test]
 fn the_leaf_is_asked_about_a_turns_ends_together() {
     let asked = Asked::default();
     let found = search(&mut toy(24), &asked, 100_000, usize::MAX, &Bounds::new());
@@ -322,7 +340,7 @@ fn the_full_beam_takes_the_dives_turns_instead_of_searching_them_again() {
             jobs.iter()
                 .map(|job| {
                     searched.borrow_mut().push(text(&job.path));
-                    turn::search(&mut played(root.copy(), &job.path), &job.history, nodes, keep, &Bounds::new(), job.crossing, &ToyLeaf)
+                    turn::search(&mut played(root.copy(), &job.path), &job.history, nodes, keep, &Bounds::new(), job.crossing, &ToyLeaf, None)
                 })
                 .collect()
         }),
