@@ -70,6 +70,9 @@ pub struct TurnSearch {
     pub nodes: i32,
     pub cut: bool,
     pub pruned: i32,
+    /// The world the turn was searched from, where the searcher gives it back (`threads.rs`): the beam and the solver
+    /// keep it, so that a later turn below it starts there instead of replaying its path from the root (`Worlds`).
+    pub start: Option<State>,
 }
 
 /// C#: SlPlanner.Mix.
@@ -144,6 +147,7 @@ pub fn search(root: &mut State, history: &Arc<History>, nodes: i32, keep: usize,
         nodes: dfs.nodes,
         cut: dfs.cut,
         pruned: dfs.pruned,
+        start: None,
     })
 }
 

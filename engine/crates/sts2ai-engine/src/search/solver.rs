@@ -39,6 +39,7 @@ use std::sync::Arc;
 use super::beam::{self, ByFirst, Found, Job, Rank, Searcher, UNLIMITED};
 use super::bound::{self, Bounds};
 use super::state::{self, Action, History, Status};
+use super::threads::Worlds;
 use super::turn::{self, TurnEnd, TurnSearch};
 
 /// C#: SlSolver.Edge. The actions from a state to where its turn ends, the hash of each one's observation, the key of the
@@ -144,7 +145,15 @@ pub struct Solver {
     bounds: Bounds,
     raised: i32,
     purged: i32,
+    /// The worlds of the states expanded last, by their paths from the root: a state's turn starts from the nearest one
+    /// on its path instead of replaying the path from the root.
+    worlds: Worlds,
 }
+
+/// How many expanded states' worlds the solver keeps, the latest. On max's route over 45 fights of whole runs (8
+/// threads) it took the CPU from 724 s, every path replayed from the root, to 354 s, for 153 MB more at the peak;
+/// keeping 4,096 saved a tenth more for 568 MB.
+const WORLDS: usize = 1024;
 
 fn end_turns(actions: &[Action]) -> i32 {
     actions.iter().filter(|a| a.is_end_turn()).count() as i32
@@ -171,6 +180,7 @@ impl Solver {
             bounds: Bounds::new(),
             raised: 0,
             purged: 0,
+            worlds: Worlds::new(WORLDS),
         }
     }
 
@@ -232,14 +242,21 @@ impl Solver {
             }
             let jobs: Vec<Job> = states
                 .iter()
-                .map(|&n| Job {
-                    path: self.path(n).0,
-                    history: self.nodes_of[n].history.clone(),
-                    bounds: self.bounds.clone(),
+                .map(|&n| {
+                    let path = self.path(n).0;
+                    Job {
+                        from: self.worlds.nearest(&path),
+                        path,
+                        history: self.nodes_of[n].history.clone(),
+                        bounds: self.bounds.clone(),
+                    }
                 })
                 .collect();
             let found = search.search(&jobs, UNLIMITED, usize::MAX)?;
-            for (n, found) in states.into_iter().zip(found) {
+            for ((n, mut found), job) in states.into_iter().zip(found).zip(jobs) {
+                if let Some(world) = found.start.take() {
+                    self.worlds.keep(job.path, world);
+                }
                 self.expand(n, found);
             }
             if self.raised > self.purged {
@@ -273,6 +290,7 @@ impl Solver {
         self.order += 1;
         self.nodes_of.push(Node::new(0, 0.0, turns, moves, 0, self.order, i32::MAX, String::new(), 0));
         self.root = self.nodes_of.len() - 1;
+        self.worlds.advance(played);
         if let Some((line, from)) = self.seed.take() {
             self.seed = if line.actions.len() > played.len() && line.actions[..played.len()] == *played {
                 Some((
@@ -333,6 +351,7 @@ impl Solver {
             path: Vec::new(),
             history: self.nodes_of[root].history.clone(),
             bounds: self.bounds.clone(),
+            from: None,
         };
         let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
         self.expand(root, found);

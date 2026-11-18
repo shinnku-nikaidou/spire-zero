@@ -1,7 +1,9 @@
-//! Turns searched in threads (C#: EnginePlanner's Searcher): each job's state is the root with the job's path played,
-//! searched in a thread of its own; a thread that is done takes the next job, and the results come back in job order,
-//! so a plan is the same on any number of threads.
+//! Turns searched in threads (C#: EnginePlanner's Searcher): each job's state is the job's path played from the world it
+//! starts at (one kept from an earlier turn's search, `Worlds`, else the root), searched in a thread of its own; a
+//! thread that is done takes the next job, and the results come back in job order, so a plan is the same on any number
+//! of threads.
 
+use std::collections::{HashMap, VecDeque};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
@@ -9,7 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use super::beam::{Job, Searcher};
 use super::ffi;
 use super::leaf::{Net, Price};
-use super::state::State;
+use super::state::{Action, State};
 use super::turn::{self, TurnSearch};
 
 /// The engine's turn searches from one root.
@@ -33,14 +35,98 @@ unsafe impl Send for Stop {}
 unsafe impl Sync for Stop {}
 
 impl Threads<'_> {
-    /// One job's turn: the root with the path played, searched.
+    /// One job's turn: the job's path played from where it starts (`Job::from`, else the root), searched; with the world
+    /// it was searched from.
     fn job(&self, root: &State, job: &Job, nodes: i32, keep: usize) -> Result<TurnSearch, String> {
-        let mut state = root.copy();
-        for action in &job.path {
-            state = state.step(action)?;
-        }
+        let mut state = start(root, job)?;
         let leaf = self.net.leaf(self.base, self.price);
-        turn::search(&mut state, &job.history, nodes, keep, &job.bounds, &leaf)
+        let mut found = turn::search(&mut state, &job.history, nodes, keep, &job.bounds, &leaf)?;
+        found.start = Some(state);
+        Ok(found)
+    }
+}
+
+/// The state a job's turn is searched from: its path played from the world it starts at, else from the root.
+pub fn start(root: &State, job: &Job) -> Result<State, String> {
+    let (mut state, done) = match &job.from {
+        Some((done, world)) => (world.copy(), *done),
+        None => (root.copy(), 0),
+    };
+    for action in &job.path[done..] {
+        state = state.step(action)?;
+    }
+    Ok(state)
+}
+
+/// Worlds of states searched before, by the path from the root that reaches each (Job's `from`), the latest `most`:
+/// a job starts from the one at the longest beginning of its path instead of replaying the path from the root. The
+/// engine's steps depend on nothing else, so the world is the one the replay would make. Kept by the hash of the path,
+/// with the path to tell a match.
+pub struct Worlds {
+    by_hash: HashMap<u64, (Vec<Action>, State)>,
+    order: VecDeque<u64>,
+    most: usize,
+}
+
+/// The hash of each beginning of `path`, the first action's first.
+fn beginnings(path: &[Action]) -> Vec<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut at = 0u64;
+    path.iter()
+        .map(|action| {
+            let mut one = std::collections::hash_map::DefaultHasher::new();
+            action.hash(&mut one);
+            at = super::turn::mix(at, one.finish());
+            at
+        })
+        .collect()
+}
+
+impl Worlds {
+    pub fn new(most: usize) -> Worlds {
+        Worlds {
+            by_hash: HashMap::new(),
+            order: VecDeque::new(),
+            most,
+        }
+    }
+
+    /// The world at the longest beginning of `path` kept, with how many of its actions lead there.
+    pub fn nearest(&self, path: &[Action]) -> Option<(usize, State)> {
+        let hashes = beginnings(path);
+        (1..=path.len()).rev().find_map(|k| match self.by_hash.get(&hashes[k - 1]) {
+            Some((kept, world)) if kept[..] == path[..k] => Some((k, world.copy())),
+            _ => None,
+        })
+    }
+
+    /// Keeps the world `path` reaches; the oldest goes when `most` are kept. The root's own (no path) is the root.
+    pub fn keep(&mut self, path: Vec<Action>, world: State) {
+        let Some(&hash) = beginnings(&path).last() else {
+            return;
+        };
+        if self.most == 0 || self.by_hash.contains_key(&hash) {
+            return;
+        }
+        if self.order.len() == self.most
+            && let Some(oldest) = self.order.pop_front()
+        {
+            self.by_hash.remove(&oldest);
+        }
+        self.order.push_back(hash);
+        self.by_hash.insert(hash, (path, world));
+    }
+
+    /// The root moved by `played`: the worlds below it stay, by their paths from there; the rest go.
+    pub fn advance(&mut self, played: &[Action]) {
+        let order = std::mem::take(&mut self.order);
+        let mut by_hash = std::mem::take(&mut self.by_hash);
+        for hash in order {
+            let (path, world) = by_hash.remove(&hash).expect("a world for each hash kept");
+            if path.len() > played.len() && path.starts_with(played) {
+                self.keep(path[played.len()..].to_vec(), world);
+            }
+        }
     }
 }
 

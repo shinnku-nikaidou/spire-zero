@@ -41,7 +41,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::bound::{self, Bounds};
-use super::state::{Action, History, Status};
+use super::state::{Action, History, State, Status};
+use super::threads::Worlds;
 use super::turn::{TurnEnd, TurnSearch};
 
 /// C#: SlPlanner.MaxTurns.
@@ -50,11 +51,14 @@ pub const MAX_TURNS: i32 = 40;
 /// C#: SlPlanner.Unlimited.
 pub const UNLIMITED: i32 = i32::MAX;
 
-/// C#: PlanJob. A state of the beam as a turn's search needs it.
+/// C#: PlanJob. A state of the beam as a turn's search needs it: the path from the root that reaches it, and where to
+/// start playing it: the world after its first `k` actions, kept from an earlier turn's search (`Worlds`), or none,
+/// the root. The engine's steps are the same whichever way, so the state is too.
 pub struct Job {
     pub path: Vec<Action>,
     pub history: Arc<History>,
     pub bounds: Bounds,
+    pub from: Option<(usize, State)>,
 }
 
 /// C#: TurnSearcher. Searches one turn from each job's state, in job order, each with `nodes` nodes, keeping `keep`.
@@ -176,6 +180,7 @@ pub fn narrow(full: &TurnSearch, keep: usize) -> TurnSearch {
         nodes: full.nodes,
         cut: full.cut || going.len() > keep,
         pruned: full.pruned,
+        start: None,
     }
 }
 
@@ -219,6 +224,8 @@ pub fn search(budget: &Budget, history: Arc<History>, searcher: &dyn Searcher) -
         history,
         searcher,
         searched: HashMap::new(),
+        // A turn's states start from the turn's before: a few turns' worth is all the beam needs.
+        worlds: Worlds::new(4 * budget.beam.max(1) as usize),
         by_first: ByFirst::default(),
         best: None,
         bounds: Bounds::new(),
@@ -244,6 +251,8 @@ struct Beam<'a> {
     searcher: &'a dyn Searcher,
     /// The dive's turns, each searched in full (every end), by the path to the turn's state.
     searched: HashMap<String, TurnSearch>,
+    /// The worlds of the states whose turns were searched, which the states below them start from.
+    worlds: Worlds,
     by_first: ByFirst,
     best: Option<(TurnEnd, Rank)>,
     bounds: Bounds,
@@ -331,11 +340,15 @@ impl Beam<'_> {
                     path: states[i].actions.clone(),
                     history: states[i].history.clone(),
                     bounds: self.bounds.clone(),
+                    from: self.worlds.nearest(&states[i].actions),
                 })
                 .collect();
             let replies = self.searcher.search(&jobs, self.nodes_per_state, if dive { usize::MAX } else { keep })?;
-            for (k, reply) in replies.into_iter().enumerate() {
+            for (k, mut reply) in replies.into_iter().enumerate() {
                 let i = asked[k];
+                if let Some(world) = reply.start.take() {
+                    self.worlds.keep(states[i].actions.clone(), world);
+                }
                 found[i] = Some(if dive {
                     let narrowed = narrow(&reply, keep);
                     self.searched.insert(path_key(&states[i].actions), reply);

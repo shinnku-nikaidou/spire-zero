@@ -378,6 +378,7 @@ fn a_sooner_win_is_the_pick_on_an_exact_tie_or_within_the_turn_decay() {
             nodes,
             cut: false,
             pruned: 0,
+            start: None,
         };
         let turns: HashMap<&str, TurnSearch> = HashMap::from([
             (

@@ -619,11 +619,10 @@ impl Searcher for Replay<'_> {
         let none = Bounds::new();
         jobs.iter()
             .map(|job| {
-                let mut state = self.root.copy();
-                for action in &job.path {
-                    state = state.step(action)?;
-                }
-                turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, self.leaf)
+                let mut state = super::threads::start(&self.root, job)?;
+                let mut found = turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, self.leaf)?;
+                found.start = Some(state);
+                Ok(found)
             })
             .collect()
     }
