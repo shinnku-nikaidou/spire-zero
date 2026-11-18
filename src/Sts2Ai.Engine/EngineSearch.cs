@@ -248,6 +248,9 @@ public static unsafe class EngineCrossing
 /// <summary>Where a solver's root moved, as <c>search/read.rs</c> reads it.</summary>
 internal sealed record SolverMoved(IReadOnlyList<CombatAction> Played, IReadOnlyList<EnemyTurns> Moves);
 
+/// <summary>NoSL's search of a decision asked of the engine, as <c>search/read.rs</c> reads it.</summary>
+internal sealed record PimcAsked(IReadOnlyList<EnemyTurns> History, IReadOnlyList<string> First, int NodesPerFirst, int Worlds, ulong Seed);
+
 /// <summary>A plan asked of the engine, as <c>search/read.rs</c> reads it.</summary>
 internal sealed record PlanAsked(IReadOnlyList<EnemyTurns> History, int NodesPerWorld, int Beam, int EasyBeam, double TurnDecay);
 

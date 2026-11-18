@@ -217,3 +217,61 @@ fn end_json(end: &TurnEnd, out: &mut Vec<u8>) {
     string(&end.potions, out);
     out.put(format!(",\"shown\":{}}}", end.shown).as_bytes());
 }
+
+#[derive(Deserialize)]
+struct PimcJson {
+    history: Vec<EnemyJson>,
+    first: Vec<String>,
+    nodes_per_first: i32,
+    worlds: usize,
+    seed: u64,
+}
+
+/// NoSL's search of a decision asked for (`pimc::Asked`):
+/// `{"history":[…],"first":["ACTION"…],"nodes_per_first":N,"worlds":K,"seed":S}`.
+pub fn pimc_asked(json: &[u8]) -> Result<super::pimc::Asked, String> {
+    let asked: PimcJson = serde_json::from_slice(json).map_err(|e| format!("a NoSL search asked for: {e}"))?;
+    Ok(super::pimc::Asked {
+        history: record(asked.history),
+        first: asked.first.iter().map(|a| Action::parse(a)).collect::<Result<_, _>>()?,
+        nodes_per_first: asked.nodes_per_first,
+        worlds: asked.worlds,
+        seed: asked.seed,
+    })
+}
+
+/// Each world's line after each first action, as C# reads a `PlannedLine[][]`:
+/// `[[{"value":V,"actions":["ACTION"…],"hashes":[H…],"repeats":R}…]…]`.
+pub fn write_lines(worlds: &[Vec<super::pimc::Line>], out: &mut Vec<u8>) {
+    out.put(b"[");
+    for (k, lines) in worlds.iter().enumerate() {
+        if k > 0 {
+            out.put(b",");
+        }
+        out.put(b"[");
+        for (a, line) in lines.iter().enumerate() {
+            if a > 0 {
+                out.put(b",");
+            }
+            out.put(b"{\"value\":");
+            double(line.value, out);
+            out.put(b",\"actions\":[");
+            for (i, action) in line.actions.iter().enumerate() {
+                if i > 0 {
+                    out.put(b",");
+                }
+                string(&action.text(), out);
+            }
+            out.put(b"],\"hashes\":[");
+            for (i, hash) in line.hashes.iter().enumerate() {
+                if i > 0 {
+                    out.put(b",");
+                }
+                out.put(hash.to_string().as_bytes());
+            }
+            out.put(format!("],\"repeats\":{}}}", line.repeats).as_bytes());
+        }
+        out.put(b"]");
+    }
+    out.put(b"]");
+}

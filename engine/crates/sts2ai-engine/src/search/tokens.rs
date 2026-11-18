@@ -102,8 +102,8 @@ pub struct Tokens {
     extra: Vec<f64>,
 }
 
-/// C#: CombatTokens.Of, in SL (no environment's mark).
-pub fn of(obs: &CombatObservation, history: &History, lags: usize) -> Tokens {
+/// C#: CombatTokens.Of: in NoSL where `nosl`, its mark `env:NoSL` in the context; in SL none.
+pub fn of(obs: &CombatObservation, history: &History, lags: usize, nosl: bool) -> Tokens {
     let pl = &obs.player;
     let enemies = obs
         .enemies
@@ -153,6 +153,10 @@ pub fn of(obs: &CombatObservation, history: &History, lags: usize) -> Tokens {
     }
     if let Some(dominion) = obs.dominion {
         context.push(format!("dominion:{}", dominion.as_str()));
+    }
+    // C#: EnvTokens.
+    if nosl {
+        context.push("env:NoSL".to_string());
     }
     Tokens {
         cards,

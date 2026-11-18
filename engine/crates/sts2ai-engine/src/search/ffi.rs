@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use super::state::State;
 use super::threads::{Stop, Threads};
-use super::{beam, read};
+use super::{beam, pimc, read};
 use crate::ffi::{SzBuf, call, engine_world, give, text};
 use crate::protocol::{self, RunChange};
 
@@ -137,6 +137,36 @@ pub unsafe extern "C" fn sz_net_outcome(
             *out.add(1) = outcome.win;
             *out.add(2) = outcome.hp;
         }
+        Ok(0)
+    })
+}
+
+/// NoSL's search of a decision (`pimc::search`) from the real combat `world` stands at, between the player's actions, as
+/// `asked` gives it (`read::pimc_asked`'s JSON): its worlds drawn there and searched in `threads` threads, every state
+/// read in NoSL where `nosl` is not 0; `out` gets each world's line after each first action (`read::write_lines`).
+/// `base`, `price` and `ctx` as for `sz_net_outcome`: V is asked through `price` from the search's threads, any number
+/// at once. 0 when it worked, 1 on error.
+///
+/// # Safety
+/// As for `sz_net_outcome`; `asked` points at `len` readable bytes; `out` points at an `sz_buf` to fill.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_pimc(
+    net: u64, world: u64, asked: *const u8, len: usize, base: u64, price: SzPrice, ctx: *mut c_void, nosl: i32, threads: i32, out: *mut SzBuf,
+) -> i32 {
+    if out.is_null() {
+        return call(1, || Err("no buffer to fill: a null pointer".into()));
+    }
+    unsafe { *out = SzBuf::EMPTY };
+    call(1, || {
+        let net = unsafe { self::net(net) }?;
+        let (world, _) = unsafe { engine_world(world) }?;
+        let asked = read::pimc_asked(unsafe { text(asked, len, "the NoSL search asked for") }?.as_bytes())?;
+        let price = pricer(price, ctx);
+        let leaf_of = || net.leaf_in(base, &price, nosl != 0);
+        let worlds = pimc::search(world, &asked, threads.max(1) as usize, &leaf_of)?;
+        let mut json = Vec::with_capacity(16 * 1024);
+        read::write_lines(&worlds, &mut json);
+        give(json, out);
         Ok(0)
     })
 }

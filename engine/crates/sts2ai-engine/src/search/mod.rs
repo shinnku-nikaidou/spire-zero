@@ -8,6 +8,7 @@
 //! - `bound`: the one rule written by hand, the pruning by HP (C#: LifeBound).
 //! - `loops`: cycles inside a turn (C#: LoopSearch).
 //! - `turn`: one turn searched depth first to its ends (C#: SlPlanner's TurnDfs).
+//! - `pimc`: NoSL's search, PIMC over worlds drawn from the real combat (C#: PimcBrain).
 //! - `beam`: the beam over turns (C#: SlPlanner.Search); `solver`: the solver (C#: SlSolver); `threads`: their turns
 //!   searched in threads.
 //! - `leaf`: what the ends are worth, by the combat net and V (C#: CombatNet, FreeDisposal); `tokens`: the net's
@@ -22,6 +23,7 @@ pub mod ffi;
 pub mod leaf;
 pub mod loops;
 pub mod order;
+pub mod pimc;
 pub mod read;
 pub mod solver;
 pub mod state;

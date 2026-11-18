@@ -183,21 +183,29 @@ impl Net {
     }
 
     /// The leaf of a search with this net, its endings priced by `price`; `base` tells apart the runs the C# side
-    /// prices over (the run at the import), for the prices the net keeps across searches.
+    /// prices over (the run at the import), for the prices the net keeps across searches. In SL: no environment's mark.
     pub fn leaf<'a>(&'a self, base: u64, price: &'a Price<'a>) -> NetLeaf<'a> {
+        self.leaf_in(base, price, false)
+    }
+
+    /// The leaf of a search in NoSL where `nosl` (C#: CombatNet.In): every state it reads marked `env:NoSL`, its
+    /// endings priced by `price`, which is V in that environment on the C# side.
+    pub fn leaf_in<'a>(&'a self, base: u64, price: &'a Price<'a>, nosl: bool) -> NetLeaf<'a> {
         NetLeaf {
             net: self,
             base,
             price,
+            nosl,
             keyed: std::cell::RefCell::new(None),
         }
     }
 
     /// The graph's outputs for each of the states, asked as one batch (C#: CombatNet.Graphs): per state, the endings'
     /// chances and the potions' chances of being gone.
-    pub fn graphs(&self, states: &[(&CombatObservation, &History)]) -> Result<Vec<Vec<Vec<f32>>>, String> {
+    pub fn graphs(&self, states: &[(&CombatObservation, &History)], nosl: bool) -> Result<Vec<Vec<Vec<f32>>>, String> {
         let lags = self.file.lags as usize;
-        let fed: Vec<Vec<tokens::Input>> = states.iter().map(|(obs, history)| tokens::feed(&tokens::of(obs, history, lags), lags, self)).collect();
+        let fed: Vec<Vec<tokens::Input>> =
+            states.iter().map(|(obs, history)| tokens::feed(&tokens::of(obs, history, lags, nosl), lags, self)).collect();
         let batch = tokens::stack(fed);
         let mut inputs: Vec<(std::borrow::Cow<'_, str>, ort::session::SessionInputValue<'_>)> = Vec::with_capacity(batch.len());
         for input in batch {
@@ -257,6 +265,8 @@ pub struct NetLeaf<'a> {
     net: &'a Net,
     base: u64,
     price: &'a Price<'a>,
+    /// Whether every state is read in NoSL (`env:NoSL`).
+    nosl: bool,
     /// The run this leaf last made a key of, without its HP and potions, and the key (C#: CombatNet's `_keyed`).
     keyed: std::cell::RefCell<Option<(RunChange, u64)>>,
 }
@@ -388,7 +398,7 @@ impl Leaf for NetLeaf<'_> {
         if let Some(ended) = self.ended(state.status, &state.run)? {
             return Ok(ended);
         }
-        let outputs = self.net.graphs(&[(&state.obs, &state.history)])?;
+        let outputs = self.net.graphs(&[(&state.obs, &state.history)], self.nosl)?;
         self.priced(&state.run, &outputs[0])
     }
 
@@ -404,7 +414,7 @@ impl Leaf for NetLeaf<'_> {
         }
         for asked in going.chunks(BATCH) {
             let batch: Vec<(&CombatObservation, &History)> = asked.iter().map(|&i| (&*states[i].obs, &*states[i].history)).collect();
-            let outputs = self.net.graphs(&batch)?;
+            let outputs = self.net.graphs(&batch, self.nosl)?;
             for (k, &i) in asked.iter().enumerate() {
                 outcomes[i] = Some(self.priced(&states[i].run, &outputs[k])?);
             }

@@ -78,6 +78,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// <summary>The net's file, which the engine's search loads the same net from (<c>EngineNet</c>).</summary>
     public CombatNetFile File => _file;
 
+    /// <summary>The environment this leaf reads every state in (<see cref="In"/>).</summary>
+    public PlayEnvironment Env => _env;
+
     /// <summary>V of a run, as this net prices its endings: in its environment.</summary>
     public double RunValue(RunView run) => _value.Value(run);
 

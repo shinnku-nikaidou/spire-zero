@@ -66,7 +66,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         // The nets read every state in the run's environment (env:NoSL in NoSL); the workers' leaves are the planner's,
         // in SL (Serve).
         ICombatLeaf InEnv() => Leaf.Leaf.In(env);
-        var combat = Policy == "pimc" ? new EnginePimc(InEnv(), Workers).Route(Budget, Combat)
+        var combat = Policy == "pimc" ? new EnginePimc((CombatNet)InEnv(), Workers).Route(Budget, Combat)
             : pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
             : new EnginePlanner((CombatNet)InEnv(), Workers).Route(Budget, Combat, pool, background);
         Dispatcher dispatcher;

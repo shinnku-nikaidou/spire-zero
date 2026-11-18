@@ -222,6 +222,30 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         });
     }
 
+    /// <summary>
+    /// NoSL's search of a decision in the engine (search/pimc.rs, C#: PimcBrain): <paramref name="worlds"/> worlds drawn
+    /// from the real combat this world is, the k-th from <c>WorldSeed(seed, k)</c>, each searched for the best line
+    /// after each of <paramref name="first"/> with <paramref name="nodesPerFirst"/> nodes, in
+    /// <paramref name="threads"/> of the engine's threads, which ask V (<paramref name="value"/>) any number at once;
+    /// every state is read in NoSL where <paramref name="nosl"/>. The lines by world, in world order, then by first
+    /// action. This world stays where it stands.
+    /// </summary>
+    /// <exception cref="EngineException">The search failed in the engine.</exception>
+    public IReadOnlyList<IReadOnlyList<PlannedLine>> Pimc(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history,
+        IReadOnlyList<CombatAction> first, int nodesPerFirst, int worlds, ulong seed, bool nosl, int threads)
+    {
+        var asked = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(new PimcAsked(history, [.. first.Select(a => a.ToString())], nodesPerFirst, worlds, seed)));
+        return new Pricer(RunOf, value).With(ctx =>
+        {
+            Native.Buf buf;
+            int said;
+            fixed (byte* bytes = asked)
+                said = Native.sz_pimc(net.Handle, _at.Handle, bytes, (nuint)asked.Length, _base.Value, Pricer.Callback, ctx, nosl ? 1 : 0, threads, &buf);
+            if (said != 0) throw Native.Failed("sz_pimc");
+            return ProtocolJson.Deserialize<PlannedLine[][]>(Native.Take(buf));
+        });
+    }
+
     /// <summary>The engine's net's outcome of the state the world stands at (<c>CombatNet.Outcome</c>): the value, the
     /// chance to win and the HP held at a win, with V by <paramref name="value"/>.</summary>
     public (double Value, double Win, double Hp) Outcome(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history)

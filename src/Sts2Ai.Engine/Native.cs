@@ -98,6 +98,8 @@ internal static unsafe partial class Native
     [LibraryImport(Library)] internal static partial void sz_sink_put(nint sink, byte* bytes, nuint len);
     [LibraryImport(Library)] internal static partial int sz_plan(NetHandle net, WorldHandle world, byte* asked, nuint len, ulong @base,
         delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop, Buf* result);
+    [LibraryImport(Library)] internal static partial int sz_pimc(NetHandle net, WorldHandle world, byte* asked, nuint len, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int nosl, int threads, Buf* result);
 
     /// <summary>The bytes of a buffer the engine filled, which is given back.</summary>
     internal static byte[] Take(Buf buf)

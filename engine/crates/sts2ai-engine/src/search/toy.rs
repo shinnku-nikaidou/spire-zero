@@ -139,7 +139,7 @@ impl Played {
 
 /// C#: Fixtures.Around, the run around a toy's combat: the combat's HP, max HP, gold and potions. The rest of the
 /// floor-1 run is left out, as no toy leaf reads it.
-fn around(obs: &CombatObservation) -> RunChange {
+pub fn around(obs: &CombatObservation) -> RunChange {
     RunChange {
         hp: obs.player.hp,
         max_hp: obs.player.max_hp,

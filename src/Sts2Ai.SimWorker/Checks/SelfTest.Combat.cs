@@ -42,8 +42,8 @@ internal static partial class SelfTest
     /// </summary>
     private static void PimcThreads(Pump pump, CombatPool combats, int seed, int workers, LeafChoice net, Action<string, bool, string> check)
     {
-        var alone = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), 1);
-        var threaded = new EnginePimc(net.Leaf.In(PlayEnvironment.NoSL), workers);
+        var alone = new EnginePimc((CombatNet)net.Leaf.In(PlayEnvironment.NoSL), 1);
+        var threaded = new EnginePimc((CombatNet)net.Leaf.In(PlayEnvironment.NoSL), workers);
         for (int i = 0; i < 4; i++)
         {
             var setup = combats.Setup(i, GameSeeds.MakeSeed(seed + 2, i));
@@ -344,7 +344,7 @@ internal static partial class SelfTest
                 check($"SL world ends a cycle as planned ({name})", world.Status == plan.End, $"{world.Status}, planned {plan.End}");
             }
             if (prompt) return;
-            var pimc = new EnginePimc(leaf.In(PlayEnvironment.NoSL), 2).Decide(obs, legal, () => export, new Budget(Worlds: 2, NodesPerWorld: 300), 1, []);
+            var pimc = new EnginePimc((CombatNet)leaf.In(PlayEnvironment.NoSL), 2).Decide(obs, legal, () => export, new Budget(Worlds: 2, NodesPerWorld: 300), 1, []);
             check($"PIMC finds a cycle ({name})", pimc.Repeats, $"{pimc.First} [{string.Join(" ", pimc.Plan.Take(8))}...]");
         }
         Case("draws", ["MONOLOGUE", "FLASH_OF_STEEL", "FLASH_OF_STEEL"], []);

@@ -11,6 +11,7 @@ use super::bound::{self, Bounds};
 use super::leaf::{Leaf, LeafOutcome, LeafState};
 use super::loops;
 use super::order;
+use super::pimc;
 use super::solver::Solver;
 use super::state::{self, Action, History, State, Status};
 use super::toy::{Asked, Disliking, Loop, Plan, Prompted, Replay, Rules, Toy, ToyLeaf, jobs, picked, round, slugs, toy};
@@ -897,4 +898,247 @@ fn an_unlimited_turn_search_at_a_prompt_tries_every_answer() {
     let narrow = search(&mut world.copy(), &ToyLeaf, 2, usize::MAX, &Bounds::new());
     assert!(narrow.cut);
     assert!(!narrow.ends.iter().any(|e| e.status == Status::Won));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// NoSL's search (C#: LoopSearchTests' PIMC tests and PimcMemoTests, in git's history)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// C#: PimcBrain.Root and Merge, as EnginePimc merges the engine's lines: the first actions by their mean over the
+/// worlds, the first of the best; the plan is its line in the first world, with the hashes where every world agrees.
+struct Merged {
+    first: Action,
+    plan: Vec<Action>,
+    plan_hashes: Option<Vec<u64>>,
+    repeats: bool,
+}
+
+/// C#: LoopSearchTests.Pimc. `worlds` worlds of the toy `make` makes (a toy draws nothing), each searched with 100
+/// nodes shared over the first actions.
+fn pimc_of(worlds: usize, make: &dyn Fn() -> State, leaf: &dyn Leaf) -> Merged {
+    let mut world = make();
+    let first = order::ordered(&world.legal(), &world.obs);
+    let asked = pimc::Asked {
+        history: Vec::new(),
+        nodes_per_first: (100 / first.len() as i32).max(1),
+        first: first.clone(),
+        worlds,
+        seed: 0,
+    };
+    let lines: Vec<Vec<pimc::Line>> = (0..worlds).map(|_| pimc::world_lines(make(), &asked, &none(), leaf).expect("a world's lines")).collect();
+    let mean = |a: usize| lines.iter().map(|l| l[a].value).sum::<f64>() / worlds as f64;
+    let mut order: Vec<usize> = (0..first.len()).collect();
+    order.sort_by(|&a, &b| mean(b).partial_cmp(&mean(a)).unwrap_or(std::cmp::Ordering::Equal));
+    let line = &lines[0][order[0]];
+    let agreed = lines.iter().all(|l| l[order[0]].actions == line.actions && l[order[0]].hashes == line.hashes);
+    Merged {
+        first: first[order[0]].clone(),
+        plan: line.actions[1..].to_vec(),
+        plan_hashes: agreed.then(|| line.hashes[1..].to_vec()),
+        repeats: line.repeats,
+    }
+}
+
+fn pimc_loop(worlds: usize, rules: Rules) -> Merged {
+    pimc_of(worlds, &|| Loop::new(rules).state(), &ToyLeaf)
+}
+
+/// C#: LoopSearchTests.Replayed. Plays the merged line on a new world, each step at the observation it expects.
+fn pimc_replayed(merged: &Merged, rules: Rules) -> State {
+    let mut world = Loop::new(rules).state();
+    let steps: Vec<Action> = std::iter::once(merged.first.clone()).chain(merged.plan.iter().cloned()).collect();
+    for (i, step) in steps.iter().enumerate() {
+        if i > 0 {
+            assert_eq!(merged.plan_hashes.as_ref().expect("the worlds agree")[i - 1], world.hash);
+        }
+        world = world.step(step).expect("a step of the line");
+    }
+    world
+}
+
+#[test]
+fn every_answer_to_a_prompt_is_searched_by_pimc() {
+    // The third answer wins at once; the first loses the fight.
+    let merged = pimc_loop(2, Rules { prompted: Prompted::GivesStrike, ..Rules::new(50) });
+    assert!(std::iter::once(&merged.first).chain(merged.plan.iter()).any(|a| *a == Action::pick(vec![2])));
+}
+
+#[test]
+fn every_prompt_of_an_action_is_searched_by_pimc() {
+    // The potion asks twice, and only the third answer to its second prompt wins.
+    let rules = Rules { prompted: Prompted::AsksTwice, ..Rules::new(50) };
+    let merged = pimc_loop(2, rules);
+    assert_eq!(Status::Won, pimc_replayed(&merged, rules).status);
+}
+
+#[test]
+fn pimc_repeats_the_cycle_as_well() {
+    let merged = pimc_loop(2, Rules::new(50));
+
+    assert!(merged.repeats);
+    assert_eq!(R, merged.first);
+    assert_eq!(44, count(&merged.plan, &R) + 1);
+    assert_eq!(Status::Won, pimc_replayed(&merged, Rules::new(50)).status);
+}
+
+#[test]
+fn pimc_takes_another_answer_that_opens_a_cycle() {
+    let rules = Rules { prompted: Prompted::GivesR, ..Rules::new(50) };
+    let merged = pimc_loop(2, rules);
+
+    assert!(merged.repeats);
+    assert_eq!(POTION, merged.first);
+    assert_eq!(Action::pick(vec![2]), merged.plan[0]);
+    assert_eq!(Status::Won, pimc_replayed(&merged, rules).status);
+}
+
+/// C#: PimcMemoTests.Rolls. A turn of two cards, A and B, where A rolls once if played first and three times if
+/// second, and the enemies' turn then hits for 10 per roll. Played in either order, the two cards show the same state,
+/// but not the same future.
+#[derive(Clone)]
+struct Rolls {
+    steps: Vec<&'static str>,
+    /// What the enemies' turn hits for each roll.
+    hit: i32,
+}
+
+impl Default for Rolls {
+    fn default() -> Rolls {
+        Rolls { steps: Vec::new(), hit: 10 }
+    }
+}
+
+impl Rolls {
+    const A: Action = Action::Play { card: 1, target: None };
+    const B: Action = Action::Play { card: 2, target: None };
+
+    fn count(&self) -> i32 {
+        match self.steps.iter().position(|s| *s == "A") {
+            Some(0) => 1,
+            Some(1) => 3,
+            _ => 0,
+        }
+    }
+
+    fn ended(&self) -> bool {
+        self.steps.contains(&"end")
+    }
+}
+
+impl state::ToyWorld for Rolls {
+    fn observe(&self) -> CombatObservation {
+        let mut obs = slugs();
+        obs.round = if self.ended() { 2 } else { 1 };
+        obs.player.hp = if self.ended() { 100 - self.hit * self.count() } else { 100 };
+        obs.player.max_hp = 100;
+        obs.hand = [("A", 1), ("B", 2)]
+            .iter()
+            .filter(|(id, _)| !self.steps.contains(id))
+            .map(|&(id, uid)| CardView {
+                id: Str::lit(id),
+                uid: Some(uid),
+                ..CardView::default()
+            })
+            .collect();
+        obs
+    }
+
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+
+    fn hidden_key(&self) -> u64 {
+        self.count() as u64
+    }
+
+    fn legal(&self) -> Vec<Action> {
+        if self.ended() {
+            return Vec::new();
+        }
+        std::iter::once(Action::EndTurn)
+            .chain(self.observe().hand.iter().map(|c| Action::Play { card: c.uid.expect("a uid"), target: None }))
+            .collect()
+    }
+
+    fn execute(&mut self, action: &Action) -> Result<(), String> {
+        self.steps.push(match action {
+            Action::EndTurn => "end",
+            Action::Play { card: 1, .. } => "A",
+            Action::Play { card: 2, .. } => "B",
+            other => return Err(format!("{} is not a play of the toy", other.text())),
+        });
+        Ok(())
+    }
+
+    fn run(&self) -> crate::protocol::RunChange {
+        super::toy::around(&self.observe())
+    }
+
+    fn boxed(&self) -> Box<dyn state::ToyWorld> {
+        Box::new(self.clone())
+    }
+}
+
+/// C#: PimcMemoTests.Leaf. The HP after the enemies' turn, and 50 for each card played.
+struct RollsLeaf;
+
+impl Leaf for RollsLeaf {
+    fn outcome(&self, state: &LeafState) -> Result<LeafOutcome, String> {
+        Ok(LeafOutcome {
+            value: (state.obs.player.hp + 50 * (2 - state.obs.hand.len() as i32)) as f64,
+            win: 0.0,
+            hp: 0.0,
+        })
+    }
+
+    fn outcomes(&self, states: &[&LeafState]) -> Result<Vec<LeafOutcome>, String> {
+        states.iter().map(|s| self.outcome(s)).collect()
+    }
+}
+
+#[test]
+fn lines_that_look_the_same_but_rolled_differently_are_not_merged() {
+    let values = |first: Vec<Action>| -> Vec<f64> {
+        let asked = pimc::Asked {
+            history: Vec::new(),
+            first,
+            nodes_per_first: 1000,
+            worlds: 1,
+            seed: 0,
+        };
+        let root = State::toy(Box::new(Rolls::default()));
+        pimc::world_lines(root, &asked, &none(), &RollsLeaf).expect("the lines").iter().map(|l| l.value).collect()
+    };
+    // A then B: one roll, 190. B then A: three rolls, 170. Searched in either order.
+    assert_eq!(vec![190.0, 170.0], values(vec![Rolls::A, Rolls::B]));
+    assert_eq!(vec![170.0, 190.0], values(vec![Rolls::B, Rolls::A]));
+}
+
+#[test]
+fn an_end_reached_again_is_valued_once() {
+    // With rolls that hit for nothing, A then B and B then A end the turn at the same observation, from states that the
+    // hidden key tells apart (one roll against three): the leaf reads only the observation and the run, so it is asked
+    // about that end once. The four lines end at three observations.
+    struct Counting(std::cell::Cell<usize>);
+    impl Leaf for Counting {
+        fn outcome(&self, state: &LeafState) -> Result<LeafOutcome, String> {
+            self.0.set(self.0.get() + 1);
+            RollsLeaf.outcome(state)
+        }
+        fn outcomes(&self, states: &[&LeafState]) -> Result<Vec<LeafOutcome>, String> {
+            states.iter().map(|s| self.outcome(s)).collect()
+        }
+    }
+    let leaf = Counting(std::cell::Cell::new(0));
+    let asked = pimc::Asked {
+        history: Vec::new(),
+        first: vec![Rolls::A, Rolls::B],
+        nodes_per_first: 1000,
+        worlds: 1,
+        seed: 0,
+    };
+    let root = State::toy(Box::new(Rolls { hit: 0, ..Rolls::default() }));
+    let lines = pimc::world_lines(root, &asked, &none(), &leaf).expect("the lines");
+    assert_eq!(vec![200.0, 200.0], lines.iter().map(|l| l.value).collect::<Vec<_>>());
+    assert_eq!(3, leaf.0.get());
 }
