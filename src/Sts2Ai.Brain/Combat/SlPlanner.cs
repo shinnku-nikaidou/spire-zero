@@ -323,8 +323,14 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly HashSet<(ulong Obs, ulong Hidden)> _seen = [];
         private readonly HashSet<ulong> _keys = [];
         private readonly List<TurnEnd> _ends = [];
-        /// <summary>The lines the search has ended, in the order found, until the leaf is asked about them all.</summary>
+        /// <summary>The lines the search has ended, in the order found, until the leaf is asked about them (<see cref="Price"/>).</summary>
         private readonly List<Ended> _ended = [];
+        /// <summary>The lines the leaf has valued, in the order found, with their outcomes, until the turn's ends are made
+        /// of them (<see cref="Value"/>).</summary>
+        private readonly List<Priced> _priced = [];
+        private readonly List<LeafOutcome> _outcomes = [];
+        /// <summary>How many of <see cref="_ended"/> are at the next turn's start, the ones the net is asked about.</summary>
+        private int _going;
         private readonly List<CombatAction> _actions = [];
         private readonly List<ulong> _hashes = [];
         private readonly List<LoopPoint> _path = [];
@@ -412,7 +418,25 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Bare = 0)
         {
             public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, State.Status, outcome.Value, Key, State.History, outcome.Win, outcome.Hp);
+
+            /// <summary>What is kept of the line once the leaf has valued it: no observation or run.</summary>
+            public Priced Light() => new(Actions, Hashes, State.Status, Key, Bare, State.Obs.Potions, State.History);
         }
+
+        /// <summary>A line the leaf has valued (<see cref="Ended"/>), with the potions <see cref="Thrown"/> compares.</summary>
+        private sealed record Priced(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, ulong Key, ulong Bare,
+            IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History)
+        {
+            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp);
+        }
+
+        /// <summary>
+        /// The ends at the next turn's start the leaf is asked about at a time: a turn has had 169 thousand (a Regent's
+        /// second turn of 9 cards and 4 energy, with Toasty Mittens' exhaust after it), each held with its observation and
+        /// its run until asked, which took gigabytes. A multiple of the net's batch (<see cref="CombatNet.Batch"/>), so it
+        /// is asked in the same batches as about them all together.
+        /// </summary>
+        private const int Chunk = 256 * CombatNet.Batch;
 
         /// <summary>The key of a state at the next turn's start, by which a turn's ends and the beam's states are told
         /// apart; 0 once the combat is over.</summary>
@@ -428,7 +452,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         }
 
         /// <summary>The search's line ended here. The search needs no end's value to go on, so the leaf is asked about
-        /// all of a turn's ends together (<see cref="Value"/>); a state another line already ended at is not asked about again.</summary>
+        /// a turn's ends together, <see cref="Chunk"/> at a time (<see cref="Price"/>); a state another line already ended
+        /// at is not asked about again.</summary>
         private void Ends(CombatStatus status, CombatObservation obs)
         {
             if (status != CombatStatus.InProgress)
@@ -441,15 +466,28 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             ulong bare = obs.Potions.All(p => p == null) ? key
                 : Mix(world.StateKey(obs with { Potions = [.. obs.Potions.Select(_ => (string?)null)] }), hidden);
             _ended.Add(Reached(status, obs, _actions, _hashes, key) with { Bare = bare });
+            if (++_going == Chunk) Price();
         }
 
-        /// <summary>Asks the leaf about the ends the search found, in the order found.</summary>
+        /// <summary>Asks the leaf about the ends found since it was last asked, in the order found.</summary>
+        private void Price()
+        {
+            if (_ended.Count == 0) return;
+            _outcomes.AddRange(leaf.Outcomes([.. _ended.Select(e => e.State)]));
+            _priced.AddRange(_ended.Select(e => e.Light()));
+            _ended.Clear();
+            _going = 0;
+        }
+
+        /// <summary>The turn's ends, from all the lines the search ended, valued in the order found.</summary>
         private void Value()
         {
-            var outcomes = leaf.Outcomes([.. _ended.Select(e => e.State)]).ToArray();
+            Price();
+            var outcomes = _outcomes.ToArray();
             Thrown(outcomes);
-            for (int i = 0; i < _ended.Count; i++) _ends.Add(_ended[i].Valued(outcomes[i]));
-            _ended.Clear();
+            for (int i = 0; i < _priced.Count; i++) _ends.Add(_priced[i].Valued(outcomes[i]));
+            _priced.Clear();
+            _outcomes.Clear();
         }
 
         /// <summary>
@@ -460,13 +498,13 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// </summary>
         private void Thrown(LeafOutcome[] outcomes)
         {
-            foreach (var same in Enumerable.Range(0, _ended.Count).Where(i => _ended[i].Bare != 0).GroupBy(i => _ended[i].Bare))
+            foreach (var same in Enumerable.Range(0, _priced.Count).Where(i => _priced[i].Bare != 0).GroupBy(i => _priced[i].Bare))
             {
                 // By how many potions each holds, so that an end's own is final before an end holding more is compared with it.
-                var ends = same.OrderBy(i => _ended[i].State.Obs.Potions.Count(p => p != null)).ToList();
+                var ends = same.OrderBy(i => _priced[i].Potions.Count(p => p != null)).ToList();
                 for (int m = 1; m < ends.Count; m++)
                     for (int f = 0; f < m; f++)
-                        if (outcomes[ends[f]].Value > outcomes[ends[m]].Value && Holds(_ended[ends[m]].State.Obs.Potions, _ended[ends[f]].State.Obs.Potions))
+                        if (outcomes[ends[f]].Value > outcomes[ends[m]].Value && Holds(_priced[ends[m]].Potions, _priced[ends[f]].Potions))
                             outcomes[ends[m]] = outcomes[ends[f]];
             }
         }
