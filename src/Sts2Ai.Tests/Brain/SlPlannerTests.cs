@@ -712,6 +712,59 @@ public class SlPlannerTests
         AssertReplays(plan, played: off);
     }
 
+    /// <summary>Plays the toy's combat to its end by the solver's route (<see cref="SolverRoute"/>); at each decision,
+    /// <paramref name="hand"/> may take another action than the route's.</summary>
+    private static (List<CombatAction> Played, SolverRoute Route) PlayBySolver(Budget budget, Func<int, CombatAction, CombatAction>? hand = null)
+    {
+        var route = new SolverRoute(budget);
+        var world = new Toy();
+        var played = new List<CombatAction>();
+        for (int d = 0; world.Status == CombatStatus.InProgress; d++)
+        {
+            var at = played.ToList();
+            var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => more => ToySearcher([.. at, .. more]),
+                () => throw new InvalidOperationException("the toy is always taken in")).First;
+            var taken = hand?.Invoke(d, answer) ?? answer;
+            world.Execute(taken);
+            played.Add(taken);
+        }
+        return (played, route);
+    }
+
+    [Fact]
+    public void TheSolversRouteFollowsItsPicksWithOneSolverACombat()
+    {
+        var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
+
+        // Searched to the end at the first decision: the best line there is, played to its end.
+        var full = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue));
+        Assert.Equal(1, full.Route.Begun);
+        Assert.Equal(Best([]), Best(full.Played), 9);
+
+        // A few nodes a decision: the same each time, one solver the combat long, never worse than the beam it began from.
+        var few = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20));
+        Assert.Equal(few.Played, PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20)).Played);
+        Assert.Equal(1, few.Route.Begun);
+        Assert.True(Best(few.Played) >= beam.Value - 1e-9);
+    }
+
+    [Fact]
+    public void TheSolversRouteBeginsAgainWhereTheCombatLeftItsLine()
+    {
+        // The first decision taken by hand, otherwise: a new solver from there, which plays the best line there.
+        CombatAction? other = null;
+        var (played, route) = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue),
+            (d, answer) => d > 0 ? answer : (other = new Toy().Legal().First(a => a != answer)).Value);
+        Assert.Equal(2, route.Begun);
+        Assert.Equal(Best([other!.Value]), Best(played), 9);
+
+        // Where the combat cannot be taken in, the beam decides.
+        var world = new Toy();
+        var beam = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20))
+            .Decide(world.Observe(), world.Legal(), [], () => null, () => PimcBrain.Only(CombatAction.EndTurn));
+        Assert.Equal(CombatAction.EndTurn, beam.First);
+    }
+
     [Fact]
     public void ReachAddsEveryHealAndMaxHpTheStateStillHolds()
     {

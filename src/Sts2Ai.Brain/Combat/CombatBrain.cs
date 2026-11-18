@@ -16,8 +16,11 @@ namespace Sts2Ai.Brain.Combat;
 /// <param name="Boss">A boss fight's budget, where it differs; null: this one.</param>
 /// <param name="TurnDecay">What a line of the SL planner keeps of its end's value for each turn it ended, when the plan
 /// is picked (<see cref="SlPlanner"/>); 1: all of it, as self-play and the tests plan. It is this budget's in every room.</param>
+/// <param name="Solve">The combat solver's actions simulated at each decision before it answers (<see cref="SolverRoute"/>,
+/// max): one solver a combat, begun from the beam's plan that the rest of the budget makes; 0: no solver, the beam
+/// alone.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0,
-    Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1)
+    Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1, long Solve = 0)
 {
     /// <summary>The budget of a fight in a room of this type (<see cref="CombatObservation.Room"/>: Monster, Elite or Boss).</summary>
     public Budget For(string? room) => room switch
@@ -30,16 +33,20 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     /// <summary>The planner's budget at an effort level: beam, nodes per state and turn, the
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
     /// plans in a row before the last is played to its end. Since 2026-11-18 each name is the budget of the level above
-    /// it before (low was medium's, medium high's, high max's); max is to be the combat solver (<see cref="SlSolver"/>,
-    /// plans/2026-11-18-1412-max-solver.md) and plays high's beam until the brain runs it.</summary>
+    /// it before (low was medium's, medium high's, high max's); max is the combat solver (<see cref="SolverRoute"/>,
+    /// plans/2026-11-18-1412-max-solver.md), begun from high's beam, with <see cref="MaxSolve"/> nodes a decision.</summary>
     public static Budget Effort(string level) => level switch
     {
         "low" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 4, LossPlans: 3),
         "medium" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
         "high" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
-        "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
+        "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1, Solve: MaxSolve),
         _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),
     };
+
+    /// <summary>max's solver nodes a decision (<see cref="Solve"/>): to be set by what the friend's replay measures
+    /// (plans/2026-11-18-1412-max-solver.md, 2.5).</summary>
+    public const long MaxSolve = 100_000;
 
     /// <summary>The effort levels, cheapest first.</summary>
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
@@ -50,10 +57,10 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
         $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{(NodesPerWorld == SlPlanner.Unlimited ? "all" : NodesPerWorld.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
 
     /// <summary>As the champion's name shows it: the size (<see cref="Size"/>), then the planner's easy beam,
-    /// replan when not 1, loss plans when limited and the turn decay when not 1; then an elite's and a boss's budget
-    /// where they differ.</summary>
+    /// replan when not 1, loss plans when limited, the turn decay when not 1 and the solver's nodes a decision when it
+    /// solves; then an elite's and a boss's budget where they differ.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{Size}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}") +
+        $"{Size}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}{(Solve > 0 ? $" solve {Solve}" : "")}") +
         (Elite != null ? $" elite ({Elite})" : "") + (Boss != null ? $" boss ({Boss})" : "");
 }
 

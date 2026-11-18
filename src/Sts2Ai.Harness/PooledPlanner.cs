@@ -23,6 +23,7 @@ public sealed class PooledPlanner(WorkerPool pool)
     /// <param name="name">The brain's name in reports: plan and its leaf's name.</param>
     public CombatRoute Route(Budget budget, string name)
     {
+        if (budget.Solve > 0) throw new NotSupportedException("the combat solver searches in the engine (--combat-world engine)");
         var route = new SlRoute(budget);
         // The search's processor time is the workers'.
         var meter = new PlanMeter(pool.CpuTime);

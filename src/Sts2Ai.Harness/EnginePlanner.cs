@@ -42,7 +42,11 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
 
     /// <param name="start">A world of its own at the plan's root, for one turn's search.</param>
     private SlPlan Search<TWorld>(Budget budget, IReadOnlyList<EnemyTurns> history, Func<TWorld> start) where TWorld : ICombatWorld, IDisposable =>
-        SlPlanner.Search(budget, history, (jobs, nodes, keep) =>
+        SlPlanner.Search(budget, history, Searcher(start));
+
+    /// <summary>Each job's turn searched in a world of its own from <paramref name="start"/>, in threads, in job order.</summary>
+    private TurnSearcher Searcher<TWorld>(Func<TWorld> start) where TWorld : ICombatWorld, IDisposable =>
+        (jobs, nodes, keep) =>
         {
             // One world from one thread at a time: each job's world is made here, before the threads start.
             var worlds = jobs.Select(_ => start()).ToArray();
@@ -65,13 +69,15 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
                 foreach (var world in worlds) world.Dispose();
             }
             return found;
-        });
+        };
 
-    /// <summary>As Harness's combat route in SL, one per run, like <see cref="PooledPlanner.Route"/>.</summary>
+    /// <summary>As Harness's combat route in SL, one per run, like <see cref="PooledPlanner.Route"/>; with a solver
+    /// (<see cref="Budget.Solve"/>), <see cref="Solver"/>.</summary>
     /// <param name="name">The brain's name in reports: plan and its leaf's name, as on the node's clone.</param>
     /// <param name="pool">The workers that play the node's clone across a card prompt.</param>
     public CombatRoute Route(Budget budget, string name, WorkerPool pool)
     {
+        if (budget.Solve > 0) return Solver(budget, name, pool);
         var route = new SlRoute(budget);
         // The search's processor time: this process's threads, and the workers' where a prompt is crossed.
         var meter = new PlanMeter(() =>
@@ -101,5 +107,49 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
             double exportMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             return meter.Count(() => Plan(live, b, history, importMs => meter.Imported(live.Bytes.Length, exportMs, importMs)));
         }), budget, () => meter.Tally);
+    }
+
+    /// <summary>
+    /// max's route (<see cref="SolverRoute"/>): the combat taken in once where a solver begins, each turn's search a copy
+    /// of that world with the actions played since and the state's path applied. Where the solver cannot begin (a card
+    /// prompt off its line), the beam's route decides.
+    /// </summary>
+    private CombatRoute Solver(Budget budget, string name, WorkerPool pool)
+    {
+        var beam = Route(budget with { Solve = 0 }, name, pool);
+        var route = new SolverRoute(budget);
+        // Every decision searched, the beam's where it decides: this process's threads, and the workers' where a prompt
+        // is crossed.
+        var meter = new PlanMeter(() =>
+        {
+            using var process = Process.GetCurrentProcess();
+            return process.TotalProcessorTime + pool.CpuTime();
+        });
+        return new(name, (decision, seed, node, history) =>
+        {
+            CombatDecisionResult Decide() => route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision.Export),
+                () => beam.Decide(decision, seed, node, history));
+            if (PimcBrain.Forced(decision.Observation, decision.Legal) != null) return Decide();
+            CombatDecisionResult? made = null;
+            meter.Count(() =>
+            {
+                made = Decide();
+                return new(made, 0, CombatStatus.InProgress, made.Nodes ?? 0, made.Turns ?? 0, false);
+            });
+            return made!;
+        }, budget, () => meter.Tally);
+    }
+
+    /// <summary>Turn searches in the combat as <paramref name="live"/> is, after the actions given; null with no live combat.</summary>
+    private Func<IReadOnlyList<CombatAction>, TurnSearcher>? Taken(CombatExport? live)
+    {
+        if (live == null) return null;
+        var root = EngineWorld.Import(live.Bytes, live.Run);
+        return played =>
+        {
+            var at = root.Clone();
+            foreach (var action in played) at.Execute(action);
+            return Searcher(at.Clone);
+        };
     }
 }
