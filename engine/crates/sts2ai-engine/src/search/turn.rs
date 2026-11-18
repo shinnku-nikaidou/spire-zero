@@ -84,8 +84,9 @@ pub fn mix(a: u64, b: u64) -> u64 {
 }
 
 /// C#: SlPlanner's Chunk. The ends at the next turn's start the leaf is asked about at a time: a multiple of the net's
-/// batch, so they are asked in the same batches as all together.
-pub const CHUNK: usize = 256 * super::leaf::BATCH;
+/// batch, so they are asked in the same batches as all together. Each is held with its observation and its run until
+/// then: 4,096 of a big Regent deck in each of max's eight turns searched at once held most of 1.8 GB.
+pub const CHUNK: usize = 16 * super::leaf::BATCH;
 
 /// C#: SlPlanner.SearchTurn. The rest of the turn from `root`, with `nodes` nodes: the best end of the combat the turn
 /// can reach, if any, and the best `keep` distinct states at the next turn's start. `history` is the record of enemy
@@ -112,6 +113,7 @@ pub fn search(root: &mut State, history: &Arc<History>, nodes: i32, keep: usize,
         pruned: 0,
         cut: false,
         loops: Loops::new(round),
+        records: Vec::new(),
     };
     dfs.visit(root, Some(nodes))?;
     dfs.value();
@@ -240,6 +242,9 @@ struct Dfs<'a> {
     pruned: i32,
     cut: bool,
     loops: Loops,
+    /// The records of enemy moves the ends hold, each once: a turn's ends mostly share one (1 to 13 among 6 to 55
+    /// thousand ends in the big turns of a Regent run).
+    records: Vec<Arc<History>>,
 }
 
 /// The state reached here, for the leaf (C#: Reached's LeafState): its record of enemy moves goes on from the
@@ -343,7 +348,7 @@ impl Dfs<'_> {
     fn ends(&mut self, state: &mut State) -> Result<(), String> {
         if state.status != Status::InProgress {
             let ended = Ended {
-                state: leaf_state(&self.history, state),
+                state: self.leaf_state(state),
                 actions: self.actions.clone(),
                 hashes: self.hashes.clone(),
                 key: 0,
@@ -369,7 +374,7 @@ impl Dfs<'_> {
             mix(protocol::state_key(&thrown), hidden)
         };
         let ended = Ended {
-            state: leaf_state(&self.history, state),
+            state: self.leaf_state(state),
             actions: self.actions.clone(),
             hashes: self.hashes.clone(),
             key,
@@ -383,6 +388,17 @@ impl Dfs<'_> {
             self.price()?;
         }
         Ok(())
+    }
+
+    /// The state reached here, for the leaf (`leaf_state`), its record of enemy moves the one another end holds where it
+    /// is the same.
+    fn leaf_state(&mut self, state: &mut State) -> LeafState {
+        let mut reached = leaf_state(&self.history, state);
+        match self.records.iter().find(|record| ***record == *reached.history) {
+            Some(record) => reached.history = record.clone(),
+            None => self.records.push(reached.history.clone()),
+        }
+        reached
     }
 
     /// C#: Price. Asks the leaf about the ends found since it was last asked, in the order found.
