@@ -111,6 +111,10 @@ impl DrawLog {
                     let to = key(field("to")?, &mut log)?;
                     Event::Relabel(card, to)
                 }
+                "broken" => {
+                    let why = o.get("why").and_then(Value::as_str).unwrap_or("no reason given");
+                    return Err(format!("the recorder broke: {why}"));
+                }
                 _ => return Err(format!("a draw log op {op}")),
             };
             log.events.push(event);

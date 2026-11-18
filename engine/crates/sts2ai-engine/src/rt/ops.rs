@@ -542,15 +542,6 @@ pub fn walked(r: R<bool>) -> bool {
     }
 }
 
-/// C#: `List<T>.Enumerator.MoveNext`: a list changed while a `foreach` walks it throws at the walk's next step.
-/// `walked` is the list as the walk began, `now` the list in its place.
-#[inline]
-pub fn enumerating<T: PartialEq>(walked: &[T], now: &[T]) {
-    if walked != now {
-        panic!("Collection was modified; enumeration operation may not execute.");
-    }
-}
-
 #[cfg(test)]
 mod net_tests {
     use super::*;

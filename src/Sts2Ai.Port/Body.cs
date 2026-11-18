@@ -1064,15 +1064,16 @@ public sealed partial class Body
         // Nothing is left in the loop and what it walks is only read: the statement is left out.
         if (body.Length == 0 && lazy == null && OnlyReads(fe.Collection)) { LeftOut++; return; }
         if (lazy == null && fe.Body.Descendants().Any(o => o is IInvocationOperation or IAssignmentOperation or IIncrementOrDecrementOperation or IObjectCreationOperation)
-            && ChangeableList(fe.Collection) is var (walkedList, pin, listCode))
+            && ChangeableList(fe.Collection) is var (_, pin, listCode))
         {
-            // A list the loop's code could change: C#'s enumerator throws at its next step when the list changed,
-            // and so does this (rt::enumerating), at the start of every round but the first and at the end. The
-            // object that holds the list is reached once, as C# reaches the collection once.
+            // A list the loop's code could change: the walk goes over the list as it began. C#'s enumerator throws at
+            // its next step when the list changed, a bug of the game that leaves its combat stuck (the turn loop
+            // dies); the engine plays on, as a copy of the list (ToList) would. The object that holds the list is
+            // reached once, as C# reaches the collection once.
             string seen = Tmp("w"), at = Tmp("at");
-            sb.Append($"{{\n{pin}let {seen} = {listCode};\nlet mut {at} = 0usize;\n{label}: loop {{\nif {at} > 0 {{ rt::enumerating(&{seen}, &{walkedList}); }}\nif {at} == {seen}.len() {{ break {label}; }}\n"
+            sb.Append($"{{\n{pin}let {seen} = {listCode};\nlet mut {at} = 0usize;\n{label}: loop {{\nif {at} == {seen}.len() {{ break {label}; }}\n"
                 + $"let mut {NameOf(local)}: {T(local.Type)} = {seen}[{at}].clone();\n{at} += 1;\n{body}}}\n}}\n");
-            w.Rep.Count("loops over a list their code could change: each step checks it is as it was, as C#'s enumerator does");
+            w.Rep.Count("loops over a list their code could change: the list as it began");
         }
         else if (lazy == null) sb.Append($"{label}: for {NameOf(local)} in {coll} {{\nlet mut {NameOf(local)}: {T(local.Type)} = {NameOf(local)};\n{body}}}\n");
         else sb.Append($"{run.Before}{label}: for {LazyFirst} in {coll} {{\n{run.Code}let mut {NameOf(local)}: {T(local.Type)} = {run.Item};\n{body}}}{new string('}', run.Nested)}\n");

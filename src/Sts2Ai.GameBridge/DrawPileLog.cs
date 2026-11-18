@@ -290,6 +290,8 @@ public static class DrawPileLog
                 _rebuilding = left > 1 ? left - 1 : null;
                 return;
             }
+            // The record as it stood before this card came: bringing it up to date may put down changes after it.
+            int before = Entries.Count;
             BringUpToDate(card);
             if (_broken != null) return;
             var key = Observe.CardKey(card);
@@ -304,9 +306,10 @@ public static class DrawPileLog
                 }
                 else Entries.Add(new Entry("add") { Card = key, At = Place(at) });
             }
-            else if (index >= 0 && Entries.LastOrDefault() is { Taken: { } replaced, Landed: false } transformed)
+            else if (index >= 0 && before > 0 && Entries[before - 1] is { Taken: { } replaced, Landed: false } transformed)
             {
-                // The game's transform: the new card where the old one stood.
+                // The game's transform: the new card where the old one stood. Taking the old one out can change what
+                // other cards of the pile show (Crescent Spear counts the cards that cost stars), put down just now after it.
                 transformed.Op = "relabel";
                 transformed.To = key;
                 transformed.Taken = null;

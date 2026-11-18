@@ -350,12 +350,10 @@ fn turn_start_begun(me: CombatManager, turn_state: CombatTurnState, c: &mut Comb
         turn.players_ready_to_begin_enemy_turn.clear();
         // The turn's number names its banner only, which is presentation.
         if !extra_turn {
-            // C#: foreach over turnState.State.Enemies, which throws if the list changes while it is walked.
+            // C#: foreach over turnState.State.Enemies, which throws if the list changes while it is walked (the
+            // game's combat then sticks); here the walk goes over the list as it began.
             let enemies = g::combat::combat_state::enemies(state, c);
-            for (at, &enemy) in enemies.iter().enumerate() {
-                if at > 0 {
-                    rt::enumerating(&enemies, &CombatStateData::of(state, c)._enemies);
-                }
+            for &enemy in enemies.iter() {
                 let player_creatures = g::combat::combat_state::player_creatures(state, c);
                 g::entities_creatures::creature::prepare_for_next_turn(
                     enemy,
