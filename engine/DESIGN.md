@@ -406,14 +406,20 @@ random streams are part of the state), so the run up to the prompt repeats exact
 and translated code stays a straight line with `?`.
 
 It runs again from the step's last *resume point* before the prompt, not from the action's start. A resume point is a
-place in the hand-written turn loop where nothing of the game's code is running, so the combat there is all there is:
-before the players' turn starts (`turn_loop`, `world::resume_point`), with no hook paused or waiting, no card prompt
-and no turn start's setup running, outside a replay of the step. A step keeps its latest point; a world at a prompt
-keeps the point with the state before the action, and its answers run from the point (`world::run_from`): the turn
-loop goes on inside its loop, as the step did there. A prompt of the turn start (Toasty Mittens' exhaust, a setup that
-asks) then costs the turn start again, not the end of the players' turn and the enemies' turn as well. A hook's
-replay (below) starts from the point too. On v0.113.1 the lockstep check has no difference with it, and on a Regent's
-9-card turn with Toasty Mittens a prompt's answer took 143 µs from the action's start and 82 µs from the point.
+place in the hand-written turn loop where nothing of the game's code is running, so the combat there is all there is.
+There are two. One is before the players' turn starts (`turn_loop`, `world::resume_point`), with no turn start's setup
+running. The other is in the player's setup at that turn start, after the hand is drawn and before
+`AfterPlayerTurnStart`'s hooks (`setup_player_turn`, hand-written for it, `world::setup_point`), with one player
+starting the turn and the setup not paused for a choice yet. Both need no hook paused or waiting, no card prompt
+running, and are not taken in a replay of the step. A step keeps its latest point; a world at a prompt keeps the point
+with the state before the action, and its answers run from the point (`world::run_from`): the turn loop goes on
+inside its loop, and from the setup's point the turn start goes on in the setup, as the step did there. A prompt of
+`AfterPlayerTurnStart` (Toasty Mittens' exhaust) then costs its own hook again, not the turn start's block, energy and
+draw, nor the end of the players' turn and the enemies' turn; one before the draw (a `BeforeHandDraw` hook that asks)
+is answered from the turn loop's point. A hook's replay (below) starts from the point too. On v0.113.1 the lockstep
+check has no difference with them. On a Regent's 9-card turn with Toasty Mittens a prompt's answer took 143 µs from
+the action's start and 82 µs from the turn loop's point; side by side on a busier machine, 94–101 µs from the turn
+loop's point and 54–60 µs from the setup's.
 
 **The action queue and the turn loop.** In the game these are tasks that wait on each other: the executor runs
 queued actions, the turn loop waits for "every player is ready to end the turn", runs the turn's end, waits for

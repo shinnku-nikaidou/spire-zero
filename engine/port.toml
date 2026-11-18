@@ -301,8 +301,9 @@ members = [
     # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).
     "CombatManager.StartCombatInternal", "CombatManager.SetReadyToEndTurn", "CombatManager.SetReadyToBeginEnemyTurn",
     "CombatManager.WaitUntilQueueIsEmptyOrWaitingOnNonPlayerDrivenAction", "CombatManager.DoTurnEndCards",
-    # A player's setup that pauses for a choice lets the rest of the turn start run first (manual/combat_manager.rs).
-    "CombatManager.StartTurn",
+    # A player's setup that pauses for a choice lets the rest of the turn start run first; the setup keeps a resume point
+    # after the hand is drawn (manual/combat_manager.rs, world.rs).
+    "CombatManager.StartTurn", "CombatManager.SetupPlayerTurn",
     "ActionExecutor.ExecuteActions", "ActionExecutor.FinishedExecutingActions", "ActionExecutor.IsRunning",
     "GameAction.Execute", "GameAction.WaitForActionToResumeExecutingAfterPlayerChoice",
     "ActionQueueSynchronizer.RequestEnqueue", "ActionQueueSynchronizer.RequestResumeActionAfterPlayerChoice",

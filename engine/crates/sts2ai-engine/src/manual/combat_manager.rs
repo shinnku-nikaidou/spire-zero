@@ -264,6 +264,54 @@ pub fn start_turn(
     if !g::combat::combat_turn_state::is_in_progress(turn_state, c) {
         return Ok(());
     }
+    // A resume point's combat taken in the setup (`setup_player_turn`) goes on there: the turn start before it ran.
+    let (creatures, players) = match (c.x.enter_setup, &c.x.turn_start) {
+        (true, Some(running)) => (running.creatures.clone(), running.players.clone()),
+        _ => turn_start_begun(me, turn_state, c)?,
+    };
+    let mut setups = Vec::new();
+    let mut paused = false;
+    for &player in &players {
+        let Some(net_id) = c.s.local_context__net_id else {
+            continue;
+        };
+        let context = match (c.x.enter_setup, &c.x.turn_start) {
+            (true, Some(running)) => running.setup,
+            _ => {
+                let context = g::game_actions_multiplayer::hook_player_choice_context::new__player_u64_game_action_type(
+                    player,
+                    net_id,
+                    GameActionType::CombatPlayPhaseOnly,
+                    c,
+                );
+                c.x.turn_start = Some(TurnStart {
+                    me,
+                    turn_state,
+                    creatures: creatures.clone(),
+                    players: players.clone(),
+                    setup: context,
+                    paused: false,
+                });
+                context
+            }
+        };
+        let setup = setup_player_turn(me, turn_state, player, context, c);
+        paused = c.x.turn_start.take().is_some_and(|t| t.paused);
+        match &setup {
+            // The rest of the turn start ended the combat, or every player was ready to end the turn: the game never
+            // runs the paused setup's rest.
+            Err(Stop::Dropped) => return Ok(()),
+            Err(stop) => return Err(stop.clone()),
+            Ok(()) => {}
+        }
+        setups.push((player, context, setup));
+    }
+    turn_start_end(me, turn_state, action_during_enemy_turn, &creatures, &players, setups, paused, c)
+}
+
+/// C#: CombatManager.StartTurn up to the players' setups: who starts the turn, the turn's start for each, the block
+/// cleared.
+fn turn_start_begun(me: CombatManager, turn_state: CombatTurnState, c: &mut Combat) -> R<(Vec<Creature>, Vec<Player>)> {
     let state = g::combat::combat_turn_state::state(turn_state, c);
     let players_side =
         |c: &mut Combat| g::combat::combat_state::current_side(state, c) == CombatSide::Player;
@@ -325,39 +373,25 @@ pub fn start_turn(
     for &creature in &creatures {
         g::hooks::hook::after_block_cleared(state, creature, c)?;
     }
-    let mut setups = Vec::new();
-    let mut paused = false;
-    for &player in &players {
-        let Some(net_id) = c.s.local_context__net_id else {
-            continue;
-        };
-        let context = g::game_actions_multiplayer::hook_player_choice_context::new__player_u64_game_action_type(
-            player,
-            net_id,
-            GameActionType::CombatPlayPhaseOnly,
-            c,
-        );
-        c.x.turn_start = Some(TurnStart {
-            me,
-            turn_state,
-            creatures: creatures.clone(),
-            players: players.clone(),
-            setup: context,
-            paused: false,
-        });
-        let setup =
-            g::combat::combat_manager::setup_player_turn(me, turn_state, player, context, c);
-        paused = c.x.turn_start.take().is_some_and(|t| t.paused);
-        match &setup {
-            // The rest of the turn start ended the combat, or every player was ready to end the turn: the game never
-            // runs the paused setup's rest.
-            Err(Stop::Dropped) => return Ok(()),
-            Err(stop) => return Err(stop.clone()),
-            Ok(()) => {}
-        }
-        setups.push((player, context, setup));
-    }
-    if !paused && !side_turn_started(me, turn_state, &creatures, &players, c)? {
+    Ok((creatures, players))
+}
+
+/// C#: CombatManager.StartTurn after the players' setups.
+#[allow(clippy::too_many_arguments)]
+fn turn_start_end(
+    me: CombatManager,
+    turn_state: CombatTurnState,
+    action_during_enemy_turn: Fn0<R<()>>,
+    creatures: &[Creature],
+    players: &[Player],
+    setups: Vec<(Player, HookPlayerChoiceContext, R<()>)>,
+    paused: bool,
+    c: &mut Combat,
+) -> R<()> {
+    let state = g::combat::combat_turn_state::state(turn_state, c);
+    let players_side =
+        |c: &mut Combat| g::combat::combat_state::current_side(state, c) == CombatSide::Player;
+    if !paused && !side_turn_started(me, turn_state, creatures, players, c)? {
         return Ok(());
     }
     if players_side(c) {
@@ -400,6 +434,76 @@ pub fn start_turn(
     Ok(())
 }
 
+/// C#: CombatManager.SetupPlayerTurn: the energy, the hand, then `AfterPlayerTurnStart`. Written by hand for its resume
+/// point (world.rs): after the hand is drawn and before those hooks, where a prompt they raise (Toasty Mittens') is
+/// answered from, so its answers do not draw the hand again. A combat resumed there (`Extra::enter_setup`) goes on with
+/// the hooks.
+pub fn setup_player_turn(
+    _me: CombatManager,
+    turn_state: CombatTurnState,
+    player: Player,
+    player_choice_context: HookPlayerChoiceContext,
+    c: &mut Combat,
+) -> R<()> {
+    if !std::mem::take(&mut c.x.enter_setup) {
+        if g::entities_creatures::creature::is_dead(g::entities_players::player::creature(player, c), c) {
+            return Ok(());
+        }
+        if rt::is_null(&PlayerData::of(player, c).player_combat_state) {
+            return Ok(());
+        }
+        hand_drawn(turn_state, player, player_choice_context, c)?;
+        crate::world::setup_point(c);
+    }
+    let state = g::combat::combat_turn_state::state(turn_state, c);
+    g::hooks::hook::after_player_turn_start(state, player_choice_context, player, c)?;
+    Ok(())
+}
+
+/// C#: SetupPlayerTurn up to the hand drawn: the energy reset or added, the hand's size by the hooks, on the first turn
+/// the cards that start at the bottom of the draw pile and the innate ones at its top, the draw.
+fn hand_drawn(turn_state: CombatTurnState, player: Player, player_choice_context: HookPlayerChoiceContext, c: &mut Combat) -> R<()> {
+    let state = g::combat::combat_turn_state::state(turn_state, c);
+    if g::hooks::hook::should_player_reset_energy(state, player, c) {
+        g::entities_players::player_combat_state::reset_energy(g::entities_players::player::player_combat_state(player, c), c);
+    } else {
+        g::entities_players::player_combat_state::add_max_energy_to_current(g::entities_players::player::player_combat_state(player, c), c);
+    }
+    g::hooks::hook::after_energy_reset(state, player, c)?;
+    g::hooks::hook::before_hand_draw(state, player, player_choice_context, c)?;
+    let (mut hand_draw, modifiers) = g::hooks::hook::modify_hand_draw(state, player, Dec::lit(5, 0), c);
+    g::hooks::hook::after_modifying_hand_draw(state, modifiers, c)?;
+    if g::entities_players::player_combat_state::turn_number(g::entities_players::player::player_combat_state(player, c), c) == 1 {
+        let pile = g::entities_cards::pile_type_extensions::get_pile(PileType::Draw, player, c);
+        let list: Vec<CardModel> = linq::where_(
+            g::entities_cards::card_pile::cards(pile, c),
+            |card: CardModel, c: &mut Combat| -> bool {
+                let enchantment = g::models::card_model::enchantment(card, c);
+                !rt::is_null(&enchantment) && g::dispatch::enchantment_model::should_start_at_bottom_of_draw_pile(enchantment, c)
+            },
+            c,
+        );
+        for &item in &list {
+            g::entities_cards::card_pile::move_to_bottom_internal(pile, item, c);
+        }
+        let list2: Vec<CardModel> = linq::except(
+            linq::where_(
+                g::entities_cards::card_pile::cards(pile, c),
+                |card: CardModel, c: &mut Combat| -> bool { g::models::card_model::keywords(card, c).contains(&CardKeyword::Innate) },
+                c,
+            ),
+            list.clone(),
+        );
+        for &item in &list2 {
+            g::entities_cards::card_pile::move_to_top_internal(pile, item, c);
+        }
+        hand_draw = rt::max(hand_draw, Dec::from_i32(list2.len() as i32));
+        hand_draw = rt::min(hand_draw, Dec::from_i32(g::entities_cards::card_pile::max_cards_in_hand(c)));
+    }
+    g::commands::card_pile_cmd::draw__player_choice_context_dec_player_bool(player_choice_context, hand_draw, player, true, c)?;
+    Ok(())
+}
+
 /// The rest of the turn start, where the running setup pauses for its first choice (`start_turn`), then the actions it
 /// queued. The engine's combats have one player; a setup that pauses with more starting the turn is not ported (the game
 /// goes on with the other players' setups first).
@@ -435,6 +539,13 @@ pub fn turn_start_rest(c: &mut Combat) -> R<()> {
         return Err(Stop::Dropped);
     }
     Ok(())
+}
+
+/// Whether the turn start runs one player's setup that has not paused for a choice yet (world.rs, `setup_point`).
+pub fn setup_running(c: &Combat) -> bool {
+    c.x.turn_start
+        .as_ref()
+        .is_some_and(|t| !t.paused && t.players.len() == 1)
 }
 
 /// Whether a choice begun in `context` pauses the setup that is running at a turn start (`start_turn`): its first.

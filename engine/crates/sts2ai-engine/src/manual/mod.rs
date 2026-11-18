@@ -67,4 +67,7 @@ pub struct Extra {
     /// Set on a resume point's combat only: the turn loop goes on inside its loop, where the point was taken
     /// (manual/combat_manager.rs, `turn_loop`).
     pub enter_loop: bool,
+    /// Set on a resume point taken in a player's setup, after the hand is drawn (manual/combat_manager.rs,
+    /// `setup_player_turn`): the turn start goes on in that setup, from there.
+    pub enter_setup: bool,
 }

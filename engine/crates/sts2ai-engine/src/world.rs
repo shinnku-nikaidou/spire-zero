@@ -13,9 +13,10 @@
 //! given so far, and shows the combat as it stood at the prompt. The answer runs the action again with one more
 //! answer; the random streams are part of the combat, so it runs the same way up to the prompt. It runs from the
 //! step's last resume point before the prompt, if there is one, not from the action's start: a place where nothing of
-//! the game's code is running, so the combat there is all there is (`resume_point`). There is one, before the players'
-//! turn starts (manual/combat_manager.rs, `turn_loop`): a prompt of the turn start (Toasty Mittens' exhaust) is
-//! answered from there, and the end of the players' turn and the enemies' turn are not run again.
+//! the game's code is running, so the combat there is all there is (`resume_point`). There are two: before the players'
+//! turn starts (manual/combat_manager.rs, `turn_loop`), and in the player's setup at that turn start, after the hand is
+//! drawn and before `AfterPlayerTurnStart`'s hooks (`setup_point`). A prompt of those hooks (Toasty Mittens' exhaust)
+//! is answered from there: the end of the players' turn, the enemies' turn and the draw are not run again.
 
 use crate::ffi;
 use crate::r#gen as g;
@@ -221,31 +222,49 @@ fn go_on(c: &mut Combat) -> R<()> {
 /// running and the step can be run on from the combat alone: no hook paused or waiting for the player, no card prompt
 /// running, no turn start's setup running, not in a replay of the step. A point replaces the one before it.
 pub(crate) fn resume_point(c: &mut Combat) {
-    let hooks = &c.x.hooks;
-    if !c.x.points
-        || c.x.resume.is_some()
-        || !hooks.waiting.is_empty()
-        || !hooks.started.is_null()
-        || !hooks.asking.is_null()
-        || !hooks.asked_at_once.is_empty()
-        || !hooks.resumed.is_empty()
-        || hooks.restart
-        || c.x.turn_start.is_some()
-        || c.x.entries != 0
-        || c.x.entry.is_some()
-        || c.x.vakuu != 0
-        || c.x.asked.is_some()
-        || c.only.is_some()
-        || c.choices.stopped
-    {
-        return;
+    if c.x.turn_start.is_none() && quiet(c) {
+        take_point(c, false);
     }
+}
+
+/// A resume point in the player's setup at the players' turn start, after the hand is drawn and before
+/// `AfterPlayerTurnStart`'s hooks (manual/combat_manager.rs, `setup_player_turn`): as `resume_point`, with the turn
+/// start running for one player and its setup not paused for a choice yet.
+pub(crate) fn setup_point(c: &mut Combat) {
+    if manual::combat_manager::setup_running(c) && quiet(c) {
+        take_point(c, true);
+    }
+}
+
+/// The combat as it stands, kept as the step's resume point. `setup`: taken in the turn start's setup.
+fn take_point(c: &mut Combat, setup: bool) {
     c.x.resume_point = None;
     let mut point = c.clone();
     point.x.step = None;
     point.x.points = false;
     point.x.enter_loop = true;
+    point.x.enter_setup = setup;
     c.x.resume_point = Some(Arc::new(point));
+}
+
+/// Whether the step can be run on from the combat alone, as far as the turn start: points are taken, nothing paused
+/// or waiting for the player, no card prompt running, not in a replay of the step.
+fn quiet(c: &Combat) -> bool {
+    let hooks = &c.x.hooks;
+    c.x.points
+        && c.x.resume.is_none()
+        && hooks.waiting.is_empty()
+        && hooks.started.is_null()
+        && hooks.asking.is_null()
+        && hooks.asked_at_once.is_empty()
+        && hooks.resumed.is_empty()
+        && !hooks.restart
+        && c.x.entries == 0
+        && c.x.entry.is_none()
+        && c.x.vakuu == 0
+        && c.x.asked.is_none()
+        && c.only.is_none()
+        && !c.choices.stopped
 }
 
 /// "pick:0,2": the picked options of the prompt as the player sees it, as indexes into the game's list of cards.
