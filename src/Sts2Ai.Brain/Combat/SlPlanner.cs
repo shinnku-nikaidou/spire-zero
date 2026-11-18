@@ -21,7 +21,10 @@ public delegate IReadOnlyList<TurnSearch> TurnSearcher(IReadOnlyList<PlanJob> jo
 /// <param name="Proved">Whether the line is the best there is: the full beam left nothing out, with no turn's search out
 /// of nodes or keeping fewer states than it found, no state dropped from the beam, and every line at the end of the
 /// combat.</param>
-public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Proved);
+/// <param name="Line">The whole line picked, from the decision, past the turns its plan stops at.</param>
+/// <param name="From">For a losing line, the value of the turn start it died from, which the pick compares losses by.</param>
+public sealed record SlPlan(CombatDecisionResult Result, double Value, CombatStatus End, int Nodes, int Turns, bool Proved,
+    TurnEnd? Line = null, double From = 0);
 
 /// <summary>
 /// The SL planner as a combat route plays it, one per run: a plan is followed step by step with a
@@ -140,9 +143,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly Dictionary<string, TurnSearch> _searched = [];
         private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
-        private double _bestWorth, _bestFrom = double.NegativeInfinity;
-        /// <summary>The best win's potions drunk and turns ended, which a win worth exactly the same is compared by.</summary>
-        private (int Drunk, int Turns) _bestEnds;
+        private Rank _bestRank;
         private List<TurnEnd> _left = [];
         private int _nodes, _turns;
         private bool _complete;
@@ -176,14 +177,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                             continue;
                         }
                         Note(line);
-                        // A loss is 0 however it comes: then the turn start it came from decides. Wins worth exactly the
-                        // same: the one with fewer turns ended.
-                        double worth = Worth(line), from = states[i].Value;
-                        var ends = (Drunk: line.Actions.Count(a => a.Kind == CombatActionKind.UsePotion),
-                            Turns: line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn));
-                        if (_best == null || worth > _bestWorth || (worth == _bestWorth && (line.Status == CombatStatus.Lost
-                                ? from > _bestFrom : line.Status == CombatStatus.Won && ends.CompareTo(_bestEnds) < 0)))
-                            (_best, _bestWorth, _bestFrom, _bestEnds) = (line, worth, from, ends);
+                        var rank = Rank.Of(line, decay, states[i].Value);
+                        if (_best == null || rank.Beats(_bestRank)) (_best, _bestRank) = (line, rank);
                     }
                 }
                 var seen = new HashSet<ulong>();
@@ -237,23 +232,9 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             foreach (var state in _left) Note(state);
             // The best end of the combat, unless the search stopped first at a state worth more.
-            var pick = (_left.Count > 0 && (_best == null || Worth(_left[0]) > _bestWorth) ? _left[0] : _best)
-                ?? throw new InvalidOperationException("the planner found no line");
-            var candidates = _byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value.Value)
-                .Select(kv => new Candidate(kv.Key.ToString(), kv.Value.Value, 0, 1, [Math.Round(kv.Value.Value, 4)],
-                    Math.Round(kv.Value.Win, 4), Math.Round(kv.Value.Hp, 1))).ToList();
-            // A loss the search may have been wrong about is played replan turns at a time; a proved one has nothing better.
-            int played = pick.Actions.Count;
-            if (pick.Status == CombatStatus.Lost && !Proved && replan > 0)
-                for (int i = 0, ends = 0; i < pick.Actions.Count; i++)
-                    if (pick.Actions[i].Kind == CombatActionKind.EndTurn && ++ends == replan)
-                    {
-                        played = i + 1;
-                        break;
-                    }
-            var result = new CombatDecisionResult(pick.Actions[0], [.. pick.Actions.Take(played).Skip(1)], candidates,
-                [.. pick.Hashes.Take(played).Skip(1)], Nodes: _nodes, Turns: _turns);
-            return new(result, pick.Value, pick.Status, _nodes, _turns, Proved);
+            bool left = _left.Count > 0 && (_best == null || Worth(_left[0]) > _bestRank.Worth);
+            var pick = (left ? _left[0] : _best) ?? throw new InvalidOperationException("the planner found no line");
+            return Picked(pick, left ? 0 : _bestRank.From, _byFirst, Proved, replan, _nodes, _turns);
         }
 
         /// <summary>What a line is worth to the pick: its value, times the budget's turn decay for each turn it ended
@@ -265,6 +246,57 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             if (!_byFirst.TryGetValue(line.Actions[0], out var best) || Worth(line) > Worth(best)) _byFirst[line.Actions[0]] = line;
         }
+    }
+
+    /// <summary>
+    /// A line's place in the pick: its worth, the value times the turn decay for each turn it ended
+    /// (<see cref="Budget.TurnDecay"/>), then, at the same worth, a loss by the value of the turn start it died from (every
+    /// loss is 0, however it comes) and a win by the potions it drank, then the turns it ended, fewest first.
+    /// </summary>
+    internal readonly record struct Rank(CombatStatus Status, double Worth, double From, int Drunk, int Turns)
+    {
+        /// <param name="from">For a loss, the value of the turn start it died from.</param>
+        public static Rank Of(TurnEnd line, double decay, double from)
+        {
+            int turns = line.Actions.Count(a => a.Kind == CombatActionKind.EndTurn);
+            return new(line.Status, line.Value * Math.Pow(decay, turns), from, line.Actions.Count(a => a.Kind == CombatActionKind.UsePotion), turns);
+        }
+
+        /// <summary>Whether a line so ranked is picked over <paramref name="best"/>, the best so far.</summary>
+        public bool Beats(Rank best) => Worth > best.Worth || (Worth == best.Worth && (Status == CombatStatus.Lost
+            ? From > best.From : Status == CombatStatus.Won && (Drunk, Turns).CompareTo((best.Drunk, best.Turns)) < 0));
+    }
+
+    /// <summary>
+    /// The plan of the line picked, with the best line after each first action as the candidates. A loss the search may
+    /// have been wrong about (not <paramref name="proved"/>) is played <paramref name="replan"/> turns at a time; a proved
+    /// one has nothing better.
+    /// </summary>
+    internal static SlPlan Picked(TurnEnd pick, double from, IReadOnlyDictionary<CombatAction, TurnEnd> byFirst, bool proved, int replan,
+        int nodes, int turns)
+    {
+        var candidates = byFirst.OrderByDescending(kv => kv.Key == pick.Actions[0]).ThenByDescending(kv => kv.Value.Value)
+            .Select(kv => new Candidate(kv.Key.ToString(), kv.Value.Value, 0, 1, [Math.Round(kv.Value.Value, 4)],
+                Math.Round(kv.Value.Win, 4), Math.Round(kv.Value.Hp, 1))).ToList();
+        int played = pick.Actions.Count;
+        if (pick.Status == CombatStatus.Lost && !proved && replan > 0)
+            for (int i = 0, ends = 0; i < pick.Actions.Count; i++)
+                if (pick.Actions[i].Kind == CombatActionKind.EndTurn && ++ends == replan)
+                {
+                    played = i + 1;
+                    break;
+                }
+        var result = new CombatDecisionResult(pick.Actions[0], [.. pick.Actions.Take(played).Skip(1)], candidates,
+            [.. pick.Hashes.Take(played).Skip(1)], Nodes: nodes, Turns: turns);
+        return new(result, pick.Value, pick.Status, nodes, turns, proved, pick, pick.Status == CombatStatus.Lost ? from : 0);
+    }
+
+    internal static ulong Mix(ulong a, ulong b)
+    {
+        ulong z = a ^ (b + 0x9E3779B97F4A7C15 + (a << 6) + (a >> 2));
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EB;
+        return z ^ (z >> 31);
     }
 
     /// <summary>
@@ -459,14 +491,6 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             if (end.Status == CombatStatus.InProgress && !_keys.Add(end.Key)) return;
             _ends.Add(end);
-        }
-
-        private static ulong Mix(ulong a, ulong b)
-        {
-            ulong z = a ^ (b + 0x9E3779B97F4A7C15 + (a << 6) + (a >> 2));
-            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9;
-            z = (z ^ (z >> 27)) * 0x94D049BB133111EB;
-            return z ^ (z >> 31);
         }
     }
 }

@@ -141,10 +141,12 @@ public class SlPlannerTests
         return known[key] = best;
     }
 
-    /// <summary>Plays the plan from the start: each step at the observation it expects, to the end it claims.</summary>
-    private static void AssertReplays(SlPlan plan, int enemyHp = 24)
+    /// <summary>Plays the plan from the start, or after <paramref name="played"/>: each step at the observation it
+    /// expects, to the end it claims.</summary>
+    private static void AssertReplays(SlPlan plan, int enemyHp = 24, IReadOnlyList<CombatAction>? played = null)
     {
         var world = new Toy(enemyHp);
+        foreach (var action in played ?? []) world.Execute(action);
         var steps = plan.Result.Plan.Prepend(plan.Result.First).ToList();
         var hashes = plan.Result.PlanHashes!;
         Assert.Equal(steps.Count - 1, hashes.Count);
@@ -559,5 +561,153 @@ public class SlPlannerTests
 
         Assert.All(copy.History, e => Assert.Equal([1, 2], e.Turns.Select(t => t.Round)));
         Assert.All(record.History, e => Assert.Equal([1], e.Turns.Select(t => t.Round)));
+    }
+
+    /// <summary>A solver's turn searches, each in a toy of its own where the combat stands after <paramref name="played"/>.</summary>
+    private static TurnSearcher ToySearcher(IReadOnlyList<CombatAction> played, int enemyHp = 24) => (jobs, nodes, keep) => [.. jobs.Select(job =>
+    {
+        var world = new Toy(enemyHp);
+        foreach (var action in played.Concat(job.Path)) world.Execute(action);
+        return new SlPlanner(Leaf).SearchTurn(world, job.History, nodes, keep);
+    })];
+
+    /// <summary>The record of enemy moves after <paramref name="played"/>, as a decision there has it: each round's
+    /// intents from the second on, as the planner's lines record them from a root with none.</summary>
+    private static IReadOnlyList<EnemyTurns> Moves(IReadOnlyList<CombatAction> played)
+    {
+        var world = new Toy();
+        var record = new MoveRecord();
+        foreach (var action in played)
+        {
+            world.Execute(action);
+            if (world.Status == CombatStatus.InProgress && world.Observe().Round != 1) record.Witness(world.Observe());
+        }
+        return record.History;
+    }
+
+    /// <summary>A plan's value from its search's toy after <paramref name="played"/>, by trying every line.</summary>
+    private static double Best(IReadOnlyList<CombatAction> played, int enemyHp = 24)
+    {
+        var world = new Toy(enemyHp);
+        foreach (var action in played) world.Execute(action);
+        return BruteForce(world, []);
+    }
+
+    [Fact]
+    public void TheSolverSearchedToTheEndPicksTheBestLineAndProvesIt()
+    {
+        foreach (int enemyHp in new[] { 24, 500 })
+        {
+            var solver = new SlSolver([]);
+            solver.Run(ToySearcher([], enemyHp), long.MaxValue);
+            var plan = solver.Result(1);
+
+            Assert.True(plan.Proved);
+            Assert.Equal(0, solver.Left);
+            Assert.Equal(enemyHp == 24 ? CombatStatus.Won : CombatStatus.Lost, plan.End);
+            Assert.Equal(Best([], enemyHp), plan.Value, 9);
+            AssertReplays(plan, enemyHp);
+        }
+    }
+
+    [Fact]
+    public void TheSolverStoppedAnywhereIsNoWorseThanTheBeamItStartsFrom()
+    {
+        var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
+        double best = Best([]);
+        // The beam wins, not with the best line: 0.52 of 0.88.
+        Assert.Equal(CombatStatus.Won, beam.End);
+        Assert.True(beam.Value < best - 1e-9);
+
+        var solver = new SlSolver([], batch: 1);
+        solver.Seed(beam);
+        double last = beam.Value;
+        int stops = 0;
+        for (; !solver.Proved; stops++)
+        {
+            solver.Run(ToySearcher([]), 10);
+            var plan = solver.Result(1);
+            Assert.Equal(CombatStatus.Won, plan.End);
+            Assert.True(plan.Value >= last - 1e-12);
+            last = plan.Value;
+            AssertReplays(plan);
+        }
+        Assert.True(stops > 2);
+        Assert.Equal(best, last, 9);
+    }
+
+    [Fact]
+    public void TheSameNodesGiveTheSamePlan()
+    {
+        var plans = Enumerable.Range(0, 2).Select(_ =>
+        {
+            var solver = new SlSolver([], batch: 4);
+            solver.Run(ToySearcher([]), 300);
+            return (solver.Result(1), solver.Nodes, solver.States);
+        }).ToList();
+
+        Assert.Equal((plans[0].Item1.Result.First, plans[0].Item1.Value, plans[0].Nodes, plans[0].States),
+            (plans[1].Item1.Result.First, plans[1].Item1.Value, plans[1].Nodes, plans[1].States));
+        Assert.Equal(plans[0].Item1.Line!.Actions, plans[1].Item1.Line!.Actions);
+        Assert.False(plans[0].Item1.Proved);
+    }
+
+    [Fact]
+    public void TheSolversRootMovesWithTheCombat()
+    {
+        var solver = new SlSolver([]);
+        solver.Run(ToySearcher([]), long.MaxValue);
+        var plan = solver.Result(1);
+        var line = plan.Line!.Actions;
+        int turn = line.ToList().FindIndex(a => a.Kind == CombatActionKind.EndTurn) + 1;
+
+        // Along the plan, into the turn and then past its end: all below was searched, so only the root's turn is again.
+        foreach (int played in new[] { 1, turn })
+        {
+            var gone = line.Take(played).ToList();
+            var moved = new SlSolver([]);
+            moved.Run(ToySearcher([]), long.MaxValue);
+            int searched = moved.Searched;
+            moved.Advance(gone, Moves(gone), ToySearcher(gone));
+
+            Assert.Equal(searched + 1, moved.Searched);
+            Assert.True(moved.Proved);
+            var after = moved.Result(1);
+            Assert.Equal(plan.Value, after.Value, 9);
+            Assert.Equal(Best(gone), after.Value, 9);
+            AssertReplays(after, played: gone);
+        }
+
+        // Off the plan: the solver searches on from there, to the best line there.
+        var other = new SlSolver([]);
+        other.Run(ToySearcher([]), long.MaxValue);
+        CombatAction[] off = [new Toy().Legal().First(a => a != line[0])];
+        other.Advance(off, Moves(off), ToySearcher(off));
+        other.Run(ToySearcher(off), long.MaxValue);
+        var there = other.Result(1);
+        Assert.True(there.Proved);
+        Assert.Equal(Best(off), there.Value, 9);
+        AssertReplays(there, played: off);
+    }
+
+    [Fact]
+    public void TheSolversSeedStaysOnlyWhereTheCombatWentItsWay()
+    {
+        var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
+        var line = beam.Line!.Actions;
+        CombatAction[] along = [line[0]], off = [new Toy().Legal().First(a => a != line[0])];
+
+        // Searched no further than the root's turn, the pick is the seed's where it went, and the solver's own elsewhere.
+        var solver = new SlSolver([], batch: 1);
+        solver.Seed(beam);
+        solver.Advance(along, Moves(along), ToySearcher(along));
+        Assert.Equal(line.Skip(1), solver.Result(1).Line!.Actions);
+
+        var elsewhere = new SlSolver([], batch: 1);
+        elsewhere.Seed(beam);
+        elsewhere.Advance(off, Moves(off), ToySearcher(off));
+        var plan = elsewhere.Result(1);
+        Assert.NotEqual(line.Skip(1), plan.Line!.Actions);
+        AssertReplays(plan, played: off);
     }
 }
