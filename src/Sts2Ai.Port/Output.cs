@@ -259,6 +259,11 @@ public sealed class Output(World w, Emitter em)
     /// <summary>What the `of_mut` of a class whose fields the kept walks read starts with (World.MemoClasses).</summary>
     private const string Counted = "        c.a.writes += 1;\n";
 
+    /// <summary>The `of_mut` that counts no write, of a class whose `of_mut` counts: for the fields no kept walk reads
+    /// (World.MemoFields, Program.Quiet).</summary>
+    private static string Quiet(string head, string body) =>
+        $"    /// For a field no kept walk reads: no write is counted (rt/memo.rs).\n    pub fn of_mut_q{head} {{\n{body}    }}\n";
+
     private bool HasFields(INamedTypeSymbol t) => w.Fields(t).Any() || t.TypeParameters.Any(w.Erased);
 
     /// <summary>The nearest class at or above t, below its root, that has fields of its own.</summary>
@@ -316,7 +321,15 @@ public sealed class Output(World w, Emitter em)
             sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n");
             sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n{(w.CountsWrites(o) ? Counted : "")}        match me.tag() {{\n");
             foreach (var r in under) sb.Append($"            {Tag(r)} => &mut c.a.{ArenaField(r)}[me].{field},\n");
-            sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
+            sb.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n    }}\n");
+            if (w.CountsWrites(o))
+            {
+                var arms = new StringBuilder($"        match me.tag() {{\n");
+                foreach (var r in under) arms.Append($"            {Tag(r)} => &mut c.a.{ArenaField(r)}[me].{field},\n");
+                arms.Append($"            _ => panic!(\"not a {w.Unique(o)}: {{:?}}\", me),\n        }}\n");
+                sb.Append(Quiet($"(me: Obj, c: &mut Combat) -> &mut {data}", arms.ToString()));
+            }
+            sb.Append("}\n\n");
         }
 
         foreach (var r in roots)
@@ -330,6 +343,7 @@ public sealed class Output(World w, Emitter em)
             sb.Append("}\n\n");
             sb.Append($"impl Stored for {data} {{\n    const TAG: u16 = {Tag(r)};\n}}\n\n");
             sb.Append($"impl {data} {{\n    pub fn of(me: Obj, c: &Combat) -> &{data} {{ &c.a.{arena}[me] }}\n    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {data} {{\n{(w.CountsWrites(r) ? Counted : "")}        &mut c.a.{arena}[me]\n    }}\n");
+            if (w.CountsWrites(r)) sb.Append(Quiet($"(me: Obj, c: &mut Combat) -> &mut {data}", $"        &mut c.a.{arena}[me]\n"));
             sb.Append($"    pub fn alloc(kind: Kind, c: &mut Combat) -> Obj {{\n        c.a.{arena}.alloc({data} {{ kind, {(carriers.Count > 0 ? $"ext: {w.Unique(r)}Ext::of_kind(kind), " : "")}..Default::default() }})\n    }}\n}}\n\n");
             if (carriers.Count == 0) continue;
             string ext = w.Unique(r) + "Ext";
@@ -366,7 +380,15 @@ public sealed class Output(World w, Emitter em)
                 sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n");
                 sb.Append($"    pub fn of_mut(me: Obj, c: &mut Combat) -> &mut {td} {{\n{(w.CountsWrites(t) ? Counted : "")}        match &mut c.a.{arena}[me].ext {{\n");
                 foreach (var (variant, path) in paths) sb.Append($"            {ext}::{variant}(d) => {(path.Length == 0 ? "d" : "&mut d" + path)},\n");
-                sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n}}\n\n");
+                sb.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n    }}\n");
+                if (w.CountsWrites(t))
+                {
+                    var arms = new StringBuilder($"        match &mut c.a.{arena}[me].ext {{\n");
+                    foreach (var (variant, path) in paths) arms.Append($"            {ext}::{variant}(d) => {(path.Length == 0 ? "d" : "&mut d" + path)},\n");
+                    arms.Append($"            _ => panic!(\"not a {w.Unique(t)}: {{:?}}\", me),\n        }}\n");
+                    sb.Append(Quiet($"(me: Obj, c: &mut Combat) -> &mut {td}", arms.ToString()));
+                }
+                sb.Append("}\n\n");
             }
         }
 

@@ -98,11 +98,12 @@ var output = new Output(world, emitter);
 output.Build(results);
 
 if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
+var memoFields = world.MemoFields();
 foreach (var (path, text) in output.Files)
 {
     string full = Path.Combine(outDir, path);
     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-    File.WriteAllText(full, text);
+    File.WriteAllText(full, Quiet(text, memoFields, rep));
 }
 // The hand-stated facts: each against the code it rests on, now and in the version it was read against.
 {
@@ -145,3 +146,34 @@ rep.EqualityTypes = world.EqualityTypes()
 File.WriteAllText(Path.Combine(outDir, "report.txt"), rep.Full());
 Console.Write(rep.Summary());
 Console.Error.WriteLine($"port: {output.Files.Count} files written to {outDir} ({clock.Elapsed.TotalSeconds:F1} s)");
+
+/// <summary>A write of the translated code to a field no kept walk reads, of a class whose `of_mut` counts writes
+/// (World.MemoFields): `X::of_mut(recv, c).field` becomes `X::of_mut_q(recv, c).field`, which counts none, so the
+/// walks' lists and answers stay kept across it. Only a write that names one of the class's own state fields right
+/// after the call is changed; every other use of `of_mut` (the whole object held, a field of no kept walk's class)
+/// counts as before.</summary>
+static string Quiet(string text, Dictionary<string, (HashSet<string> Read, HashSet<string> All)> fields, Report rep)
+{
+    const string call = "::of_mut(";
+    var sb = new System.Text.StringBuilder(text.Length);
+    int from = 0;
+    for (int at = text.IndexOf(call, StringComparison.Ordinal); at >= 0; at = text.IndexOf(call, at + call.Length, StringComparison.Ordinal))
+    {
+        int start = at;
+        while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_')) start--;
+        if (!fields.TryGetValue(text[start..at], out var f)) continue;
+        // The call's closing parenthesis (no string in a receiver holds one).
+        int depth = 1, end = at + call.Length;
+        for (; end < text.Length && depth > 0; end++)
+            depth += text[end] == '(' ? 1 : text[end] == ')' ? -1 : 0;
+        if (end >= text.Length || text[end] != '.') continue;
+        int name = end + 1, stop = name;
+        while (stop < text.Length && (char.IsLetterOrDigit(text[stop]) || text[stop] == '_')) stop++;
+        string field = text[name..stop];
+        if (!f.All.Contains(field) || f.Read.Contains(field)) continue;
+        sb.Append(text, from, at - from).Append("::of_mut_q(");
+        from = at + call.Length;
+        rep.QuietWrites++;
+    }
+    return sb.Append(text, from, text.Length - from).ToString();
+}

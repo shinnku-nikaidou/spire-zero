@@ -508,9 +508,14 @@ count moves and the rest of that walk asks `Contains` as the game does, item by 
 out from the game's code: from the statements that build the list and from the test it follows every call at any
 depth, every implementation of a virtual member and every getter, and gathers the classes whose own fields are read
 (sixteen: the combat, its creatures and players, piles, orb queues, the models' fields the walk looks at, and
-`AbstractModel`'s, which every model's getters check). A field is written only through the `of_mut` of the class that
+`AbstractModel`'s, which every model's getters check), and of each class the fields read (a creature's powers, combat
+state, monster and player; not its HP or block). A field is written only through the `of_mut` of the class that
 declares it, and a new object changes none that is there, so the `of_mut` of these classes count and nothing else
-does: a choice context made for each listener of a hook, or a relic's counter, leaves the lists kept. A walk that
+does: a choice context made for each listener of a hook, or a relic's counter, leaves the lists kept. Each of these
+classes also has an `of_mut_q` that counts nothing, and a write of the translated code that names a field no walk
+reads goes through it (`X::of_mut(o, c).field`, the field right after the call): damage taken, block gained, a card's
+cost changed leave the lists and answers kept too. A write that holds the whole object counts, as does the
+hand-written code's. The report lists each class with its fields read and how many writes count none. A walk that
 reads a root, or calls code the walk cannot see into (a delegate it is handed), stops the translation; the report
 lists the classes with the first read found for each. A copy of a combat has the count and the lists it was copied
 with, and each one's count only goes up from there, so a list kept at a count is the list of the one combat that

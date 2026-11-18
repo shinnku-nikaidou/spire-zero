@@ -23,6 +23,8 @@ public sealed class Report
     /// hand-written members they reach, read as their C# is; how many methods they reach.</summary>
     public List<string> MemoClasses = [], MemoManual = [];
     public int MemoMethods;
+    /// <summary>How many writes of the translated code go through `of_mut_q`: a field of a class above whose kept walks read none (Program.Quiet).</summary>
+    public int QuietWrites;
     /// <summary>The hand-stated facts and what became of the code each rests on (Facts.cs), with the head of the section.</summary>
     public List<string> Facts = [];
     public string FactsHead = "", FactsSummary = "";
@@ -237,7 +239,7 @@ public sealed class Report
         }
         sb.AppendLine().AppendLine("== usings of translated code, and what became of each resource (disposed at the end of its scope, or left out and why)");
         foreach (var s in usings.Order(StringComparer.Ordinal)) sb.AppendLine(s);
-        sb.AppendLine().AppendLine($"== classes whose fields the kept walks and getters read (port.toml [memo], {MemoMethods} methods reached): only a write to a field of one of these moves the write count");
+        sb.AppendLine().AppendLine($"== classes whose fields the kept walks and getters read (port.toml [memo], {MemoMethods} methods reached), with the fields read: only a write to one of those fields moves the write count ({QuietWrites} writes of the translated code to their other fields count none)");
         foreach (var s in MemoClasses) sb.AppendLine(s);
         sb.AppendLine().AppendLine("== hand-written members the kept walks reach, taken to read what their C# reads");
         foreach (var s in MemoManual) sb.AppendLine(s);

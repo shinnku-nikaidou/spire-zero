@@ -11,6 +11,8 @@ public sealed partial class World
 {
     private readonly object _memoLock = new();
     private HashSet<INamedTypeSymbol>? _memoClasses;
+    /// <summary>For each class of MemoClasses, by its data's name, the Rust fields the kept walks read and all its own.</summary>
+    private Dictionary<string, (HashSet<string> Read, HashSet<string> All)>? _memoFields;
 
     /// <summary>The classes whose own fields a kept walk of port.toml [memo] may read where it builds its list or asks
     /// its test, or a kept getter anywhere in its body: through every call at any depth, every implementation of a
@@ -24,12 +26,23 @@ public sealed partial class World
         lock (_memoLock) return _memoClasses ??= MemoReads();
     }
 
-    /// <summary>Whether a write to a field this class declares moves the write count.</summary>
+    /// <summary>Whether a write to a field this class declares can move the write count: its `of_mut` counts one, and
+    /// its `of_mut_q` is there for the fields no kept walk reads.</summary>
     public bool CountsWrites(INamedTypeSymbol t) => MemoClasses().Contains(t.OriginalDefinition);
+
+    /// <summary>For each class whose `of_mut` counts, by its data's name, the fields the kept walks read: a write to any
+    /// other field of it leaves every kept list and answer as it is, and goes through `of_mut_q` (Program.Quiet).</summary>
+    public Dictionary<string, (HashSet<string> Read, HashSet<string> All)> MemoFields()
+    {
+        MemoClasses();
+        lock (_memoLock) return _memoFields!;
+    }
 
     private HashSet<INamedTypeSymbol> MemoReads()
     {
         var classes = new HashSet<INamedTypeSymbol>(Eq);
+        // The fields (and events) read, each of a class in `classes`.
+        var fields = new HashSet<ISymbol>(Eq);
         var why = new Dictionary<INamedTypeSymbol, string>(Eq);
         var problems = new List<string>();
         var manual = new SortedSet<string>(StringComparer.Ordinal);
@@ -94,11 +107,11 @@ public sealed partial class World
                     case IFieldReferenceOperation { Field: var f }:
                         if (f.IsConst) break;
                         if (f.IsStatic) Static(f, by);
-                        else Read(f.ContainingType, $"{by} reads {Name(f)}");
+                        else { Read(f.ContainingType, $"{by} reads {Name(f)}"); fields.Add(f.OriginalDefinition); }
                         break;
                     case IEventReferenceOperation { Event: var e }:
                         if (e.IsStatic) Static(e, by);
-                        else Read(e.ContainingType, $"{by} reads {Name(e)}");
+                        else { Read(e.ContainingType, $"{by} reads {Name(e)}"); fields.Add(e.OriginalDefinition); }
                         break;
                     case IPropertyReferenceOperation { Property: var p }:
                     {
@@ -187,10 +200,10 @@ public sealed partial class World
             string by = $"{Name(m)} (from {from})";
             if (CatOfMember(m) == Cat.Manual) manual.Add(Name(m));
             // An auto-property's accessor reads or writes its field.
-            if (m.AssociatedSymbol is IPropertySymbol p && p.ContainingType.GetMembers().OfType<IFieldSymbol>().Any(f => Eq.Equals(f.AssociatedSymbol, p)))
+            if (m.AssociatedSymbol is IPropertySymbol p && p.ContainingType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => Eq.Equals(f.AssociatedSymbol, p)) is { } backing)
             {
                 if (p.IsStatic) Static(p, by);
-                else Read(p.ContainingType, $"{by} reads {Name(p)}");
+                else { Read(p.ContainingType, $"{by} reads {Name(p)}"); fields.Add(backing.OriginalDefinition); }
                 continue;
             }
             if (BodyOf(m) is { } op) Visit(op, Name(m));
@@ -198,7 +211,19 @@ public sealed partial class World
 
         if (problems.Count > 0)
             throw new InvalidOperationException("port.toml [memo]: what a kept walk reads is not known:\n  " + string.Join("\n  ", problems.Distinct().Take(20)));
-        foreach (var t in classes.OrderBy(Unique, StringComparer.Ordinal)) Rep.MemoClasses.Add($"{Unique(t)}: {why[t]}");
+        // Each field read as its class's data names it (a nullable collection's flag beside it too).
+        var byData = classes.ToDictionary(DataName, t => (Read: new HashSet<string>(StringComparer.Ordinal),
+            All: Fields(t).Select(x => x.Name).ToHashSet(StringComparer.Ordinal)));
+        foreach (var f in fields)
+        {
+            var t = f.ContainingType.OriginalDefinition;
+            if (!byData.TryGetValue(DataName(t), out var names)) continue;
+            foreach (var x in Fields(t))
+                if (Eq.Equals(x.Field, f)) names.Read.Add(x.Name);
+        }
+        _memoFields = byData;
+        foreach (var t in classes.OrderBy(Unique, StringComparer.Ordinal))
+            Rep.MemoClasses.Add($"{Unique(t)}: {why[t]}; fields read: {string.Join(", ", byData[DataName(t)].Read.Order(StringComparer.Ordinal))}");
         Rep.MemoManual.AddRange(manual);
         Rep.MemoMethods = seen.Count;
         return classes;
