@@ -10,8 +10,12 @@
 //!
 //! A card prompt in the middle of an action has no answer the first time: the action stops there
 //! (`Err(Stop::Choice)`). The world then keeps the combat as it was before the action, the action and the answers
-//! given so far, and shows the combat as it stood at the prompt. The answer runs the action again from the start
-//! with one more answer; the random streams are part of the combat, so it runs the same way up to the prompt.
+//! given so far, and shows the combat as it stood at the prompt. The answer runs the action again with one more
+//! answer; the random streams are part of the combat, so it runs the same way up to the prompt. It runs from the
+//! step's last resume point before the prompt, if there is one, not from the action's start: a place where nothing of
+//! the game's code is running, so the combat there is all there is (`resume_point`). There is one, before the players'
+//! turn starts (manual/combat_manager.rs, `turn_loop`): a prompt of the turn start (Toasty Mittens' exhaust) is
+//! answered from there, and the end of the players' turn and the enemies' turn are not run again.
 
 use crate::ffi;
 use crate::r#gen as g;
@@ -40,6 +44,8 @@ struct Prompted {
     /// The answers to the action's prompts so far: for each, the picked cards as indexes into the game's list.
     answers: Vec<Vec<i32>>,
     asked: Asked,
+    /// The step's last resume point before the prompt, which the answer runs from; none: from `before`.
+    resume: Option<Arc<Combat>>,
 }
 
 impl ffi::World for Live {
@@ -53,20 +59,33 @@ impl ffi::World for Live {
     fn step(&mut self, action: &str) -> Result<Self, String> {
         // What runs: the action from the combat as it stands, or at a card prompt the prompted action again from
         // the combat before it, with one more answer.
-        let (before, action, answers) = match &self.prompted {
-            None => (&self.combat, action.to_string(), Vec::new()),
+        let (before, action, answers, resume) = match &self.prompted {
+            None => (&self.combat, action.to_string(), Vec::new(), None),
             Some(prompted) => {
                 let mut answers = prompted.answers.clone();
                 answers.push(picks(action, &prompted.asked, &mut self.combat)?);
-                (&*prompted.before, prompted.action.clone(), answers)
+                (
+                    &*prompted.before,
+                    prompted.action.clone(),
+                    answers,
+                    prompted.resume.clone(),
+                )
             }
         };
         // A hook that pauses for the player is found again from what the step started from
         // (manual/hook_player_choice_context.rs): a step where one pauses is run again keeping it.
-        let (mut c, stopped) = match run(before, &action, &answers, false)? {
-            (c, _) if c.x.hooks.restart => run(before, &action, &answers, true)?,
-            ran => ran,
+        let (mut c, stopped) = match &resume {
+            None => match run(before, &action, &answers, false)? {
+                (c, _) if c.x.hooks.restart => run(before, &action, &answers, true)?,
+                ran => ran,
+            },
+            Some(point) => match run_from(point, &answers, false) {
+                (c, _) if c.x.hooks.restart => run_from(point, &answers, true),
+                ran => ran,
+            },
         };
+        // The step's last resume point, or the one it ran from.
+        let point = c.x.resume_point.take().or(resume);
         let stopped = if c.choices.stopped {
             Err(Stop::Choice)
         } else {
@@ -120,6 +139,7 @@ impl ffi::World for Live {
                         action,
                         answers,
                         asked,
+                        resume: point,
                     })),
                 })
             }
@@ -154,13 +174,78 @@ fn run(before: &Combat, action: &str, answers: &[Vec<i32>], keep: bool) -> Resul
     if keep {
         c.x.step = Some(Arc::new(manual::hook_player_choice_context::StepStart {
             before: before.clone(),
-            action: action.to_string(),
+            action: Some(action.to_string()),
         }));
     }
+    c.x.points = true;
+    c.x.resume_point = None;
     start(action, &mut c)?;
     let stopped = pump(&mut c).and_then(|()| cap(&mut c));
     c.x.step = None;
+    c.x.points = false;
     Ok((c, stopped))
+}
+
+/// The step from its resume point `point` on (`resume_point`), with these answers, and how it stopped: as `run` from
+/// the action's start, which got there with the answers the point had taken. `keep` as for `run`, with the point as
+/// what the step started from.
+fn run_from(point: &Arc<Combat>, answers: &[Vec<i32>], keep: bool) -> (Combat, R<()>) {
+    let mut c = (**point).clone();
+    c.choices.answers = answers.to_vec();
+    c.x.step = keep.then(|| {
+        Arc::new(manual::hook_player_choice_context::StepStart {
+            before: (**point).clone(),
+            action: None,
+        })
+    });
+    c.x.points = true;
+    c.x.resume_point = None;
+    let stopped = go_on(&mut c).and_then(|()| cap(&mut c));
+    c.x.step = None;
+    c.x.points = false;
+    (c, stopped)
+}
+
+/// A resume point's combat goes on: the turn loop from inside its loop, where the point was taken, then the queued
+/// actions and the turn loop as `pump` runs them, as the step did after that turn loop's move.
+fn go_on(c: &mut Combat) -> R<()> {
+    let manager = c.s.combat_manager__instance;
+    if !manual::combat_manager::turn_loop(manager, c)? && c.x.hooks.started.is_null() {
+        return Ok(());
+    }
+    pump(c)
+}
+
+/// A resume point of the running step, before the players' turn starts in the turn loop (manual/combat_manager.rs):
+/// the combat as it stands, kept for a prompt after it to be answered from. Only where nothing of the game's code is
+/// running and the step can be run on from the combat alone: no hook paused or waiting for the player, no card prompt
+/// running, no turn start's setup running, not in a replay of the step. A point replaces the one before it.
+pub(crate) fn resume_point(c: &mut Combat) {
+    let hooks = &c.x.hooks;
+    if !c.x.points
+        || c.x.resume.is_some()
+        || !hooks.waiting.is_empty()
+        || !hooks.started.is_null()
+        || !hooks.asking.is_null()
+        || !hooks.asked_at_once.is_empty()
+        || !hooks.resumed.is_empty()
+        || hooks.restart
+        || c.x.turn_start.is_some()
+        || c.x.entries != 0
+        || c.x.entry.is_some()
+        || c.x.vakuu != 0
+        || c.x.asked.is_some()
+        || c.only.is_some()
+        || c.choices.stopped
+    {
+        return;
+    }
+    c.x.resume_point = None;
+    let mut point = c.clone();
+    point.x.step = None;
+    point.x.points = false;
+    point.x.enter_loop = true;
+    c.x.resume_point = Some(Arc::new(point));
 }
 
 /// "pick:0,2": the picked options of the prompt as the player sees it, as indexes into the game's list of cards.
@@ -314,13 +399,18 @@ fn pump(c: &mut Combat) -> R<()> {
     }
 }
 
-/// The step `action` once more from the combat it started from, for a hook that paused in it
-/// (manual/hook_player_choice_context.rs, `resume`): the replay goes over to the step's combat at the hook's choice,
-/// and stops at the hook's end (`Stop::Resumed`).
-pub(crate) fn replay(action: &str, c: &mut Combat) -> R<()> {
-    if let Err(refused) = start(action, c) {
-        panic!("a replay of `{action}` was refused: {refused}");
+/// The step once more from what it started from, for a hook that paused in it (manual/hook_player_choice_context.rs,
+/// `resume`): its action from the combat before it, or the turn loop from a resume point. The replay goes over to the
+/// step's combat at the hook's choice, and stops at the hook's end (`Stop::Resumed`).
+pub(crate) fn replay(step: &manual::hook_player_choice_context::StepStart, c: &mut Combat) -> R<()> {
+    match &step.action {
+        Some(action) => {
+            if let Err(refused) = start(action, c) {
+                panic!("a replay of `{action}` was refused: {refused}");
+            }
+            pump(c)?;
+        }
+        None => go_on(c)?,
     }
-    pump(c)?;
     cap(c)
 }

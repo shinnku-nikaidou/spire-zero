@@ -59,4 +59,12 @@ pub struct Extra {
     pub step: Option<std::sync::Arc<hook_player_choice_context::StepStart>>,
     /// In a replay of the step: the paused hook it runs to and the combat it goes on in from there.
     pub resume: Option<Box<hook_player_choice_context::Resume>>,
+    /// Whether the running step keeps resume points (world.rs): the step a world runs, not a replay inside it.
+    pub points: bool,
+    /// The running step's latest resume point (world.rs): the combat as it stood there, where a prompt after it is
+    /// answered from.
+    pub resume_point: Option<std::sync::Arc<crate::rt::Combat>>,
+    /// Set on a resume point's combat only: the turn loop goes on inside its loop, where the point was taken
+    /// (manual/combat_manager.rs, `turn_loop`).
+    pub enter_loop: bool,
 }

@@ -62,37 +62,48 @@ pub fn turn_loop(me: CombatManager, c: &mut Combat) -> R<bool> {
     }
     let in_progress = |c: &Combat| CombatTurnStateData::of(turn_state, c).is_in_progress;
     let mut action_during_enemy_turn = Fn0::NULL;
-    match c.x.waits {
-        Waits::EndTurn => {
-            let Some(signal) = c.x.end_turn_signal.take() else {
-                return Ok(false);
-            };
-            if in_progress(c) {
-                g::combat::combat_manager::after_all_players_ready_to_end_turn(
-                    me, turn_state, signal, c,
-                )?;
+    // A resume point's combat (world.rs) goes on inside the loop below, where the point was taken: before the
+    // players' turn start, with nothing to run during an enemies' turn.
+    let resumed = std::mem::take(&mut c.x.enter_loop);
+    if !resumed {
+        match c.x.waits {
+            Waits::EndTurn => {
+                let Some(signal) = c.x.end_turn_signal.take() else {
+                    return Ok(false);
+                };
+                if in_progress(c) {
+                    g::combat::combat_manager::after_all_players_ready_to_end_turn(
+                        me, turn_state, signal, c,
+                    )?;
+                }
+                if in_progress(c) {
+                    c.x.waits = Waits::BeginEnemyTurn;
+                    return Ok(true);
+                }
             }
-            if in_progress(c) {
-                c.x.waits = Waits::BeginEnemyTurn;
-                return Ok(true);
-            }
-        }
-        Waits::BeginEnemyTurn => {
-            let Some(action) = c.x.begin_enemy_turn_signal.take() else {
-                return Ok(false);
-            };
-            if in_progress(c) {
-                g::combat::combat_manager::after_all_players_ready_to_begin_enemy_turn(
-                    me, turn_state, c,
-                )?;
-                action_during_enemy_turn = action;
+            Waits::BeginEnemyTurn => {
+                let Some(action) = c.x.begin_enemy_turn_signal.take() else {
+                    return Ok(false);
+                };
+                if in_progress(c) {
+                    g::combat::combat_manager::after_all_players_ready_to_begin_enemy_turn(
+                        me, turn_state, c,
+                    )?;
+                    action_during_enemy_turn = action;
+                }
             }
         }
     }
+    let mut point = !resumed;
     // C#: while (turnState.IsLive), up to the next wait.
     while g::combat::combat_turn_state::is_live(turn_state, c) {
         let state = CombatTurnStateData::of(turn_state, c).state;
         if g::combat::combat_state::current_side(state, c) == CombatSide::Player {
+            // The players' turn is about to start: nothing of the game's code is running, so a prompt of the turn
+            // start is answered from here (world.rs), not from the action that ended the players' turn.
+            if std::mem::replace(&mut point, true) {
+                crate::world::resume_point(c);
+            }
             m::combat_manager::start_turn(me, turn_state, Fn0::NULL, c)?;
             action_during_enemy_turn = Fn0::NULL;
             if in_progress(c)

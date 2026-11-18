@@ -50,15 +50,19 @@ pub struct Hooks {
     pub restart: bool,
 }
 
-/// What a world's step started from (world.rs): the combat before it and the action.
+/// What a world's step started from (world.rs): the combat before it and the action, or a resume point where the
+/// turn loop goes on (`action` none: the combat is the point's, which says how many answers were taken before it).
 pub struct StepStart {
     pub before: Combat,
-    pub action: String,
+    pub action: Option<String>,
 }
 
 impl std::fmt::Debug for StepStart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "StepStart({})", self.action)
+        match &self.action {
+            Some(action) => write!(f, "StepStart({action})"),
+            None => write!(f, "StepStart(resume point)"),
+        }
     }
 }
 
@@ -85,6 +89,8 @@ struct Running {
     vakuu: i32,
     turn_start: Option<super::combat_manager::TurnStart>,
     only: Option<&'static Only>,
+    points: bool,
+    resume_point: Option<Arc<Combat>>,
 }
 
 impl Running {
@@ -95,6 +101,8 @@ impl Running {
             vakuu: c.x.vakuu,
             turn_start: c.x.turn_start.take(),
             only: c.only.take(),
+            points: c.x.points,
+            resume_point: c.x.resume_point.take(),
         }
     }
 
@@ -104,6 +112,8 @@ impl Running {
         c.x.vakuu = self.vakuu;
         c.x.turn_start = self.turn_start;
         c.only = self.only;
+        c.x.points = self.points;
+        c.x.resume_point = self.resume_point;
     }
 }
 
@@ -277,28 +287,34 @@ pub fn resume(me: HookPlayerChoiceContext, c: &mut Combat) -> R<()> {
     let step = c.x.step.clone().expect("a hook paused outside a world's step");
     let taken = Arc::new(AtomicBool::new(false));
     let mut replay = step.before.clone();
+    // From the step's action, with no answer taken and no hook asked yet; from a resume point, as the point stood.
     replay.choices = Choices {
         answers: c.choices.answers.clone(),
-        next: 0,
+        next: if step.action.is_some() { 0 } else { step.before.choices.next },
         stopped: false,
     };
-    replay.x.hooks = Hooks::default();
+    if step.action.is_some() {
+        replay.x.hooks = Hooks::default();
+    }
+    // A replay takes no resume point: the step it replays keeps its own.
+    replay.x.points = false;
+    replay.x.resume_point = None;
     replay.x.step = Some(step.clone());
     replay.x.resume = Some(Box::new(Resume {
         target,
         state: c.clone(),
         taken: taken.clone(),
     }));
-    let ran = crate::world::replay(&step.action, &mut replay);
+    let ran = crate::world::replay(&step, &mut replay);
     if !taken.load(Ordering::Relaxed) {
-        panic!("a replay of `{}` ended ({ran:?}) before the hook it resumes asked", step.action);
+        panic!("a replay of {step:?} ended ({ran:?}) before the hook it resumes asked");
     }
     let running = Running::take(c);
     *c = replay;
     running.put(c);
     match ran {
         Err(Stop::Resumed(context)) if context == me => Ok(()),
-        Ok(()) => panic!("a replay of `{}` went on past the end of the hook it resumes", step.action),
+        Ok(()) => panic!("a replay of {step:?} went on past the end of the hook it resumes"),
         Err(stop) => Err(stop),
     }
 }

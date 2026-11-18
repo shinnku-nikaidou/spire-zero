@@ -400,9 +400,19 @@ synchronously. Two places need care.
 like any other: it must be copied and answered many ways. So an action is a function of the state before it and the
 answers given so far. `apply(action)` runs it on a copy; a prompt with no answer left stops it (`Err(Stop::Choice)`),
 and the world keeps the state before the action, the action, the answers, and the copy as it stood at the prompt (what
-the observation shows). The next answer runs the action again from the start with one more answer. Effects are
-deterministic (the random streams are part of the state), so the run up to the prompt repeats exactly. No continuation
-is ever stored, and translated code stays a straight line with `?`.
+the observation shows). The next answer runs the action again with one more answer. Effects are deterministic (the
+random streams are part of the state), so the run up to the prompt repeats exactly. No continuation is ever stored,
+and translated code stays a straight line with `?`.
+
+It runs again from the step's last *resume point* before the prompt, not from the action's start. A resume point is a
+place in the hand-written turn loop where nothing of the game's code is running, so the combat there is all there is:
+before the players' turn starts (`turn_loop`, `world::resume_point`), with no hook paused or waiting, no card prompt
+and no turn start's setup running, outside a replay of the step. A step keeps its latest point; a world at a prompt
+keeps the point with the state before the action, and its answers run from the point (`world::run_from`): the turn
+loop goes on inside its loop, as the step did there. A prompt of the turn start (Toasty Mittens' exhaust, a setup that
+asks) then costs the turn start again, not the end of the players' turn and the enemies' turn as well. A hook's
+replay (below) starts from the point too. On v0.113.1 the lockstep check has no difference with it, and on a Regent's
+9-card turn with Toasty Mittens a prompt's answer took 143 µs from the action's start and 82 µs from the point.
 
 **The action queue and the turn loop.** In the game these are tasks that wait on each other: the executor runs
 queued actions, the turn loop waits for "every player is ready to end the turn", runs the turn's end, waits for
