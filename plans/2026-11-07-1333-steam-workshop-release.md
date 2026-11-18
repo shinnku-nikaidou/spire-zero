@@ -417,3 +417,13 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   `run --check` passed. Sts2Ai.Mod.csproj now embeds it too; the brain is 0.3.21's. The commit timed out with the
   content through (updated 08:46:45Z, 396.9 MB, the change note on the changelog page). Installed in `mods/` over 0.3.21
   (moved to `tmp/modeng/old-installs/`) with the game closed.
+- 2026-11-18 12:46: 0.3.23 at 3bd8582a, three platforms (4:14; the VM started and shut down again), uploaded on the
+  user's word ("那d2, 開一個session更新gate,champion and mod"), public: the champion d2 of test v12-1,
+  v-sl-td4-12-1-d2 + c-sl-12-1-d2 (A10 +10.0 and the Dread mode +9.0 points of wins against v12-0-td4 + c12-0). Its
+  Linux brain on `run --check` (IRONCLAD A10, low, seed 1138): won, identical over the wire, 49/49 nodes and 27/27 saves
+  replay exactly, 0 game errors; in NoSL (same seed, pimc 8x300): lost on floor 43, identical over the wire, 43/43 nodes
+  and 24/24 saves replay exactly, 0 game errors. The nets are `weights/all/`'s byte for byte. Steam was logged on as
+  another account at first; the user switched it back. The commit timed out with the content through (updated
+  04:46:01Z, 397.1 MB, the change note on the changelog page); the texts were not sent again (none changed). The
+  listing's numbers are still v11-0-td4 + c11-0's. Installed in `mods/` over 0.3.22 (moved to `tmp/modeng/old-installs/`)
+  with the game closed.
