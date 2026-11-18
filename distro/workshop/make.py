@@ -1,10 +1,10 @@
 # Writes the Workshop title and description in each of the game's 17 languages into distro/workshop/STEAMLANG.bbcode.
 # The characters', the ascension's and the Dread mode's names are the game's own (tmp/workshop/names.json, from the pck
 # by names.mjs);
-# the numbers are v11-0-td4 + c11-0's SL runs on test seeds at the high effort (the report report-v11-0-td4-c11-0 on
-# promotion-1-200: A0, A10 and the Dread mode, which is played at A10), 200 runs of each, the Defect's Dread 199 (one
-# failed run left out), the Ironclad's played again at 800111d7 once a hook action's game error was fixed (the step
-# report-v11-0-td4-c11-0-ironclad); shown with the run counts, as the user chose.
+# the numbers are the champion v-sl-td4-12-1-d2 + c-sl-12-1-d2's SL runs on test seeds at the high effort (test v12-1's
+# reports at b34dd0a5 on promotion-1-200: A0, A10 and the Dread mode, which is played at A10), 200 runs of each but
+# the failed ones left out (the Ironclad's Dread 199, the Defect's 198: the game's own bugs); shown with the run
+# counts, as the user chose.
 import json
 import pathlib
 
@@ -12,12 +12,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = json.loads((ROOT / "tmp/workshop/names.json").read_text())
 CHARS = ["IRONCLAD", "SILENT", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
 WINS = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
-    "IRONCLAD": (199, 200, 172, 200, 76, 200),
-    "SILENT": (198, 200, 151, 200, 28, 200),
-    "DEFECT": (198, 200, 146, 200, 44, 199),
-    "REGENT": (199, 200, 116, 200, 25, 200),
-    "NECROBINDER": (195, 200, 104, 200, 21, 200),
-    "FOOL": (173, 200, 25, 200, 3, 200),
+    "IRONCLAD": (199, 200, 175, 200, 92, 199),
+    "SILENT": (198, 200, 151, 200, 50, 200),
+    "DEFECT": (199, 200, 161, 200, 61, 198),
+    "REGENT": (196, 200, 144, 200, 43, 200),
+    "NECROBINDER": (193, 200, 127, 200, 40, 200),
+    "FOOL": (187, 200, 74, 200, 15, 200),
 }
 REPO = "https://github.com/shinnku-nikaidou/spire-zero"
 DOCS = "https://sts2-docs.shinnkunikaidou.workers.dev/"
