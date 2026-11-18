@@ -480,8 +480,8 @@ public class SlPlannerTests
     [Fact]
     public void TheTurnDecayIsTheBudgetsInEveryRoom()
     {
-        var budget = Budget.Effort("medium") with { Elite = Budget.Effort("max"), TurnDecay = SlPlanner.PlayerTurnDecay };
-        Assert.Equal(Budget.Effort("max") with { TurnDecay = SlPlanner.PlayerTurnDecay }, budget.For("Elite"));
+        var budget = Budget.Effort("low") with { Elite = Budget.Effort("high"), TurnDecay = SlPlanner.PlayerTurnDecay };
+        Assert.Equal(Budget.Effort("high") with { TurnDecay = SlPlanner.PlayerTurnDecay }, budget.For("Elite"));
         Assert.Equal(SlPlanner.PlayerTurnDecay, budget.For("Monster").TurnDecay);
         Assert.Equal("beam 8x300 easy 4 loss plans 3 turn decay 0.999 elite (beam 16x300)", budget.ToString());
         // Self-play's budgets have none.
@@ -523,9 +523,10 @@ public class SlPlannerTests
     [Fact]
     public void EachEffortIsAPlannerBudget()
     {
-        Assert.Equal(new Budget(NodesPerWorld: 300, Beam: 8, Replan: 1), Budget.Effort("high"));
+        Assert.Equal(new Budget(NodesPerWorld: 300, Beam: 8, Replan: 1), Budget.Effort("medium"));
+        Assert.Equal(new Budget(NodesPerWorld: 300, Beam: 16, Replan: 1), Budget.Effort("high"));
         Assert.All(Budget.Efforts, e => Assert.True(Budget.Effort(e).Beam > 0));
-        Assert.Equal("beam 8x300 easy 4 loss plans 3", Budget.Effort("medium").ToString());
+        Assert.Equal("beam 8x300 easy 4 loss plans 3", Budget.Effort("low").ToString());
         Assert.Throws<ArgumentException>(() => Budget.Effort("ultra"));
     }
 

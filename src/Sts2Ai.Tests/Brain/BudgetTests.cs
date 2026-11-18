@@ -17,14 +17,14 @@ public class BudgetTests
     [Fact]
     public void AnEliteAndABossMayHaveTheirOwnBudget()
     {
-        var medium = Budget.Effort("medium");
-        var budget = medium with { Boss = Budget.Effort("high") };
-        Assert.Equal(medium, budget.For("Monster"));
-        Assert.Equal(medium, budget.For("Elite"));
-        Assert.Equal(medium, budget.For(null));
-        Assert.Equal(Budget.Effort("high"), budget.For("Boss"));
+        var low = Budget.Effort("low");
+        var budget = low with { Boss = Budget.Effort("medium") };
+        Assert.Equal(low, budget.For("Monster"));
+        Assert.Equal(low, budget.For("Elite"));
+        Assert.Equal(low, budget.For(null));
+        Assert.Equal(Budget.Effort("medium"), budget.For("Boss"));
         Assert.Equal("beam 8x300 easy 4 loss plans 3 boss (beam 8x300)", budget.ToString());
-        Assert.Equal("beam 8x300 easy 4 loss plans 3 elite (beam 8x300 easy 2 loss plans 3)",
-            (medium with { Elite = Budget.Effort("low") }).ToString());
+        Assert.Equal("beam 8x300 easy 4 loss plans 3 elite (beam 16x300)",
+            (low with { Elite = Budget.Effort("high") }).ToString());
     }
 }

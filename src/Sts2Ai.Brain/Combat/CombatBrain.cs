@@ -29,12 +29,14 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
 
     /// <summary>The planner's budget at an effort level: beam, nodes per state and turn, the
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
-    /// plans in a row before the last is played to its end.</summary>
+    /// plans in a row before the last is played to its end. Since 2026-11-18 each name is the budget of the level above
+    /// it before (low was medium's, medium high's, high max's); max is to be the combat solver (<see cref="SlSolver"/>,
+    /// plans/2026-11-18-1412-max-solver.md) and plays high's beam until the brain runs it.</summary>
     public static Budget Effort(string level) => level switch
     {
-        "low" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 2, LossPlans: 3),
-        "medium" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 4, LossPlans: 3),
-        "high" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
+        "low" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 4, LossPlans: 3),
+        "medium" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
+        "high" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
         "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
         _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),
     };
