@@ -11,10 +11,11 @@ public sealed record CombatExport(byte[] Bytes, RunView Run);
 /// What a combat policy gets at each decision: the legal actions, and the observation on request. In a run, the run
 /// observation around the combat too (<paramref name="inRun"/> makes it from the combat's); a combat started on its
 /// own has none. A host that holds the live game can write the combat out for the engine (<paramref name="export"/>),
-/// where the game stands between actions: not at a card prompt.
+/// where the game stands between actions: not at a card prompt. A host that shows answers as they come and may move on
+/// before one comes gives <paramref name="early"/> and <paramref name="hurry"/>.
 /// </summary>
 public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null,
-    Func<CombatExport>? export = null)
+    Func<CombatExport>? export = null, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
 {
     private CombatObservation? _observation;
     private Observation? _runObservation;
@@ -30,6 +31,13 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
     /// <summary>The live combat for the engine, written on first use; null where the host has none to give.</summary>
     public CombatExport? Export => _export ??= export?.Invoke();
+
+    /// <summary>Told the pick so far, by a brain that searches on before it answers (<see cref="SolverRoute"/>); null
+    /// for a host that only takes answers.</summary>
+    public Action<CombatDecisionResult>? Early { get; } = early;
+
+    /// <summary>Cancelled when the host moved on from the decision: a brain waiting on its search answers at once.</summary>
+    public CancellationToken Hurry { get; } = hurry;
 }
 
 /// <summary>
@@ -71,7 +79,10 @@ public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> leg
 /// request. The observation is null where there is no run around the prompt (a combat started on its own). Outside
 /// combat in SL, Harness may add the node's clone at the prompt (<paramref name="clone"/>).
 /// </summary>
-public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe = null, IMacroClone? clone = null)
+/// <param name="early">During a combat, as a combat decision's (<see cref="CombatDecision.Early"/>).</param>
+/// <param name="hurry">During a combat, as a combat decision's (<see cref="CombatDecision.Hurry"/>).</param>
+public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe = null, IMacroClone? clone = null,
+    Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
 {
     private Observation? _observation;
 
@@ -80,8 +91,12 @@ public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe
     /// <summary>SL, outside combat: the node's clone at this prompt; null otherwise.</summary>
     public IMacroClone? Clone { get; } = clone;
 
+    public Action<CombatDecisionResult>? Early { get; } = early;
+
+    public CancellationToken Hurry { get; } = hurry;
+
     /// <summary>The same prompt with <paramref name="node"/>'s clone.</summary>
-    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node);
+    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node, Early, Hurry);
 
     /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
     public Observation? Observation => _observation ??= observe?.Invoke();

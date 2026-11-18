@@ -29,7 +29,10 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CancellationT
 /// take as soon as the route gives it, and the solver searches on there until the next decision. That decision is
 /// answered once the solver has searched at least <see cref="Budget.Solve"/> nodes since its root moved there, or at
 /// once when nothing is left, so it is never searched less than without the background, and what was found while the
-/// game played the step stays. <see cref="Rest"/> stops it.
+/// game played the step stays. <see cref="Rest"/> stops it. Meanwhile the host is told the pick so far
+/// (<see cref="CombatDecision.Early"/>): the rest of the plan given at the last answer while the combat goes its way, the
+/// beam's plan where a solver begins. A host that moved on from the decision (<see cref="CombatDecision.Hurry"/>) gets
+/// the pick at once.
 /// </summary>
 public sealed class SolverRoute(Budget budget, bool background = false)
 {
@@ -40,9 +43,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     private readonly List<CombatAction> _played = [], _since = [];
     /// <summary>The solver searching in the background, if it does.</summary>
     private Background? _background;
-    /// <summary>The pick from the root, and how many of its steps the combat took since.</summary>
+    /// <summary>The pick from the root, how many of its steps the combat took since, and how many of them the plan
+    /// given with it held.</summary>
     private TurnEnd? _line;
-    private int _taken;
+    private int _taken, _given;
 
     /// <summary>How many solvers the route began: one a combat while the combat goes the picks' way.</summary>
     public int Begun { get; private set; }
@@ -50,8 +54,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     /// <param name="start">Takes the combat in where the decision stands; null where it cannot.</param>
     /// <param name="beam">The beam's decision, where no solver can begin.</param>
+    /// <param name="early">In the background, told the pick so far before the decision's search.</param>
+    /// <param name="hurry">In the background, cancelled when the host moved on: the decision's search ends there.</param>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IReadOnlyList<EnemyTurns> history,
-        Func<TakenCombat?> start, Func<CombatDecisionResult> beam)
+        Func<TakenCombat?> start, Func<CombatDecisionResult> beam, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
     {
         ulong hash = ProtocolJson.Hash(observation);
         // Past the line's last step the combat goes on where it ends; the root's search there shows whether it does.
@@ -65,27 +71,38 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             return PimcBrain.Only(forced);
         }
         long nodes = 0;
-        if (!along && !Begin(observation, history, start, ref nodes))
+        if (along && _background != null && _taken < _given) early?.Invoke(Given());
+        if (!along && !Begin(observation, history, start, early, ref nodes))
         {
             Drop();
             return beam();
         }
-        var plan = Search(history, ref nodes);
+        var plan = Search(history, hurry, ref nodes);
         // The engine's combat is not this one: it played a step otherwise than the game.
         if (plan.Line!.Hashes[0] != hash)
         {
-            if (!Begin(observation, history, start, ref nodes))
+            if (!Begin(observation, history, start, early, ref nodes))
             {
                 Drop();
                 return beam();
             }
-            plan = Search(history, ref nodes);
+            plan = Search(history, hurry, ref nodes);
             if (plan.Line!.Hashes[0] != hash)
                 throw new InvalidOperationException("the combat taken in is not the combat the decision shows");
         }
-        (_line, _taken) = (plan.Line, 0);
+        (_line, _taken, _given) = (plan.Line, 0, plan.Result.Plan.Count + 1);
         Took(plan.Line.Actions[0]);
         return plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue) };
+    }
+
+    /// <summary>The rest of the plan given at the last answer, from the step the combat stands at, with the line's own
+    /// value: the pick so far until the decision's search says otherwise.</summary>
+    private CombatDecisionResult Given()
+    {
+        var line = _line!;
+        var first = line.Actions[_taken];
+        var candidate = new Candidate(first.ToString(), line.Value, 0, 1, [Math.Round(line.Value, 4)], Math.Round(line.Win, 4), Math.Round(line.Hp, 1));
+        return new(first, [.. line.Actions.Take(_given).Skip(_taken + 1)], [candidate], [.. line.Hashes.Take(_given).Skip(_taken + 1)]);
     }
 
     /// <summary>No decision of this combat comes now: it ended, or the run did. The solver goes, and with it what it holds.</summary>
@@ -103,7 +120,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
 
     /// <summary>A new solver where the decision stands, from the beam's plan there; false where the combat cannot be
     /// taken in.</summary>
-    private bool Begin(CombatObservation observation, IReadOnlyList<EnemyTurns> history, Func<TakenCombat?> start, ref long nodes)
+    private bool Begin(CombatObservation observation, IReadOnlyList<EnemyTurns> history, Func<TakenCombat?> start,
+        Action<CombatDecisionResult>? early, ref long nodes)
     {
         if (start() is not { } from) return false;
         Drop();
@@ -112,17 +130,21 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         solver.Seed(seed);
         nodes += seed.Nodes;
         Begun++;
-        if (background) _background = new Background(solver, from, history, observation.Round, budget.Replan);
+        if (background)
+        {
+            early?.Invoke(seed.Result);
+            _background = new Background(solver, from, history, observation.Round, budget.Replan);
+        }
         else (_solver, _from) = (solver, from);
         return true;
     }
 
     /// <summary>The decision's search: the budget's nodes more since the root moved here, and the pick then.</summary>
-    private SlPlan Search(IReadOnlyList<EnemyTurns> history, ref long nodes)
+    private SlPlan Search(IReadOnlyList<EnemyTurns> history, CancellationToken hurry, ref long nodes)
     {
         if (_background != null)
         {
-            var (pick, searched) = _background.Await(budget.Solve);
+            var (pick, searched) = _background.Await(budget.Solve, hurry);
             nodes += searched;
             return pick;
         }
@@ -141,7 +163,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     private void Drop()
     {
         _background?.Dispose();
-        (_solver, _from, _background, _line, _taken) = (null, null, null, null, 0);
+        (_solver, _from, _background, _line, _taken, _given) = (null, null, null, null, 0, 0);
         _played.Clear();
         _since.Clear();
     }
@@ -193,12 +215,18 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         }
 
         /// <summary>Waits until the root stands at every step posted and the solver has searched at least
-        /// <paramref name="nodes"/> there, or nothing is left; its pick then, and the nodes it searched since the last.</summary>
-        public (SlPlan Pick, long Nodes) Await(long nodes)
+        /// <paramref name="nodes"/> there, or nothing is left, or <paramref name="hurry"/> is cancelled; its pick then,
+        /// and the nodes it searched since the last.</summary>
+        public (SlPlan Pick, long Nodes) Await(long nodes, CancellationToken hurry)
         {
+            using var woken = hurry.Register(() =>
+            {
+                lock (_posted) Monitor.PulseAll(_posted);
+            });
             lock (_posted)
             {
-                while (_failed == null && !(_moved == _posted.Count && _pick != null && (_done || _nodes - _since >= nodes))) Monitor.Wait(_posted);
+                while (_failed == null && !(_moved == _posted.Count && _pick != null && (_done || hurry.IsCancellationRequested || _nodes - _since >= nodes)))
+                    Monitor.Wait(_posted);
                 if (_failed != null) ExceptionDispatchInfo.Capture(_failed).Throw();
                 long searched = _nodes - _answered;
                 _answered = _nodes;

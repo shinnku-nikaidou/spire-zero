@@ -42,6 +42,7 @@ internal static class L10n
         ["No SL clone of this room"] = ["Pas de copie SL de cette salle", "No hay copia SL de esta sala", "这个房间没有 SL 副本", "這個房間沒有 SL 複本", "この部屋のSLコピーがありません"],
         ["{0} · the next room has one"] = ["{0} · la prochaine salle en aura une", "{0} · la próxima sala tendrá una", "{0} · 下个房间会有", "{0} · 下個房間會有", "{0} · 次の部屋にはあります"],
         ["no checkpoint"] = ["pas de point de sauvegarde", "sin punto de control", "没有存档点", "沒有存檔點", "チェックポイントなし"],
+        ["searching"] = ["recherche", "buscando", "搜索中", "搜尋中", "探索中"],
         ["Thinking…"] = ["Réflexion…", "Pensando…", "思考中…", "思考中…", "思考中…"],
         ["Mod error"] = ["Erreur du mod", "Error del mod", "Mod 出错", "Mod 出錯", "Modのエラー"],
         ["floor {0}"] = ["étage {0}", "piso {0}", "第 {0} 层", "第 {0} 層", "{0}階"],

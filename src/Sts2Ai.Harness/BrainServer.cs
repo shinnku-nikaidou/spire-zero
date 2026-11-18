@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -14,6 +16,10 @@ namespace Sts2Ai.Harness;
 /// (<see cref="Dispatcher.Played"/>). <paramref name="ended"/> gets each run's Harness at
 /// run_end; <paramref name="received"/> every message a host sends; <paramref name="answered"/> the run's Harness after
 /// each answer is sent, so its decision log can be written as it grows.
+///
+/// A brain that searches on before it answers (max's solver in the background) sends its pick so far first
+/// (<see cref="Recommendation.Searching"/>), and the host's Cancel of the decision it is on makes it answer at once:
+/// messages are read on a thread of their own, and handled in order as before.
 /// </summary>
 public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
     Action<WireMessage>? received = null, Action<Dispatcher>? answered = null)
@@ -36,13 +42,39 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
 
     public void Serve(WireStream wire)
     {
+        var inbox = new BlockingCollection<WireMessage>();
+        var gate = new object();
+        (long Id, CancellationTokenSource Hurry)? deciding = null;
+        Exception? lost = null;
+        var reader = new Thread(() =>
+        {
+            try
+            {
+                while (wire.Receive() is { } message)
+                {
+                    if (message is Cancel cancel)
+                        lock (gate)
+                            if (deciding is { } at && at.Id == cancel.DecisionId) at.Hurry.Cancel();
+                    inbox.Add(message);
+                }
+            }
+            catch (Exception e)
+            {
+                lost = e;
+            }
+            finally
+            {
+                inbox.CompleteAdding();
+            }
+        }) { IsBackground = true, Name = "brain server reader" };
+        reader.Start();
         Hello? hello = null;
         Dispatcher? run = null;
         long last = -1;
         string? refused = null;
         // Each answered decision's state (MacroAnswer.State), until the host says it played the answer.
         var states = new Dictionary<long, ulong>();
-        while (wire.Receive() is { } message)
+        foreach (var message in inbox.GetConsumingEnumerable())
         {
             received?.Invoke(message);
             switch (message)
@@ -62,21 +94,29 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     }
                     break;
                 case DecisionRequest request:
-                    try
+                    using (var hurry = new CancellationTokenSource())
                     {
-                        if (run == null) throw new InvalidDataException($"decision {request.DecisionId} outside a run");
-                        if (refused != null) throw new InvalidDataException(refused);
-                        if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
-                        last = request.DecisionId;
-                        run.Steps(request.Trace);
-                        var (recommendation, state) = Answer(run, request);
-                        if (state is { } given) states[request.DecisionId] = given;
-                        wire.Send(recommendation);
-                        answered?.Invoke(run);
-                    }
-                    catch (Exception e)
-                    {
-                        wire.Send(new WireError(Describe(e)));
+                        lock (gate) deciding = (request.DecisionId, hurry);
+                        try
+                        {
+                            if (run == null) throw new InvalidDataException($"decision {request.DecisionId} outside a run");
+                            if (refused != null) throw new InvalidDataException(refused);
+                            if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
+                            last = request.DecisionId;
+                            run.Steps(request.Trace);
+                            var (recommendation, state) = Answer(run, request, wire.Send, hurry.Token);
+                            if (state is { } given) states[request.DecisionId] = given;
+                            wire.Send(recommendation);
+                            answered?.Invoke(run);
+                        }
+                        catch (Exception e)
+                        {
+                            wire.Send(new WireError(Describe(e)));
+                        }
+                        finally
+                        {
+                            lock (gate) deciding = null;
+                        }
                     }
                     break;
                 case NodeCheckpoint checkpoint:
@@ -98,7 +138,8 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                 case Executed { Ok: true } executed:
                     if (run != null && states.Remove(executed.DecisionId, out var played)) run.Played(played);
                     break;
-                // Each decision is answered before the next message is read, so there is no search to drop.
+                // A Cancel has hurried its decision as it came (the reader), and each decision is answered before
+                // the next is taken, so there is no search to drop.
                 case Executed or Cancel:
                     break;
                 default:
@@ -107,10 +148,14 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             }
         }
         run?.Rest();
+        if (lost != null) ExceptionDispatchInfo.Capture(lost).Throw();
     }
 
     /// <returns>The answer, and the state it was given at, if the run keeps one (<see cref="MacroAnswer.State"/>).</returns>
-    private static (Recommendation Answer, ulong? State) Answer(Dispatcher harness, DecisionRequest request)
+    /// <param name="send">Sends the pick so far of a combat brain that searches on (<see cref="CombatDecision.Early"/>).</param>
+    /// <param name="hurry">Cancelled when the host cancels the decision (<see cref="CombatDecision.Hurry"/>).</param>
+    private static (Recommendation Answer, ulong? State) Answer(Dispatcher harness, DecisionRequest request, Action<Recommendation> send,
+        CancellationToken hurry)
     {
         var obs = request.Obs;
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
@@ -118,11 +163,18 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             throw new InvalidDataException($"obs_hash {request.ObsHash} is not the observation's: are the mod and the brain built from the same commit?");
         // The live combat an SL host sends, with the run around it as a combat's leaf reads it, as a host in this process gives it.
         Func<CombatExport>? export = request.Export is { } bytes ? () => new CombatExport(Convert.FromBase64String(bytes), obs.Run.WithoutPreviews()) : null;
+        void Early(CombatDecisionResult result, string action, bool plan)
+        {
+            var note = harness.Note(result);
+            send(new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, plan ? note.Plan : null, note.Candidates, Searching: true));
+        }
         var (action, note, state) = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs,
-                export))),
-            (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs))),
+                export, r => Early(r, r.First.ToString(), plan: true), hurry))),
+            // A card prompt's plan goes on with plays of the combat, which the prompt's screen has no cards to name.
+            (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs,
+                early: r => Early(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false), hurry: hurry))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };

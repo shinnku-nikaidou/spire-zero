@@ -741,7 +741,7 @@ public class SlPlannerTests
     /// <paramref name="hand"/> may take another action than the route's. With <paramref name="background"/>, the solver
     /// searches between decisions too, and <paramref name="between"/> runs after each.</summary>
     private static (List<CombatAction> Played, SolverRoute Route) PlayBySolver(Budget budget, Func<int, CombatAction, CombatAction>? hand = null,
-        bool background = false, Action<int>? between = null)
+        bool background = false, Action<int>? between = null, Action<int, CombatDecisionResult>? early = null)
     {
         var route = new SolverRoute(budget, background);
         var world = new Toy();
@@ -749,8 +749,9 @@ public class SlPlannerTests
         for (int d = 0; world.Status == CombatStatus.InProgress; d++)
         {
             var at = played.ToList();
+            int decision = d;
             var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => ToyTaken(at),
-                () => throw new InvalidOperationException("the toy is always taken in")).First;
+                () => throw new InvalidOperationException("the toy is always taken in"), early == null ? null : r => early(decision, r)).First;
             var taken = hand?.Invoke(d, answer) ?? answer;
             world.Execute(taken);
             played.Add(taken);
@@ -760,8 +761,17 @@ public class SlPlannerTests
         return (played, route);
     }
 
-    /// <summary>The toy's combat taken in after <paramref name="played"/>, as a solver begins on it.</summary>
-    private static TakenCombat ToyTaken(IReadOnlyList<CombatAction> played) => new((more, _) => ToySearcher([.. played, .. more]), more =>
+    /// <summary>The toy's combat taken in after <paramref name="played"/>, as a solver begins on it; each turn search
+    /// first waits <paramref name="slow"/> milliseconds.</summary>
+    private static TakenCombat ToyTaken(IReadOnlyList<CombatAction> played, int slow = 0) => new((more, _) =>
+    {
+        var search = ToySearcher([.. played, .. more]);
+        return (jobs, nodes, keep) =>
+        {
+            Thread.Sleep(slow);
+            return search(jobs, nodes, keep);
+        };
+    }, more =>
     {
         var world = new Toy();
         foreach (var action in played.Concat(more)) world.Execute(action);
@@ -830,6 +840,41 @@ public class SlPlannerTests
             (d, answer) => d > 0 ? answer : (other = new Toy().Legal().First(a => a != answer)).Value, background: true);
         Assert.Equal(2, route.Begun);
         Assert.Equal(Best([other!.Value]), Best(played), 9);
+    }
+
+    [Fact]
+    public void TheSolverInTheBackgroundTellsItsPickSoFarAndAnswersAtOnceWhenHurried()
+    {
+        // The pick so far before each decision's search: the beam's plan where the solver begins, then the rest of the plan
+        // given, which a search in full only keeps. None without the background.
+        var budget = new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue);
+        var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
+        var early = new List<(int Decision, CombatDecisionResult Pick)>();
+        var (played, _) = PlayBySolver(budget, background: true, early: (d, r) => early.Add((d, r)));
+        Assert.Equal((0, beam.Result.First), (early[0].Decision, early[0].Pick.First));
+        Assert.True(early.Count > 1);
+        Assert.All(early.Skip(1), e => Assert.Equal(played[e.Decision], e.Pick.First));
+        var none = new List<int>();
+        PlayBySolver(budget, early: (d, _) => none.Add(d));
+        Assert.Empty(none);
+
+        // A host that moved on: the decision is answered once the root's turn is searched, not at the end of the combat.
+        var world = new Toy();
+        CombatDecisionResult Decide(CancellationToken hurry)
+        {
+            var route = new SolverRoute(budget, background: true);
+            try
+            {
+                return route.Decide(world.Observe(), world.Legal(), [], () => ToyTaken([], slow: 20), () => throw new InvalidOperationException(), hurry: hurry);
+            }
+            finally
+            {
+                route.Rest();
+            }
+        }
+        using var moved = new CancellationTokenSource();
+        moved.Cancel();
+        Assert.True(Decide(moved.Token).Nodes < Decide(CancellationToken.None).Nodes);
     }
 
     [Fact]

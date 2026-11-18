@@ -33,7 +33,8 @@ internal enum Goal
 /// at auto-play's speed; it stops when the player acts (a step the AI did not take, or going back), when an action does
 /// nothing, before an elite or a boss and when V's chance to win falls, if the player set those, and at the run's end.
 /// One decision is in flight at a time: when the state moves on first, the mod cancels it and waits for its answer
-/// before asking about the new state, so a slow brain never falls behind.
+/// before asking about the new state, so a slow brain never falls behind. A brain that searches on (max) sends its pick
+/// so far first, which the panel shows with the time it has searched; the AI plays only the final answer.
 /// The environment and the SL planner's effort are the player's choice (<see cref="Settings"/>), kept across games.
 /// Switching either, or turning assist off, ends the run as the brain sees it; the next decision starts a new one from
 /// that point. In SL the brain plans a
@@ -66,8 +67,10 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     /// <param name="Cancelled">When the state moved on and the mod cancelled it, or null.</param>
     private sealed record Asked(long Id, string Key, Observation Obs, long Sent, long? Cancelled = null);
 
-    /// <summary>An answer as it is shown, and what it is for.</summary>
-    private sealed record Answered(long Id, string Key, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route, CombatPlan? Plan);
+    /// <summary>An answer as it is shown, and what it is for. A brain still searching sent it as its pick so far
+    /// (<see cref="Recommendation.Searching"/>): the panel shows it, and the AI waits for the final answer.</summary>
+    private sealed record Answered(long Id, string Key, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route, CombatPlan? Plan,
+        bool Searching = false);
 
     private readonly Screens _screens = new();
 
@@ -300,8 +303,11 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (_answer is { } answer && answer.Key == key)
         {
             if (_shown == 0) _shown = Environment.TickCount64;
-            Play(asking, answer, run, me);
-            panel.Show(champion, status, answer.Shown, Sub(answer), answer.Foot, answer.Route, answer.Plan, Drive());
+            if (!answer.Searching) Play(asking, answer, run, me);
+            string foot = answer.Searching && _asked != null
+                ? $"{answer.Answer.Brain} · {L10n.T("searching")} {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s"
+                : answer.Foot;
+            panel.Show(champion, status, answer.Shown, Sub(answer), foot, answer.Route, answer.Plan, Drive());
             return;
         }
         _shown = 0;
@@ -500,6 +506,16 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             case Received { Message: Ready ready }:
                 _champion = ready.Shown;
                 ModLog.Write("brain", $"ready: {ready.Champion}");
+                break;
+            case Received { Message: Recommendation { Searching: true } early }:
+                // The pick so far, shown while the brain searches on; the final answer follows.
+                if (_asked is not { Cancelled: null } waiting || waiting.Id != early.DecisionId) break;
+                var shownEarly = Describe.Recommendation(early, waiting.Obs);
+                Note(shownEarly, early);
+                _answer = new(waiting.Id, waiting.Key, early, shownEarly, early.Brain, MapRoute.Of(early, waiting.Obs), CombatPlan.Of(early, waiting.Obs),
+                    Searching: true);
+                ModLog.Write("decision", $"{waiting.Id} so far after {Environment.TickCount64 - waiting.Sent} ms: {early.Action}" +
+                                         (early.Candidates is { Count: > 0 } so ? $"; {string.Join(", ", so.Take(3).Select(Candidate))}" : ""));
                 break;
             case Received { Message: Recommendation answer }:
                 if (_asked?.Id != answer.DecisionId) break;

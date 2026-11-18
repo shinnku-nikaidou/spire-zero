@@ -130,7 +130,7 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
         return new(name, (decision, seed, node, history) =>
         {
             CombatDecisionResult Decide() => route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision.Export),
-                () => beam.Decide(decision, seed, node, history));
+                () => beam.Decide(decision, seed, node, history), decision.Early, decision.Hurry);
             if (PimcBrain.Forced(decision.Observation, decision.Legal) != null) return Decide();
             CombatDecisionResult? made = null;
             meter.Count(() =>

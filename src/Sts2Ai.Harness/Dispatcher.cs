@@ -177,11 +177,14 @@ public sealed class Dispatcher(
         if (decision.Observation.Prompt != null && result.Candidates.Count > 0)
             _ = result.Replanned ? _promptReplanned++ : _fought == 0 ? _promptOpens++ : _promptAfterPlan++;
         _fought++;
-        // A plan that repeats a cycle may have thousands of steps left, at each of them.
-        var note = new DecisionNote(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
-            result.Candidates.Count > 0 ? result.Candidates : null);
-        return (result, note, id, seed, ms, history);
+        return (result, Note(result), id, seed, ms, history);
     }
+
+    /// <summary>A combat answer as the host is told it: who made it, what it planned and what it scored.</summary>
+    public DecisionNote Note(CombatDecisionResult result) =>
+        // A plan that repeats a cycle may have thousands of steps left, at each of them.
+        new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
+            result.Candidates.Count > 0 ? result.Candidates : null);
 
     /// <summary>A card prompt's answer, with who gave it and what it scored. During a combat the prompt is a decision of
     /// the combat, the combat brain's (<see cref="CombatRoute"/>); the host needs the combat it is asked in for that. A
@@ -192,7 +195,8 @@ public sealed class Dispatcher(
         var choice = decision.Choice;
         if (choice.Context.InCombat && Fought(decision) is var (around, shown))
         {
-            var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown));
+            var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown,
+                early: decision.Early, hurry: decision.Hurry));
             if (result.First.Kind != CombatActionKind.Pick || !choice.Accepts(result.First.Picks))
                 throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
             if (log)
