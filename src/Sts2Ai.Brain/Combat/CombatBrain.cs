@@ -44,9 +44,11 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
         _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),
     };
 
-    /// <summary>max's solver nodes a decision (<see cref="Solve"/>): to be set by what the friend's replay measures
-    /// (plans/2026-11-18-1412-max-solver.md, 2.5).</summary>
-    public const long MaxSolve = 100_000;
+    /// <summary>max's solver nodes a decision (<see cref="Solve"/>; the user, 2026-11-19: 「use 16384」). On a friend's
+    /// Regent A10 run, each fight played out from its first decision (plans/2026-11-18-1412-max-solver.md, 3.3), 10,000
+    /// left more HP than high in 3 of 17 fights and less in none, and 30,000 played the same but for one fight V valued
+    /// otherwise.</summary>
+    public const long MaxSolve = 16_384;
 
     /// <summary>The effort levels, cheapest first.</summary>
     public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
