@@ -702,7 +702,7 @@ run and its two keys; `sampled`, each export taken in as a NoSL sample has `Hidd
 `forgets_the_first_draw`: a world drawn twice is the world drawn once from the second seed, so nothing of the real
 hidden state survives a draw; and two ignored measurements, `rank_check`, the real draw pile and queued moves ranked
 among 19 drawn worlds, and `leak_probe`, every field of the export that 4 drawn worlds share against the real one). A
-dump is of one schema: it is stale when the schema's hash changes. `--test speed -- --ignored --nocapture` measures the
+dump is of one schema: it is stale when the schema's hash changes. `--features count-alloc --test speed -- --ignored --nocapture` measures the
 engine's own operations on the middle decision of the dump's combats (import, clone, apply by kind of action, the
 observation and what its parts cost, the keys) and what a copy costs arena by arena; its `spin` does one kind of call
 again and again and samples its own stack a thousand times a second (a timer signal and the C library's `backtrace`,

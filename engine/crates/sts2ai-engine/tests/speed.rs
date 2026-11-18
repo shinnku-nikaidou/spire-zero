@@ -1,7 +1,7 @@
 //! Not a check: what the engine's own operations cost, on states in the middle of combats of a dump (whole runs:
 //! `sim parity --dump DIR --runs N`). Run by hand, with nothing else running:
 //!
-//!     STS2AI_ENGINE_FIXTURES=<dump> cargo test --release --test speed -- --ignored --nocapture
+//!     STS2AI_ENGINE_FIXTURES=<dump> cargo test --release --features count-alloc --test speed -- --ignored --nocapture
 //!
 //! For each sampled state: the import, a copy of the world, an action (a play, the end of the turn), a search node
 //! (the world after an action with its status and keys, by `sz_world_step` and by a copy and an apply), the
@@ -14,12 +14,12 @@
 //! line tables, the functions rustc inlined are told apart too:
 //!
 //!     STS2AI_SPEED_SPIN=play|end_turn|observe|node|legal|clone STS2AI_SPEED_SECONDS=20 STS2AI_SPEED_STACKS=<file> \
-//!         CARGO_PROFILE_RELEASE_DEBUG=line-tables-only cargo test --release --test speed spin -- --ignored --nocapture
+//!         CARGO_PROFILE_RELEASE_DEBUG=line-tables-only cargo test --release --features count-alloc --test speed spin -- --ignored --nocapture
 //!     engine/sample.py <file>
 //!
 //! `grown` counts, arena by arena, the objects one action of a kind makes (`STS2AI_SPEED_GROWN=play|end_turn`).
 
-use std::alloc::{GlobalAlloc, Layout, System};
+use std::alloc::{GlobalAlloc, Layout};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Instant;
@@ -39,10 +39,10 @@ unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         BYTES.fetch_add(layout.size() as u64, Relaxed);
         CALLS.fetch_add(1, Relaxed);
-        unsafe { System.alloc(layout) }
+        unsafe { mimalloc::MiMalloc.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
+        unsafe { mimalloc::MiMalloc.dealloc(ptr, layout) }
     }
 }
 

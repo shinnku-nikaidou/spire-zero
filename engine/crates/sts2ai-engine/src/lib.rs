@@ -21,3 +21,8 @@ pub mod protocol;
 pub mod rt;
 pub mod search;
 pub mod world;
+
+/// The allocator of everything the engine allocates (Cargo.toml says why).
+#[cfg(not(feature = "count-alloc"))]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
