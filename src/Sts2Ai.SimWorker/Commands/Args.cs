@@ -148,6 +148,7 @@ internal sealed class BudgetArgs
             EasyBeam = r.GetValue(_easyBeam) ?? effort.EasyBeam,
             Replan = r.GetValue(_replan) ?? effort.Replan,
             LossPlans = r.GetValue(_lossPlans) ?? effort.LossPlans,
+            Solve = effort.Solve,
         };
         if (budget.Beam < 1 || budget.EasyBeam < 0) throw new CliException("--beam is at least 1, --easy-beam at least 0");
         if (budget.Replan < 0 || budget.LossPlans < 0) throw new CliException("--replan and --loss-plans are at least 0");

@@ -188,6 +188,19 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void MaxPlaysTheSolver()
+    {
+        var champion = new ChampionArgs(file: true);
+        var root = new RootCommand { Opt.Command("test", "", champion.Options) };
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var played = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--value", value, "--effort", "max"],
+            new ParserConfiguration()));
+        Assert.Equal(Budget.Effort("max"), played.Budget);
+        Assert.True(played.Budget.Solve > 0);
+    }
+
+    [Fact]
     public void PlansEliteAndBossFightsAtTheirOwnEffortAndDrawsBySoftmaxAndAChampionFileKeepsBoth()
     {
         var champion = new ChampionArgs(file: true);
