@@ -26,12 +26,13 @@ public sealed class FirstPicks : IChoicePolicy
 public static class PromptAnswers
 {
     /// <summary>The prompt's answers in its own order (<see cref="CardChoice.Answers"/>), at most <paramref name="most"/>
-    /// and at least one: a prompt has to be answered.</summary>
+    /// and at least one: a prompt has to be answered. <see cref="SlPlanner.Unlimited"/> takes them all.</summary>
     /// <param name="cut">Whether answers were left out.</param>
     public static List<CombatAction> Of(CardChoice prompt, int most, out bool cut)
     {
         most = Math.Max(1, most);
-        var answers = prompt.Answers().Take(most + 1).Select(CombatAction.Pick).ToList();
+        // One more than asked tells whether any were left out; there is none more than int.MaxValue.
+        var answers = prompt.Answers().Take(most == int.MaxValue ? most : most + 1).Select(CombatAction.Pick).ToList();
         cut = answers.Count > most;
         return cut ? answers[..most] : answers;
     }

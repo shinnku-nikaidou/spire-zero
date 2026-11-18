@@ -90,6 +90,14 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     public const int MaxTurns = 40;
 
     /// <summary>
+    /// The nodes of a turn's search with no limit (<see cref="SearchTurn"/>, <see cref="Budget.NodesPerWorld"/>): every
+    /// state of the turn is tried, every answer of every prompt, and every end kept; nothing is cut. On the turns measured
+    /// (plans/2026-11-18-1412-max-solver.md), a whole turn took 1,158 to 72,512 nodes, where a budget of 300 reached 19
+    /// of 226 ways to play one.
+    /// </summary>
+    public const int Unlimited = int.MaxValue;
+
+    /// <summary>
     /// The turn decay of a plan made for a player (<see cref="Hello.TurnDecay"/>, the mod's option; the user, 2026-11-16);
     /// self-play has none. A fight of a Silent with Nunchaku was planned for 35 turns where 8 won with the same HP: the
     /// slow win played one attack fewer, and V valued the run with the relic's counter at 7 above the one with it at 8 by

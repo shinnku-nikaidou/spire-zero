@@ -353,6 +353,24 @@ public class LoopSearchTests
     }
 
     [Fact]
+    public void AnUnlimitedTurnSearchAtAPromptTriesEveryAnswer()
+    {
+        // The turn's search starts at the first of two prompts, three answers each; only the second prompt's third answer
+        // wins (the others change nothing, so they are one state). Unlimited, the search tries every answer of both and
+        // finds the win; 2 nodes split over the first prompt leave the second one answer, its first.
+        var world = new Loop(50, prompted: Loop.Prompted.AsksTwice);
+        world.Execute(CombatAction.Potion(0));
+        Assert.Equal(3, PromptAnswers.Of(world.Observe().Prompt!, SlPlanner.Unlimited, out bool cut).Count);
+        Assert.False(cut);
+        var found = new SlPlanner(Leaf).SearchTurn(world, [], SlPlanner.Unlimited, int.MaxValue);
+        Assert.False(found.Cut);
+        Assert.Contains(found.Ends, e => e.Status == CombatStatus.Won && e.Actions[1] == CombatAction.Pick([2]));
+        var narrow = new SlPlanner(Leaf).SearchTurn(world, [], 2, int.MaxValue);
+        Assert.True(narrow.Cut);
+        Assert.DoesNotContain(narrow.Ends, e => e.Status == CombatStatus.Won);
+    }
+
+    [Fact]
     public void AStateAtAPromptHasNoPlaysAndTakesOnlyItsAnswers()
     {
         var world = new Loop(50, prompted: Loop.Prompted.GivesR);

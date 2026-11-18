@@ -174,6 +174,50 @@ public class SlPlannerTests
         Assert.Equal((plan.Nodes, plan.Turns), (plan.Result.Nodes!.Value, plan.Result.Turns!.Value));
     }
 
+    /// <summary>Every state the toy's current turn can end at, by trying every line from the world's state: the next
+    /// turn's states by key, and the ends of the combat by status.</summary>
+    private static void TurnEnds(Toy world, int round, HashSet<(ulong, ulong)> seen, HashSet<(ulong, ulong)> next, HashSet<CombatStatus> over)
+    {
+        var here = world.Snapshot();
+        foreach (var action in world.Legal())
+        {
+            world.Restore(here);
+            world.Execute(action);
+            var obs = world.Observe();
+            var key = (ProtocolJson.StateKey(obs), world.HiddenKey());
+            if (world.Status != CombatStatus.InProgress) over.Add(world.Status);
+            else if (obs.Round != round) next.Add(key);
+            else if (seen.Add(key)) TurnEnds(world, round, seen, next, over);
+        }
+        world.Restore(here);
+        world.Forget(here);
+    }
+
+    [Fact]
+    public void AnUnlimitedTurnSearchEndsAtEveryStateTheTurnCanReach()
+    {
+        var expected = new HashSet<(ulong, ulong)>();
+        var over = new HashSet<CombatStatus>();
+        TurnEnds(new Toy(), 1, [], expected, over);
+        var narrow = new SlPlanner(Leaf).SearchTurn(new Toy(), [], 4, int.MaxValue);
+        var found = new SlPlanner(Leaf).SearchTurn(new Toy(), [], SlPlanner.Unlimited, int.MaxValue);
+
+        // Every end, each once, and nothing cut: a budget of 4 nodes reaches fewer.
+        Assert.False(found.Cut);
+        Assert.True(narrow.Cut);
+        Assert.Empty(over);
+        var reached = found.Ends.Select(e =>
+        {
+            var world = new Toy();
+            foreach (var action in e.Actions) world.Execute(action);
+            return (ProtocolJson.StateKey(world.Observe()), world.HiddenKey());
+        }).ToList();
+        Assert.Equal(reached.Count, reached.Distinct().Count());
+        Assert.Equal(expected, reached.ToHashSet());
+        Assert.True(narrow.Ends.Count < found.Ends.Count);
+        Assert.Equal("beam 16xall", (Budget.Effort("max") with { NodesPerWorld = SlPlanner.Unlimited }).Size);
+    }
+
     /// <summary>A leaf that tells how it was asked: one state at a time, or several together.</summary>
     private sealed class Asked : ICombatLeaf
     {
