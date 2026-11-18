@@ -75,9 +75,11 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
     /// (<see cref="Budget.Solve"/>), <see cref="Solver"/>.</summary>
     /// <param name="name">The brain's name in reports: plan and its leaf's name, as on the node's clone.</param>
     /// <param name="pool">The workers that play the node's clone across a card prompt.</param>
-    public CombatRoute Route(Budget budget, string name, WorkerPool pool)
+    /// <param name="background">Whether the solver searches between decisions too (<see cref="SolverRoute"/>): the
+    /// mod's brain, whose game takes its time; self-play, the tests and run search each decision's budget alone.</param>
+    public CombatRoute Route(Budget budget, string name, WorkerPool pool, bool background = false)
     {
-        if (budget.Solve > 0) return Solver(budget, name, pool);
+        if (budget.Solve > 0) return Solver(budget, name, pool, background);
         var route = new SlRoute(budget);
         // The search's processor time: this process's threads, and the workers' where a prompt is crossed.
         var meter = new PlanMeter(() =>
@@ -114,10 +116,10 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
     /// of that world with the actions played since and the state's path applied. Where the solver cannot begin (a card
     /// prompt off its line), the beam's route decides.
     /// </summary>
-    private CombatRoute Solver(Budget budget, string name, WorkerPool pool)
+    private CombatRoute Solver(Budget budget, string name, WorkerPool pool, bool background)
     {
         var beam = Route(budget with { Solve = 0 }, name, pool);
-        var route = new SolverRoute(budget);
+        var route = new SolverRoute(budget, background);
         // Every decision searched, the beam's where it decides: this process's threads, and the workers' where a prompt
         // is crossed.
         var meter = new PlanMeter(() =>
@@ -137,19 +139,52 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
                 return new(made, 0, CombatStatus.InProgress, made.Nodes ?? 0, made.Turns ?? 0, false);
             });
             return made!;
-        }, budget, () => meter.Tally);
+        }, budget, () => meter.Tally, route.Rest);
     }
 
-    /// <summary>Turn searches in the combat as <paramref name="live"/> is, after the actions given; null with no live combat.</summary>
-    private Func<IReadOnlyList<CombatAction>, TurnSearcher>? Taken(CombatExport? live)
+    /// <summary>The combat as <paramref name="live"/> is, for a solver; null with no live combat.</summary>
+    private TakenCombat? Taken(CombatExport? live)
     {
         if (live == null) return null;
         var root = EngineWorld.Import(live.Bytes, live.Run);
-        return played =>
+        EngineWorld At(IReadOnlyList<CombatAction> played)
         {
             var at = root.Clone();
             foreach (var action in played) at.Execute(action);
-            return Searcher(at.Clone);
-        };
+            return at;
+        }
+        return new((played, stop) =>
+        {
+            var at = At(played);
+            return Searcher(() => new Stoppable(at.Clone(), stop));
+        }, played =>
+        {
+            using var at = At(played);
+            return at.Observe();
+        });
+    }
+
+    /// <summary>A world whose steps stop, with an <see cref="OperationCanceledException"/>, once <paramref name="stop"/>
+    /// is cancelled: a solver searching in the background ends where it stands.</summary>
+    private sealed class Stoppable(EngineWorld world, CancellationToken stop) : ICombatWorld, IDisposable
+    {
+        public CombatObservation Observe() => world.Observe();
+        public RunView Run() => world.Run();
+        public IReadOnlyList<CombatAction> Legal() => world.Legal();
+        public CombatStatus Status => world.Status;
+        public ulong HiddenKey() => world.HiddenKey();
+
+        public void Execute(CombatAction action)
+        {
+            stop.ThrowIfCancellationRequested();
+            world.Execute(action);
+        }
+
+        public WorldSnapshot Snapshot() => world.Snapshot();
+        public void Restore(WorldSnapshot snapshot) => world.Restore(snapshot);
+        public ulong Hash(CombatObservation observation) => world.Hash(observation);
+        public ulong StateKey(CombatObservation observation) => world.StateKey(observation);
+        public void Forget(WorldSnapshot snapshot) => world.Forget(snapshot);
+        public void Dispose() => world.Dispose();
     }
 }

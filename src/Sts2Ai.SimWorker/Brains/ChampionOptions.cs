@@ -50,8 +50,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// option whose result its button does not show is also played out on the node's clone as NoSL plays it, in
     /// <paramref name="pool"/> (<see cref="Pool"/>), for V's training: the host then sends the node's checkpoints
     /// (<see cref="Dispatcher.TakesNodes"/>), which no answer is valued on.
+    /// With <paramref name="background"/>, for a host whose game takes its time between decisions (the mod), max's
+    /// solver searches between them too (<see cref="SolverRoute"/>); its decisions then depend on that time.
     /// </summary>
-    public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log, bool explain = false, bool eventLines = false) => hello =>
+    public Func<Hello, Dispatcher> Harness(WorkerPool? pool, bool log, bool explain = false, bool eventLines = false, bool background = false) => hello =>
     {
         if (!Enum.TryParse<PlayEnvironment>(hello.Env, out var env)) throw new NotSupportedException($"no environment {hello.Env}");
         if (Policy == "plan" && env != PlayEnvironment.SL) throw new NotSupportedException($"plan plays in SL only, not in {env}");
@@ -68,7 +70,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         ICombatLeaf InEnv() => Leaf.Leaf.In(env);
         var combat = Policy == "pimc" ? new EnginePimc(InEnv(), Workers).Route(Budget, Combat)
             : pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool) : new PooledPlanner(pool).Route(Budget, Combat);
+            : Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool, background) : new PooledPlanner(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {

@@ -53,7 +53,8 @@ internal static class BrainCommand
             // An effort is the SL planner's budget, and the turn decay is its too; another combat brain plays as it is.
             if (hello.Effort is { } effort && options.Policy == "plan") options = options with { Budget = Budget.Effort(effort) };
             if (hello.TurnDecay && options.Policy == "plan") options = options with { Budget = options.Budget with { TurnDecay = SlPlanner.PlayerTurnDecay } };
-            return harnesses[key] = (options.Harness(workerPool, logFile != null, explain: true), options.Shown);
+            // The game takes its time between decisions, which max's solver searches on (SolverRoute).
+            return harnesses[key] = (options.Harness(workerPool, logFile != null, explain: true, background: true), options.Shown);
         }
         // Each decision is written as it is answered, so a game that crashes or is closed mid-run keeps every decision
         // made so far. A connection serves its runs one after another, each with its own Harness.

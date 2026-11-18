@@ -713,23 +713,35 @@ public class SlPlannerTests
     }
 
     /// <summary>Plays the toy's combat to its end by the solver's route (<see cref="SolverRoute"/>); at each decision,
-    /// <paramref name="hand"/> may take another action than the route's.</summary>
-    private static (List<CombatAction> Played, SolverRoute Route) PlayBySolver(Budget budget, Func<int, CombatAction, CombatAction>? hand = null)
+    /// <paramref name="hand"/> may take another action than the route's. With <paramref name="background"/>, the solver
+    /// searches between decisions too, and <paramref name="between"/> runs after each.</summary>
+    private static (List<CombatAction> Played, SolverRoute Route) PlayBySolver(Budget budget, Func<int, CombatAction, CombatAction>? hand = null,
+        bool background = false, Action<int>? between = null)
     {
-        var route = new SolverRoute(budget);
+        var route = new SolverRoute(budget, background);
         var world = new Toy();
         var played = new List<CombatAction>();
         for (int d = 0; world.Status == CombatStatus.InProgress; d++)
         {
             var at = played.ToList();
-            var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => more => ToySearcher([.. at, .. more]),
+            var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => ToyTaken(at),
                 () => throw new InvalidOperationException("the toy is always taken in")).First;
             var taken = hand?.Invoke(d, answer) ?? answer;
             world.Execute(taken);
             played.Add(taken);
+            between?.Invoke(d);
         }
+        route.Rest();
         return (played, route);
     }
+
+    /// <summary>The toy's combat taken in after <paramref name="played"/>, as a solver begins on it.</summary>
+    private static TakenCombat ToyTaken(IReadOnlyList<CombatAction> played) => new((more, _) => ToySearcher([.. played, .. more]), more =>
+    {
+        var world = new Toy();
+        foreach (var action in played.Concat(more)) world.Execute(action);
+        return world.Observe();
+    });
 
     [Fact]
     public void TheSolversRouteFollowsItsPicksWithOneSolverACombat()
@@ -763,6 +775,36 @@ public class SlPlannerTests
         var beam = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20))
             .Decide(world.Observe(), world.Legal(), [], () => null, () => PimcBrain.Only(CombatAction.EndTurn));
         Assert.Equal(CombatAction.EndTurn, beam.First);
+    }
+
+    [Fact]
+    public void TheSolverInTheBackgroundSearchesBetweenDecisions()
+    {
+        var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
+        // Each decision searched in full: what the route plays without the background.
+        var full = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue), background: true);
+        Assert.Equal(1, full.Route.Begun);
+        Assert.Equal(Best([]), Best(full.Played), 9);
+
+        // A few nodes a decision, at least: one solver the combat long, never worse than the beam it began from.
+        var few = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20), background: true);
+        Assert.Equal(1, few.Route.Begun);
+        Assert.True(Best(few.Played) >= beam.Value - 1e-9);
+
+        // One node a decision, and time after the first: the search there went on to the end, so the rest is the best line.
+        var waited = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 1), background: true, between: d =>
+        {
+            if (d == 0) Thread.Sleep(1000);
+        });
+        Assert.Equal(1, waited.Route.Begun);
+        Assert.Equal(Best([waited.Played[0]]), Best(waited.Played), 9);
+
+        // The first decision taken by hand, otherwise: a new solver from there.
+        CombatAction? other = null;
+        var (played, route) = PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue),
+            (d, answer) => d > 0 ? answer : (other = new Toy().Legal().First(a => a != answer)).Value, background: true);
+        Assert.Equal(2, route.Begun);
+        Assert.Equal(Best([other!.Value]), Best(played), 9);
     }
 
     [Fact]

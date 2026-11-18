@@ -48,6 +48,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             switch (message)
             {
                 case Hello next:
+                    run?.Rest();
                     (hello, run, last, refused) = (next, null, -1, null);
                     states.Clear();
                     try
@@ -90,6 +91,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     }
                     break;
                 case RunEnd end:
+                    run?.Rest();
                     if (run != null) ended?.Invoke(hello!, run, end);
                     (hello, run) = (null, null);
                     break;
@@ -104,6 +106,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     break;
             }
         }
+        run?.Rest();
     }
 
     /// <returns>The answer, and the state it was given at, if the run keeps one (<see cref="MacroAnswer.State"/>).</returns>

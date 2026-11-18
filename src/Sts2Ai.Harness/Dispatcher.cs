@@ -13,8 +13,10 @@ namespace Sts2Ai.Harness;
 /// </summary>
 /// <param name="Budget">What the brain may spend, for the log; null for a policy that does not search.</param>
 /// <param name="Costs">What the brain's plans have cost so far in this run; null for one that keeps no count.</param>
+/// <param name="Rest">Told that no decision of the combat comes now (it ended, or the run did): a brain that searches
+/// between decisions stops (<see cref="SolverRoute"/>).</param>
 public sealed record CombatRoute(string Brain, Func<CombatDecision, ulong, NodeClone?, IReadOnlyList<EnemyTurns>, CombatDecisionResult> Decide,
-    Budget? Budget = null, Func<PlanTally>? Costs = null)
+    Budget? Budget = null, Func<PlanTally>? Costs = null, Action? Rest = null)
 {
     /// <summary>A placeholder policy: it gives its pick and no candidates, and at a card prompt the first options
     /// (<see cref="FirstPicks"/>).</summary>
@@ -137,6 +139,10 @@ public sealed class Dispatcher(
 
     public IReadOnlyList<MacroAction> Plan(MacroDecision decision, MacroAction action) => macro.Policy.Plan(decision, action);
 
+    /// <summary>No decision comes for now: the run ended, or its host went. A combat brain searching between decisions
+    /// stops (<see cref="CombatRoute.Rest"/>).</summary>
+    public void Rest() => combat.Rest?.Invoke();
+
     /// <summary>The host played the answer given at <paramref name="state"/> (<see cref="MacroAnswer.State"/>,
     /// <see cref="ChoiceAnswer.State"/>), a macro decision's or a card prompt's: each macro route hears it, once.</summary>
     public void Played(ulong state)
@@ -196,6 +202,7 @@ public sealed class Dispatcher(
             // The plan goes on with plays of the combat, which a host showing the prompt's screen has no cards to name.
             return (new([.. result.First.Picks]), note with { Plan = null });
         }
+        combat.Rest?.Invoke();
         var (id, seed, clock) = Begin(macroChoices.Brain);
         if (MacroClone() is { } node) decision = decision.With(node);
         var answer = macroChoices.Policy.Choose(decision);
@@ -220,6 +227,7 @@ public sealed class Dispatcher(
     {
         _moves.Clear();
         _fought = 0;
+        combat.Rest?.Invoke();
         var (id, seed, clock) = Begin(macro.Brain);
         if (!MacroSurfaces.Contains(decision.Surface)) throw new InvalidOperationException($"uncovered surface {decision.Surface}");
         if (MacroClone() is { } node) decision = decision.With(node);
