@@ -221,7 +221,7 @@ impl Solver {
     /// C#: Run. Searches on for at least `nodes` more actions, or until nothing is left.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         if !self.started {
-            self.start(search)?;
+            self.start(search, false)?;
         }
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
         while !self.queue.is_empty() && self.nodes < until {
@@ -281,15 +281,32 @@ impl Solver {
     }
 
     /// C#: Advance. The combat went on from the root by `played`, to where its record of enemy moves is `moves`; `search`
-    /// searches from there.
+    /// searches from there. Where `played` ends at a turn's start whose turn was searched in full already (`searched_at`),
+    /// that state becomes the root as it is, its turn not searched again.
     pub fn advance(&mut self, played: &[Action], moves: Arc<History>, search: &dyn Searcher) -> Result<(), String> {
         if played.is_empty() {
             return Ok(());
         }
         let turns = self.nodes_of[self.root].turns + end_turns(played);
+        let searched = self.searched_at(played);
         self.order += 1;
-        self.nodes_of.push(Node::new(0, 0.0, turns, moves, 0, self.order, i32::MAX, String::new(), 0));
-        self.root = self.nodes_of.len() - 1;
+        let root = Node::new(0, 0.0, turns, moves, 0, self.order, i32::MAX, String::new(), 0);
+        match searched {
+            // The root as a search of its turn would make it, with that turn's search.
+            Some(at) => {
+                let node = &mut self.nodes_of[at];
+                *node = Node {
+                    edges: node.edges.take(),
+                    over: node.over.take(),
+                    ..root
+                };
+                self.root = at;
+            }
+            None => {
+                self.nodes_of.push(root);
+                self.root = self.nodes_of.len() - 1;
+            }
+        }
         self.worlds.advance(played);
         if let Some((line, from)) = self.seed.take() {
             self.seed = if line.actions.len() > played.len() && line.actions[..played.len()] == *played {
@@ -305,7 +322,27 @@ impl Solver {
                 None
             };
         }
-        self.start(search)
+        self.start(search, searched.is_some())
+    }
+
+    /// The state `played` leads to from the root, where it is a turn's start whose turn was searched in full and would be
+    /// searched the same again: reached along the root's edges, each to its state's own world (`exact`), its turn not
+    /// cut, no line or end of it pruned (so the bounds a search now has prune none either), and every state its turn
+    /// reached still kept. Searched again, the root's turn would give these same edges, to these same states.
+    fn searched_at(&self, played: &[Action]) -> Option<usize> {
+        let (mut at, mut done) = (self.root, 0);
+        while done < played.len() {
+            let edges = self.nodes_of[at].edges.as_ref()?;
+            let edge = edges.iter().find(|e| played[done..].starts_with(&e.actions))?;
+            let &next = self.table.get(&edge.key)?;
+            if self.nodes_of[next].exact != edge.exact {
+                return None;
+            }
+            (at, done) = (next, done + edge.actions.len());
+        }
+        let node = &self.nodes_of[at];
+        let edges = node.edges.as_ref()?;
+        (!node.cut && !node.dropped && edges.iter().all(|e| self.table.contains_key(&e.key))).then_some(at)
     }
 
     /// C#: Result, up to the plan C#'s PlanOf.Found makes of it.
@@ -337,8 +374,9 @@ impl Solver {
         })
     }
 
-    /// C#: Start. Searches the root's turn, then keeps the states it reaches, by the table, and lets the rest go.
-    fn start(&mut self, search: &dyn Searcher) -> Result<(), String> {
+    /// C#: Start. Searches the root's turn (unless `searched`: the root's turn was searched already, `advance`), then keeps
+    /// the states it reaches, by the table, and lets the rest go.
+    fn start(&mut self, search: &dyn Searcher, searched: bool) -> Result<(), String> {
         self.started = true;
         let before = std::mem::take(&mut self.bounds);
         self.best = None;
@@ -347,14 +385,16 @@ impl Solver {
             self.consider(line, from);
         }
         let root = self.root;
-        let job = Job {
-            path: Vec::new(),
-            history: self.nodes_of[root].history.clone(),
-            bounds: self.bounds.clone(),
-            from: None,
-        };
-        let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
-        self.expand(root, found);
+        if !searched {
+            let job = Job {
+                path: Vec::new(),
+                history: self.nodes_of[root].history.clone(),
+                bounds: self.bounds.clone(),
+                from: None,
+            };
+            let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
+            self.expand(root, found);
+        }
         // What the root reaches, each state on its own line or one to the same world, in the order reached.
         let mut kept: HashMap<u64, usize> = HashMap::new();
         let mut order = vec![root];

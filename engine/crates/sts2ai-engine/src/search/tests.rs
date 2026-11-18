@@ -532,7 +532,8 @@ fn the_solvers_root_moves_with_the_combat() {
     let line = plan.line.actions.clone();
     let turn = line.iter().position(|a| a.is_end_turn()).map_or(0, |i| i + 1);
 
-    // Along the plan, into the turn and then past its end: all below was searched, so only the root's turn is again.
+    // Along the plan, into the turn and then past its end: all below was searched, so only the root's turn is again,
+    // into the turn; past its end, the next turn's start was searched in full, and is the root as it is.
     for count in [1, turn] {
         let gone = &line[..count];
         let mut moved = solver(16);
@@ -540,7 +541,7 @@ fn the_solvers_root_moves_with_the_combat() {
         let searched = moved.searched();
         moved.advance(gone, moves(gone), &toy_searcher(gone, 24, false)).expect("the root's turn");
 
-        assert_eq!(searched + 1, moved.searched());
+        assert_eq!(searched + if count == turn { 0 } else { 1 }, moved.searched());
         assert!(moved.proved());
         let after = result(&moved);
         assert_near(plan.value, after.value, 9);
