@@ -7,8 +7,20 @@ namespace Sts2Ai.Brain.Combat;
 /// <param name="After">Turn searches from there after the actions given. Once the token is cancelled they stop, with an
 /// <see cref="OperationCanceledException"/>.</param>
 /// <param name="Observe">The combat's observation from there after the actions given.</param>
+/// <param name="Plan">The beam's plan from there (<see cref="SlPlanner.Search"/>); by default on <paramref name="After"/>.</param>
+/// <param name="Solver">A solver from there, with the record of enemy moves there and the pick's turn decay; by default
+/// <see cref="SlSolver"/> on <paramref name="After"/>.</param>
 public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CancellationToken, TurnSearcher> After,
-    Func<IReadOnlyList<CombatAction>, CombatObservation> Observe);
+    Func<IReadOnlyList<CombatAction>, CombatObservation> Observe,
+    Func<Budget, IReadOnlyList<EnemyTurns>, SlPlan>? Plan = null,
+    Func<IReadOnlyList<EnemyTurns>, double, ICombatSolver>? Solver = null)
+{
+    public SlPlan PlanFrom(Budget budget, IReadOnlyList<EnemyTurns> history) =>
+        Plan?.Invoke(budget, history) ?? SlPlanner.Search(budget, history, After([], CancellationToken.None));
+
+    public ICombatSolver SolverFrom(IReadOnlyList<EnemyTurns> history, double decay) =>
+        Solver?.Invoke(history, decay) ?? new SearchingSolver(new SlSolver(history, decay), After);
+}
 
 /// <summary>
 /// max's combat route (plans/2026-11-18-1412-max-solver.md, 2.3–2.5): one <see cref="SlSolver"/> a combat, which
@@ -37,11 +49,9 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CancellationT
 /// </summary>
 public sealed class SolverRoute(Budget budget, bool background = false)
 {
-    private SlSolver? _solver;
-    private TakenCombat? _from;
-    /// <summary>The actions from where the solver began to its root, and the combat's since, which the root moves by
-    /// at the next decision searched.</summary>
-    private readonly List<CombatAction> _played = [], _since = [];
+    private ICombatSolver? _solver;
+    /// <summary>The combat's steps since the solver's root, which the root moves by at the next decision searched.</summary>
+    private readonly List<CombatAction> _since = [];
     /// <summary>The solver searching in the background, if it does.</summary>
     private Background? _background;
     /// <summary>The pick from the root, how many of its steps the combat took since, and how many of them the plan
@@ -142,8 +152,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         if (start() is not { } from) return false;
         Drop();
-        var solver = new SlSolver(history, budget.TurnDecay);
-        var seed = SlPlanner.Search(budget.For(observation.Room) with { Solve = 0 }, history, from.After([], CancellationToken.None));
+        var solver = from.SolverFrom(history, budget.TurnDecay);
+        var seed = from.PlanFrom(budget.For(observation.Room) with { Solve = 0 }, history);
         solver.Seed(seed);
         nodes += seed.Nodes;
         Begun++;
@@ -152,7 +162,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             Tell(early, seed.Result);
             _background = new Background(solver, from, history, observation.Round, budget.Replan);
         }
-        else (_solver, _from) = (solver, from);
+        else _solver = solver;
         return true;
     }
 
@@ -170,11 +180,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         long before = _solver!.Nodes;
         if (_since.Count > 0)
         {
-            _played.AddRange(_since);
-            _solver.Advance([.. _since], history, _from!.After(_played, CancellationToken.None));
+            _solver.Advance([.. _since], history);
             _since.Clear();
         }
-        _solver.Run(_from!.After(_played, CancellationToken.None), budget.Solve);
+        _solver.Run(budget.Solve);
         nodes += _solver.Nodes - before;
         return _solver.Result(budget.Replan);
     }
@@ -182,8 +191,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     private void Drop()
     {
         _background?.Dispose();
-        (_solver, _from, _background, _line, _taken, _given) = (null, null, null, null, 0, 0);
-        _played.Clear();
+        _solver?.Dispose();
+        (_solver, _background, _line, _taken, _given) = (null, null, null, 0, 0);
         _since.Clear();
     }
 
@@ -194,7 +203,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// </summary>
     private sealed class Background : IDisposable
     {
-        private readonly SlSolver _solver;
+        private readonly ICombatSolver _solver;
         private readonly TakenCombat _from;
         private readonly int _replan;
         private readonly CancellationTokenSource _stop = new();
@@ -217,7 +226,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
 
         /// <param name="round">The round of the observation the solver began at, whose intents <paramref name="history"/> has
         /// as that decision got it.</param>
-        public Background(SlSolver solver, TakenCombat from, IReadOnlyList<EnemyTurns> history, int round, int replan)
+        public Background(ICombatSolver solver, TakenCombat from, IReadOnlyList<EnemyTurns> history, int round, int replan)
         {
             (_solver, _from, _record, _round, _replan) = (solver, from, new MoveRecord(history), round, replan);
             _thread = new Thread(Search) { IsBackground = true, Name = "sts2ai solver" };
@@ -276,7 +285,6 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         {
             try
             {
-                var search = _from.After(_played, _stop.Token);
                 while (true)
                 {
                     CombatAction[] steps;
@@ -296,10 +304,9 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                                 _round = shown.Round;
                             }
                         _played.AddRange(steps);
-                        search = _from.After(_played, _stop.Token);
-                        _solver.Advance(steps, _record.History, search);
+                        _solver.Advance(steps, _record.History, _stop.Token);
                     }
-                    else _solver.Run(search, 1);
+                    else _solver.Run(1, _stop.Token);
                     var pick = _solver.Result(_replan);
                     lock (_posted)
                     {
@@ -322,13 +329,14 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             }
         }
 
-        /// <summary>Stops the search where it stands and waits for the thread to end.</summary>
+        /// <summary>Stops the search where it stands, waits for the thread to end, and lets the solver go.</summary>
         public void Dispose()
         {
             _stop.Cancel();
             lock (_posted) Monitor.PulseAll(_posted);
             _thread.Join();
             _stop.Dispose();
+            _solver.Dispose();
         }
     }
 }

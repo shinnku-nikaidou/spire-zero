@@ -143,7 +143,7 @@ pub struct SzNode {
 }
 
 /// C#: NodeWorld.Combat. The live combat's state, and the player the world is for: the game's own "me".
-fn live(c: &mut Combat) -> (CombatState, Player) {
+pub(crate) fn live(c: &mut Combat) -> (CombatState, Player) {
     let manager = g::combat::combat_manager::instance(c);
     let st = g::combat::combat_manager::debug_only_get_state(manager, c);
     if rt::is_null(&st) {
@@ -191,7 +191,7 @@ fn fail(message: String) {
 }
 
 /// Runs a call of the C ABI: its error, or its panic, becomes this thread's error and `failed`.
-fn call<T>(failed: T, body: impl FnOnce() -> Result<T, String>) -> T {
+pub(crate) fn call<T>(failed: T, body: impl FnOnce() -> Result<T, String>) -> T {
     hook_panics();
     ERROR.with(|error| error.borrow_mut().clear());
     IN_CALL.with(|inside| inside.set(true));
@@ -236,7 +236,7 @@ impl SzBuf {
     };
 }
 
-fn give(bytes: Vec<u8>, out: *mut SzBuf) {
+pub(crate) fn give(bytes: Vec<u8>, out: *mut SzBuf) {
     let bytes = bytes.into_boxed_slice();
     let len = bytes.len();
     let ptr = Box::into_raw(bytes) as *mut u8;
@@ -255,7 +255,13 @@ unsafe fn world<'a>(id: u64) -> Result<&'a mut Handle<Engine>, String> {
     Ok(unsafe { &mut *(id as *mut Handle<Engine>) })
 }
 
-unsafe fn text<'a>(bytes: *const u8, len: usize, what: &str) -> Result<&'a str, String> {
+/// The world behind a handle, and whether it is a NoSL sample, for the search (search/ffi.rs).
+pub(crate) unsafe fn engine_world<'a>(id: u64) -> Result<(&'a Engine, bool), String> {
+    let handle = unsafe { world(id) }?;
+    Ok((&handle.world, handle.sample))
+}
+
+pub(crate) unsafe fn text<'a>(bytes: *const u8, len: usize, what: &str) -> Result<&'a str, String> {
     if bytes.is_null() {
         return Err(format!("{what}: a null pointer"));
     }

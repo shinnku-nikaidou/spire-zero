@@ -28,17 +28,20 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     private readonly RunView _run;
     private readonly long _weight;
     private readonly RunChanges _changes;
+    /// <summary>The run given at the import, hashed: what tells apart the runs the engine's net prices over.</summary>
+    private readonly Lazy<ulong> _base;
     private Place _at;
     /// <summary>The observation last made where the world stands now, and its text's hash; none once the world has moved.</summary>
     private CombatObservation? _shown;
     private ulong _shownHash;
 
-    private EngineWorld(WorldHandle world, RunView run, long weight, RunChanges changes)
+    private EngineWorld(WorldHandle world, RunView run, long weight, RunChanges changes, Lazy<ulong>? runHash = null)
     {
         _at = new(world);
         _run = run;
         _weight = weight;
         _changes = changes;
+        _base = runHash ?? new(() => ProtocolJson.Hash(run));
     }
 
     /// <summary>The SL world: the real combat, exact. Its states are told apart by the full hidden state
@@ -56,7 +59,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     }
 
     /// <summary>An independent world standing where this one stands.</summary>
-    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes);
+    public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes, _base);
 
     /// <summary>
     /// A NoSL world: this combat with everything the player cannot see drawn again from <paramref name="seed"/> (the
@@ -70,7 +73,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     public EngineWorld Determinize(ulong seed)
     {
         var sample = Native.sz_world_determinize(_at.Handle, seed);
-        return sample.IsInvalid ? throw Native.Failed("sz_world_determinize") : new(sample.Weighing(_weight), _run, _weight, _changes);
+        return sample.IsInvalid ? throw Native.Failed("sz_world_determinize") : new(sample.Weighing(_weight), _run, _weight, _changes, _base);
     }
 
     private WorldHandle Copy(WorldHandle world)
@@ -191,6 +194,83 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     {
         if (--place.Held == 0) place.Handle.Dispose();
     }
+
+    /// <summary>
+    /// One turn's search in the engine (<c>SlPlanner.SearchTurn</c>, moved there line for line) from where this world
+    /// stands with <paramref name="path"/> played, its ends priced by <paramref name="net"/> and V (<paramref name="value"/>,
+    /// asked from this thread). This world stays where it stands. Once <paramref name="stop"/> is cancelled the search
+    /// stops where it stands with an <see cref="OperationCanceledException"/>.
+    /// </summary>
+    /// <exception cref="EngineException">The search failed in the engine.</exception>
+    public TurnSearch SearchTurn(EngineNet net, Func<RunView, double> value, IReadOnlyList<CombatAction> path, IReadOnlyList<EnemyTurns> history,
+        int nodes, int keep, IReadOnlyDictionary<string, int>? lifeBounds, CancellationToken stop = default)
+    {
+        var asked = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(new TurnAsked(path, history, nodes, keep, lifeBounds)));
+        // Where the engine reads whether to stop; pinned through the call, set from the token's callback.
+        var flag = new int[1];
+        using var told = stop.Register(() => Volatile.Write(ref flag[0], 1));
+        return new Pricer(RunOf, value).With(ctx =>
+        {
+            Native.Buf buf;
+            int said;
+            fixed (byte* bytes = asked)
+            fixed (int* halt = flag)
+                said = Native.sz_turn_search(net.Handle, _at.Handle, bytes, (nuint)asked.Length, _base.Value, Pricer.Callback, ctx, halt, &buf);
+            if (said == 2) throw new OperationCanceledException(stop);
+            if (said != 0) throw Native.Failed("sz_turn_search");
+            return ProtocolJson.Deserialize<TurnSearch>(Native.Take(buf));
+        });
+    }
+
+    /// <summary>
+    /// The SL planner's beam over turns in the engine (<c>SlPlanner.Search</c>, moved there line for line) from where
+    /// this world stands, with the budget's members of these names, its turns searched in <paramref name="threads"/> of the
+    /// engine's threads, which ask V (<paramref name="value"/>) any number at once. This world stays where it stands.
+    /// Once <paramref name="stop"/> is cancelled the search stops where it stands with an
+    /// <see cref="OperationCanceledException"/>.
+    /// </summary>
+    /// <exception cref="EngineException">The search failed in the engine.</exception>
+    public PlanFound Plan(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history, int nodesPerWorld, int beam, int easyBeam,
+        double turnDecay, int threads, CancellationToken stop = default)
+    {
+        var asked = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(new PlanAsked(history, nodesPerWorld, beam, easyBeam, turnDecay)));
+        var flag = new int[1];
+        using var told = stop.Register(() => Volatile.Write(ref flag[0], 1));
+        return new Pricer(RunOf, value).With(ctx =>
+        {
+            Native.Buf buf;
+            int said;
+            fixed (byte* bytes = asked)
+            fixed (int* halt = flag)
+                said = Native.sz_plan(net.Handle, _at.Handle, bytes, (nuint)asked.Length, _base.Value, Pricer.Callback, ctx, threads, halt, &buf);
+            if (said == 2) throw new OperationCanceledException(stop);
+            if (said != 0) throw Native.Failed("sz_plan");
+            return ProtocolJson.Deserialize<PlanFound>(Native.Take(buf));
+        });
+    }
+
+    /// <summary>The engine's net's outcome of the state the world stands at (<c>CombatNet.Outcome</c>): the value, the
+    /// chance to win and the HP held at a win, with V by <paramref name="value"/>.</summary>
+    public (double Value, double Win, double Hp) Outcome(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history)
+    {
+        var text = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(history));
+        return new Pricer(RunOf, value).With(ctx =>
+        {
+            var outcome = stackalloc double[3];
+            int said;
+            fixed (byte* bytes = text)
+                said = Native.sz_net_outcome(net.Handle, _at.Handle, bytes, (nuint)text.Length, _base.Value, Pricer.Callback, ctx, outcome);
+            return said == 0 ? (outcome[0], outcome[1], outcome[2]) : throw Native.Failed("sz_net_outcome");
+        });
+    }
+
+    internal RunView RunOf(ReadOnlySpan<byte> change) => _changes.Over(_run, change);
+
+    /// <summary>The native world where this one stands, for the search's calls.</summary>
+    internal WorldHandle Handle => _at.Handle;
+
+    /// <summary>The run given at the import, hashed (<see cref="_base"/>).</summary>
+    internal ulong Base => _base.Value;
 
     /// <summary>Frees the world and every snapshot of it not forgotten.</summary>
     public void Dispose()

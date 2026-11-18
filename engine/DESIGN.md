@@ -62,6 +62,7 @@ one key) is dealt evenly.
 | `engine/crates/sts2ai-engine/src/manual/` | the parts of the game's core that are not translated but written by hand, one module per C# class | hand |
 | `engine/crates/sts2ai-engine/src/gen/` | the translated classes, the dispatchers, the state, the kinds, the stubs; `schema.json`, `report.txt`, `manual.txt` | `port` (ignored by git) |
 | `engine/crates/sts2ai-engine/src/{world,import,observe,ffi}.rs` | a combat as the brain uses it; a live combat taken in; the observation; the C ABI | hand |
+| `engine/crates/sts2ai-engine/src/search/` | the SL planner's search: the beam, the solver, a turn's search, the combat net (through ONNX Runtime) | hand |
 | `engine/gen.sh`, `engine/quarantine.py` | decompiled game → `src/gen/`; with `--check`, until `cargo check` passes | hand |
 | `src/Sts2Ai.GameBridge/EngineExport.cs` | the live combat written out along the schema (sim and mod) | hand |
 | `src/Sts2Ai.Engine/` | P/Invoke, `EngineWorld : ICombatWorld`, the in-process planner; no game references | hand |
@@ -613,6 +614,58 @@ holds the same one.
 `observe.rs`, which mirrors `src/Sts2Ai.GameBridge/Observe.cs` member by member. A world reads its observation once
 where it stands: the state key is its hash, and the hidden key takes the draw pile's card keys from it (the same
 cards, in the pile's own order) and reads only the random streams, the monsters' moves and the turn's history beside.
+
+## The search
+
+`src/search/` is the SL planner's search, moved from the C# brain line for line (plans/2026-11-18-2132-sl-search-rust.md):
+the beam over turns (`beam.rs`, C#: `SlPlanner.Search`), the solver (`solver.rs`, `SlSolver`), one turn searched depth
+first (`turn.rs`, `TurnDfs`) with its cycles (`loops.rs`, `LoopSearch`), the actions' order (`order.rs`), the pruning by
+HP (`bound.rs`, `LifeBound`), the combat net's tokens and inputs (`tokens.rs`, `CombatTokens` and `CombatNet.Feed`) and its
+endings priced (`leaf.rs`, `CombatNet.Priced`, `FreeDisposal`). The same search gives the same plans to the last bit:
+the same nodes, the same ends in the same order, the same values. The C# side keeps the route, V and the crossing of a
+card prompt on the node's clone, and `--combat-search check` holds the two searches against each other.
+
+A state of the search is a world standing where the player is asked, with what is read of it once (the observation,
+the two keys, the observation's hash). A plan rooted at a card prompt stands on the node's clone until the player can
+play again: each path of answers is asked of the C# side (`sz_cross`), which says what the clone shows there
+(decimals as strings, so their scale is kept) or, where the player can play, writes the combat out for the engine.
+
+The combat net runs in ONNX Runtime through the crate `ort` (`load-dynamic`): the same library the C# side ships and has
+loaded, given by its path, so nothing is downloaded at build time and the graph's numbers are the C# side's. A session
+runs one thread at a time with the C# session's options (one thread a call); the net keeps a pool of them. V stays on
+the C# side: the leaf asks it through `sz_price` with what the combat has changed of the run (`sz_world_run`'s form),
+from whichever thread searches, and keeps its values by the run without its HP and potions, the HP and the belt. The
+turns of a plan are searched in `std::thread::scope` threads, a job each, the results in job order, so a plan is the
+same on any number of threads. A search stops at its next step once the int it was given is not 0.
+
+```c
+typedef int32_t (*sz_price)(void *ctx, const uint8_t *change, size_t len, double *value);   // V of the run with the change over it; 0 ok
+typedef int32_t (*sz_cross)(void *ctx, const uint8_t *path, size_t len, void *sink);        // what a path of answers leads to, to sz_sink_put
+uint64_t sz_net_load(const uint8_t *graph, size_t graph_len, const uint8_t *file, size_t file_len, const uint8_t *ort, size_t ort_len);
+void     sz_net_free(uint64_t net);
+int32_t  sz_net_outcome(uint64_t net, uint64_t world, const uint8_t *history, size_t len, uint64_t base, sz_price price, void *ctx, double *out);
+int32_t  sz_turn_search(uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx,
+                        const int32_t *stop, sz_buf *out);   // SlPlanner.SearchTurn; 2 where told to stop
+int32_t  sz_plan(uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx, int32_t threads,
+                 const int32_t *stop, sz_buf *out);          // SlPlanner.Search, up to SlPlanner.Picked
+int32_t  sz_plan_crossed(uint64_t net, sz_cross cross, void *cross_ctx, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
+                         void *ctx, int32_t threads, const int32_t *stop, sz_buf *out);   // the same from a card prompt on the clone
+void     sz_sink_put(void *sink, const uint8_t *bytes, size_t len);
+uint64_t sz_solver_new(const uint8_t *history, size_t len, double decay, int32_t batch);
+void     sz_solver_free(uint64_t solver);
+int32_t  sz_solver_seed(uint64_t solver, const uint8_t *line, size_t len, double from);
+int32_t  sz_solver_run(uint64_t solver, uint64_t net, uint64_t world, int64_t nodes, uint64_t base, sz_price price, void *ctx,
+                       int32_t threads, const int32_t *stop);
+int32_t  sz_solver_advance(uint64_t solver, uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
+                           void *ctx, int32_t threads, const int32_t *stop);
+int32_t  sz_solver_result(uint64_t solver, sz_buf *out);
+int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved
+```
+
+What goes across is JSON in `ProtocolJson`'s form (`search/read.rs`): what is asked, and what was found (a
+`TurnSearch`, or the pick, its value's turn start, the best line after each first action, whether it is proved, the
+nodes and turns), which C#'s `SlPlanner.Picked` makes the plan of. `base` is the hash of the run given at the import,
+which tells apart the runs the net's prices are kept for.
 
 ## The lockstep check
 

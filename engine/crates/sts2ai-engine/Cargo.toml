@@ -11,4 +11,8 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# float_roundtrip: a double read from JSON is the double that was written (the search reads C#'s lines and values).
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# The combat net's inference in the search (plans/2026-11-18-2132-sl-search-rust.md, N2): ONNX Runtime loaded at run
+# time from the library the C# side ships (Microsoft.ML.OnnxRuntime 1.31), nothing downloaded at build time.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-31"] }

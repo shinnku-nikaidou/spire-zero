@@ -69,6 +69,9 @@ public sealed class PromptRoot(PromptRoot.Crossing crossing) : ICombatWorld, IDi
         /// <summary>The step as the clone showed it, without the combat written out.</summary>
         public PromptStep Step { get; } = step with { Export = null };
 
+        /// <summary>The place for the engine's crossing (<see cref="EngineCrossing"/>).</summary>
+        public CrossedPlace Crossed => new(Step.Status, Step.Observation, Step.Run, Step.HiddenKey, _export);
+
         /// <summary>A world of the engine's standing here, taken in for the caller, whose own it is; null where the
         /// engine has none (a prompt waits, or the combat is over).</summary>
         public EngineWorld? World() => _export == null ? null : EngineWorld.Import(_export, Step.Run);

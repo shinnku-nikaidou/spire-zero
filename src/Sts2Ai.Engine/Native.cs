@@ -78,6 +78,29 @@ internal static unsafe partial class Native
     [LibraryImport(Library)] internal static partial void sz_buf_free(Buf buf);
     [LibraryImport(Library)] internal static partial int sz_last_error(Buf* result);
 
+    // The search's: the combat net, and a turn's search with V asked back through `sz_price` (EngineSearch.cs).
+    [LibraryImport(Library)] internal static partial NetHandle sz_net_load(byte* graph, nuint graphLen, byte* file, nuint fileLen, byte* ort, nuint ortLen);
+    [LibraryImport(Library)] internal static partial void sz_net_free(nint net);
+    [LibraryImport(Library)] internal static partial int sz_net_outcome(NetHandle net, WorldHandle world, byte* history, nuint len, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, double* outcome);
+    [LibraryImport(Library)] internal static partial int sz_turn_search(NetHandle net, WorldHandle world, byte* asked, nuint len, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int* stop, Buf* result);
+    [LibraryImport(Library)] internal static partial SolverHandle sz_solver_new(byte* history, nuint len, double decay, int batch);
+    [LibraryImport(Library)] internal static partial void sz_solver_free(nint solver);
+    [LibraryImport(Library)] internal static partial int sz_solver_seed(SolverHandle solver, byte* line, nuint len, double from);
+    [LibraryImport(Library)] internal static partial int sz_solver_run(SolverHandle solver, NetHandle net, WorldHandle world, long nodes, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
+    [LibraryImport(Library)] internal static partial int sz_solver_advance(SolverHandle solver, NetHandle net, WorldHandle world, byte* asked, nuint len,
+        ulong @base, delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
+    [LibraryImport(Library)] internal static partial int sz_solver_result(SolverHandle solver, Buf* result);
+    [LibraryImport(Library)] internal static partial int sz_solver_counts(SolverHandle solver, long* counts);
+    [LibraryImport(Library)] internal static partial int sz_plan_crossed(NetHandle net, delegate* unmanaged<nint, byte*, nuint, nint, int> cross,
+        nint crossCtx, byte* asked, nuint len, ulong @base, delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads,
+        int* stop, Buf* result);
+    [LibraryImport(Library)] internal static partial void sz_sink_put(nint sink, byte* bytes, nuint len);
+    [LibraryImport(Library)] internal static partial int sz_plan(NetHandle net, WorldHandle world, byte* asked, nuint len, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop, Buf* result);
+
     /// <summary>The bytes of a buffer the engine filled, which is given back.</summary>
     internal static byte[] Take(Buf buf)
     {
@@ -132,6 +155,34 @@ internal sealed class WorldHandle : SafeHandle
     {
         Native.sz_world_free(handle);
         if (_weight > 0) GC.RemoveMemoryPressure(_weight);
+        return true;
+    }
+}
+
+/// <summary>The combat net loaded in the engine (<c>sz_net_load</c>), freed with <c>sz_net_free</c>.</summary>
+internal sealed class NetHandle : SafeHandle
+{
+    public NetHandle() : base(0, ownsHandle: true) { }
+
+    public override bool IsInvalid => handle == 0;
+
+    protected override bool ReleaseHandle()
+    {
+        Native.sz_net_free(handle);
+        return true;
+    }
+}
+
+/// <summary>A solver in the engine (<c>sz_solver_new</c>), freed with <c>sz_solver_free</c>.</summary>
+internal sealed class SolverHandle : SafeHandle
+{
+    public SolverHandle() : base(0, ownsHandle: true) { }
+
+    public override bool IsInvalid => handle == 0;
+
+    protected override bool ReleaseHandle()
+    {
+        Native.sz_solver_free(handle);
         return true;
     }
 }

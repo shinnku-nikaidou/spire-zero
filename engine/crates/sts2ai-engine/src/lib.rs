@@ -19,4 +19,5 @@ pub mod observe;
 pub mod prompt;
 pub mod protocol;
 pub mod rt;
+pub mod search;
 pub mod world;

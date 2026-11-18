@@ -17,8 +17,9 @@ namespace Sts2Ai.SimWorker.Brains;
 /// <param name="Engine">Whether plan searches in the engine (--combat-world engine, run's and brain's default,
 /// <see cref="EnginePlanner"/>) rather than on the node's clone. It is the same champion either way, by the same name.
 /// pimc always searches in the engine (<see cref="EnginePimc"/>): its worlds are drawn from the real combat there.</param>
+/// <param name="Search">With <paramref name="Engine"/>, where plan searches (--combat-search).</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
-    LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, bool Engine = false)
+    LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, bool Engine = false, TurnSearchIn Search = TurnSearchIn.Engine)
 {
     /// <summary>Whether it explores, which only self-play does.</summary>
     public bool Explores => Explore > 0 || MacroExplore > 0;
@@ -70,7 +71,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         ICombatLeaf InEnv() => Leaf.Leaf.In(env);
         var combat = Policy == "pimc" ? new EnginePimc(InEnv(), Workers).Route(Budget, Combat)
             : pool == null || !Searches ? CombatRoute.Of(Policy, Policies.Combat(Policy, rng))
-            : Engine ? new EnginePlanner(InEnv(), Workers).Route(Budget, Combat, pool, background) : new PooledPlanner(pool).Route(Budget, Combat);
+            : Engine ? new EnginePlanner(InEnv(), Workers, Search).Route(Budget, Combat, pool, background) : new PooledPlanner(pool).Route(Budget, Combat);
         Dispatcher dispatcher;
         if (Macro == "l0")
         {

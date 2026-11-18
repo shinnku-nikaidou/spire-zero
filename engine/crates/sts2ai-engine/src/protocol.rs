@@ -294,7 +294,8 @@ fn nullable_strings<S: Sink>(items: &[Option<Str>], out: &mut S) {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /// C#: CombatObservation.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct CombatObservation {
     pub encounter: Option<Str>,
     pub room: Option<Str>,
@@ -316,7 +317,8 @@ pub struct CombatObservation {
 }
 
 /// C#: PlayerView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct PlayerView {
     pub uid: Option<u32>,
     pub character: Str,
@@ -336,7 +338,8 @@ pub struct PlayerView {
 }
 
 /// C#: CardView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct CardView {
     pub id: Str,
     pub uid: Option<u32>,
@@ -350,6 +353,7 @@ pub struct CardView {
     pub keywords: Option<Vec<Str>>,
     pub this_turn: Option<Vec<Str>>,
     /// In the order they are written: Observe fills the dictionary sorted by name.
+    #[serde(deserialize_with = "vars")]
     pub vars: Option<Vec<(Str, Dec)>>,
     pub upgraded: Option<Box<CardView>>,
     pub lasting: Option<i32>,
@@ -361,14 +365,17 @@ pub struct CardView {
 }
 
 /// C#: TinkerView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct TinkerView {
+    #[serde(rename = "type")]
     pub type_: Str,
     pub rider: Str,
 }
 
 /// C#: ModifierView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct ModifierView {
     pub id: Str,
     pub amount: i32,
@@ -376,7 +383,8 @@ pub struct ModifierView {
 }
 
 /// C#: PowerView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct PowerView {
     pub id: Str,
     pub amount: i32,
@@ -387,7 +395,8 @@ pub struct PowerView {
 }
 
 /// C#: OrbView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct OrbView {
     pub id: Str,
     pub passive: Dec,
@@ -395,7 +404,8 @@ pub struct OrbView {
 }
 
 /// C#: RelicView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct RelicView {
     pub id: Str,
     pub counter: Option<i32>,
@@ -407,7 +417,8 @@ pub struct RelicView {
 }
 
 /// C#: CreatureView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct CreatureView {
     pub uid: Option<u32>,
     pub id: Option<Str>,
@@ -420,11 +431,48 @@ pub struct CreatureView {
 }
 
 /// C#: IntentView.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct IntentView {
+    #[serde(rename = "type")]
     pub type_: Str,
     pub damage: Option<i32>,
     pub hits: Option<i32>,
+}
+
+/// A card's vars read in the order they are written (a JSON object, or null).
+fn vars<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Vec<(Str, Dec)>>, D::Error> {
+    struct Pairs;
+
+    impl<'de> serde::de::Visitor<'de> for Pairs {
+        type Value = Option<Vec<(Str, Dec)>>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("an object of decimals, or null")
+        }
+
+        fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            d.deserialize_map(self)
+        }
+
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut pairs = Vec::new();
+            while let Some((name, value)) = map.next_entry::<Str, Dec>()? {
+                pairs.push((name, value));
+            }
+            Ok(Some(pairs))
+        }
+    }
+
+    d.deserialize_option(Pairs)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -432,7 +480,8 @@ pub struct IntentView {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /// C#: CardChoice.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct CardChoice {
     pub options: Vec<CardView>,
     pub min: i32,
@@ -452,7 +501,8 @@ impl CardChoice {
 }
 
 /// C#: ChoiceContext.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct ChoiceContext {
     pub purpose: Str,
     pub source: Option<Str>,
@@ -467,7 +517,8 @@ pub struct ChoiceContext {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /// C#: EngineWorld.RunChange. The members of RunView a combat can change, under RunView's names.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(default)]
 pub struct RunChange {
     pub hp: i32,
     pub max_hp: i32,
@@ -740,6 +791,41 @@ fn choice_json<S: Sink>(choice: &CardChoice, uids: bool, out: &mut S) {
     }
     x.end();
     m.end();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// CombatRecord.cs
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// C#: EnemyTurns. What one enemy showed at the first decision of each round.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EnemyTurns {
+    pub uid: u32,
+    pub id: Option<Str>,
+    pub turns: Vec<EnemyTurn>,
+}
+
+/// C#: EnemyTurn.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EnemyTurn {
+    pub round: i32,
+    pub intents: Vec<IntentView>,
+}
+
+/// C#: ProtocolJson.Serialize of a combat's record of enemy moves (`IReadOnlyList<EnemyTurns>`).
+pub fn history_json<S: Sink>(history: &[EnemyTurns], out: &mut S) {
+    array(history, out, |enemy, out| {
+        let mut m = Members::begin(out);
+        int(enemy.uid as i64, m.name("uid"));
+        m.str_opt("id", enemy.id);
+        array(&enemy.turns, m.name("turns"), |turn, out| {
+            let mut t = Members::begin(out);
+            t.int("round", turn.round);
+            array(&turn.intents, t.name("intents"), intent_json);
+            t.end();
+        });
+        m.end();
+    });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

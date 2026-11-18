@@ -75,6 +75,12 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     public string Name => _file.Name;
 
+    /// <summary>The net's file, which the engine's search loads the same net from (<c>EngineNet</c>).</summary>
+    public CombatNetFile File => _file;
+
+    /// <summary>V of a run, as this net prices its endings: in its environment.</summary>
+    public double RunValue(RunView run) => _value.Value(run);
+
     /// <summary>
     /// This leaf reading every state in <paramref name="env"/> (<see cref="CombatTokens.EnvTokens"/>), its endings priced
     /// by V in it too: the same graph, which this net keeps. A net loaded is SL's.

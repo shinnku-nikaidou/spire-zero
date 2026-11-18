@@ -23,7 +23,7 @@ public sealed class EnginePlannerTests(FakeEngine engine)
     private static readonly Budget Small = new(NodesPerWorld: 40, Beam: 4);
 
     /// <summary>The planner with its turns searched in <paramref name="threads"/> threads.</summary>
-    private static EnginePlanner Planner(int threads) => new(new ToyLeaf(), threads);
+    private static EnginePlanner Planner(int threads) => new(new ToyLeaf(), threads, TurnSearchIn.CSharp);
 
     private static string Text(SlPlan plan) => ProtocolJson.Serialize(plan);
 
