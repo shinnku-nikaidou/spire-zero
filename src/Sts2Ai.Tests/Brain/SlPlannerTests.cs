@@ -846,14 +846,18 @@ public class SlPlannerTests
     public void TheSolverInTheBackgroundTellsItsPickSoFarAndAnswersAtOnceWhenHurried()
     {
         // The pick so far before each decision's search: the beam's plan where the solver begins, then the rest of the plan
-        // given, which a search in full only keeps. None without the background.
+        // given, which a search in full only keeps; between them, each pick that shows otherwise. None without the background.
         var budget = new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue);
         var beam = new SlPlanner(Leaf).Plan(new Toy(), new Budget(NodesPerWorld: 10, Beam: 1));
         var early = new List<(int Decision, CombatDecisionResult Pick)>();
         var (played, _) = PlayBySolver(budget, background: true, early: (d, r) => early.Add((d, r)));
         Assert.Equal((0, beam.Result.First), (early[0].Decision, early[0].Pick.First));
-        Assert.True(early.Count > 1);
-        Assert.All(early.Skip(1), e => Assert.Equal(played[e.Decision], e.Pick.First));
+        var firsts = early.GroupBy(e => e.Decision).Where(g => g.Key > 0).Select(g => g.First()).ToList();
+        Assert.NotEmpty(firsts);
+        Assert.All(firsts, e => Assert.Equal(played[e.Decision], e.Pick.First));
+        static string Shows(CombatDecisionResult r) => string.Join(" ", [r.First, .. r.Plan]) + $" {r.Candidates[0].Win} {r.Candidates[0].Hp} {r.Proved}";
+        Assert.All(early.Zip(early.Skip(1)).Where(p => p.First.Decision == p.Second.Decision),
+            p => Assert.NotEqual(Shows(p.First.Pick), Shows(p.Second.Pick)));
         var none = new List<int>();
         PlayBySolver(budget, early: (d, _) => none.Add(d));
         Assert.Empty(none);

@@ -166,7 +166,8 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
         void Early(CombatDecisionResult result, string action, bool plan)
         {
             var note = harness.Note(result);
-            send(new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, plan ? note.Plan : null, note.Candidates, Searching: true));
+            send(new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, plan ? note.Plan : null, note.Candidates, true, note.Nodes,
+                note.Proved));
         }
         var (action, note, state) = (request.Surface, obs.Screen) switch
         {
@@ -178,7 +179,8 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };
-        return (new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates), state);
+        return (new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates, Nodes: note.Nodes,
+            Proved: note.Proved), state);
     }
 
     private static (string Action, DecisionNote Note, ulong? State) Text((CombatAction Action, DecisionNote Note) decided) =>

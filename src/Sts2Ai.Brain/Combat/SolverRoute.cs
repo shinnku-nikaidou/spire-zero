@@ -30,9 +30,10 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CancellationT
 /// answered once the solver has searched at least <see cref="Budget.Solve"/> nodes since its root moved there, or at
 /// once when nothing is left, so it is never searched less than without the background, and what was found while the
 /// game played the step stays. <see cref="Rest"/> stops it. Meanwhile the host is told the pick so far
-/// (<see cref="CombatDecision.Early"/>): the rest of the plan given at the last answer while the combat goes its way, the
-/// beam's plan where a solver begins. A host that moved on from the decision (<see cref="CombatDecision.Hurry"/>) gets
-/// the pick at once.
+/// (<see cref="CombatDecision.Early"/>), at once and before any search: the rest of the plan given at the last answer
+/// while the combat goes its way, the beam's plan where a solver begins; then again each time the solver's pick changes
+/// (the user, 2026-11-18: 「ai得能及時給出來怎麼走，並且同時在搜索更好的」). A host that moved on from the decision
+/// (<see cref="CombatDecision.Hurry"/>) gets the pick at once.
 /// </summary>
 public sealed class SolverRoute(Budget budget, bool background = false)
 {
@@ -47,6 +48,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// given with it held.</summary>
     private TurnEnd? _line;
     private int _taken, _given;
+    /// <summary>The pick so far the host was last told at this decision, as it shows it (<see cref="Shown"/>).</summary>
+    private string? _told;
 
     /// <summary>How many solvers the route began: one a combat while the combat goes the picks' way.</summary>
     public int Begun { get; private set; }
@@ -71,13 +74,14 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             return PimcBrain.Only(forced);
         }
         long nodes = 0;
-        if (along && _background != null && _taken < _given) early?.Invoke(Given());
+        _told = null;
+        if (along && _background != null && _taken < _given) Tell(early, Given());
         if (!along && !Begin(observation, history, start, early, ref nodes))
         {
             Drop();
             return beam();
         }
-        var plan = Search(history, hurry, ref nodes);
+        var plan = Search(history, early, hurry, ref nodes);
         // The engine's combat is not this one: it played a step otherwise than the game.
         if (plan.Line!.Hashes[0] != hash)
         {
@@ -86,14 +90,27 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                 Drop();
                 return beam();
             }
-            plan = Search(history, hurry, ref nodes);
+            plan = Search(history, early, hurry, ref nodes);
             if (plan.Line!.Hashes[0] != hash)
                 throw new InvalidOperationException("the combat taken in is not the combat the decision shows");
         }
         (_line, _taken, _given) = (plan.Line, 0, plan.Result.Plan.Count + 1);
         Took(plan.Line.Actions[0]);
-        return plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue) };
+        return plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved };
     }
+
+    /// <summary>Tells the host the pick so far, unless it shows what it was last told.</summary>
+    private void Tell(Action<CombatDecisionResult>? early, CombatDecisionResult pick)
+    {
+        if (early == null || Shown(pick) == _told) return;
+        _told = Shown(pick);
+        early(pick);
+    }
+
+    /// <summary>A pick as the host shows it: its step, the plan after it, and the line's chance to win and HP left.</summary>
+    private static string Shown(CombatDecisionResult pick) =>
+        string.Join(" ", [pick.First, .. pick.Plan]) + (pick.Candidates is [var top, ..] ? FormattableString.Invariant($" {top.Win} {top.Hp}") : "") +
+        (pick.Proved ? " proved" : "");
 
     /// <summary>The rest of the plan given at the last answer, from the step the combat stands at, with the line's own
     /// value: the pick so far until the decision's search says otherwise.</summary>
@@ -132,7 +149,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         Begun++;
         if (background)
         {
-            early?.Invoke(seed.Result);
+            Tell(early, seed.Result);
             _background = new Background(solver, from, history, observation.Round, budget.Replan);
         }
         else (_solver, _from) = (solver, from);
@@ -140,11 +157,13 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     }
 
     /// <summary>The decision's search: the budget's nodes more since the root moved here, and the pick then.</summary>
-    private SlPlan Search(IReadOnlyList<EnemyTurns> history, CancellationToken hurry, ref long nodes)
+    private SlPlan Search(IReadOnlyList<EnemyTurns> history, Action<CombatDecisionResult>? early, CancellationToken hurry, ref long nodes)
     {
         if (_background != null)
         {
-            var (pick, searched) = _background.Await(budget.Solve, hurry);
+            long begun = nodes;
+            var (pick, searched) = _background.Await(budget.Solve, hurry, early == null ? null : (found, since) =>
+                Tell(early, found.Result with { Nodes = (int)Math.Min(begun + since, int.MaxValue), Proved = found.Proved }));
             nodes += searched;
             return pick;
         }
@@ -216,21 +235,40 @@ public sealed class SolverRoute(Budget budget, bool background = false)
 
         /// <summary>Waits until the root stands at every step posted and the solver has searched at least
         /// <paramref name="nodes"/> there, or nothing is left, or <paramref name="hurry"/> is cancelled; its pick then,
-        /// and the nodes it searched since the last.</summary>
-        public (SlPlan Pick, long Nodes) Await(long nodes, CancellationToken hurry)
+        /// and the nodes it searched since the last. Meanwhile <paramref name="found"/> gets each pick it shows from the
+        /// root there, with the nodes since the last, on the waiting thread.</summary>
+        public (SlPlan Pick, long Nodes) Await(long nodes, CancellationToken hurry, Action<SlPlan, long>? found)
         {
             using var woken = hurry.Register(() =>
             {
                 lock (_posted) Monitor.PulseAll(_posted);
             });
-            lock (_posted)
+            SlPlan? seen = null;
+            while (true)
             {
-                while (_failed == null && !(_moved == _posted.Count && _pick != null && (_done || hurry.IsCancellationRequested || _nodes - _since >= nodes)))
-                    Monitor.Wait(_posted);
-                if (_failed != null) ExceptionDispatchInfo.Capture(_failed).Throw();
-                long searched = _nodes - _answered;
-                _answered = _nodes;
-                return (_pick!, searched);
+                (SlPlan Pick, long Nodes) shown;
+                lock (_posted)
+                {
+                    while (true)
+                    {
+                        if (_failed != null) ExceptionDispatchInfo.Capture(_failed).Throw();
+                        bool here = _moved == _posted.Count && _pick != null;
+                        if (here && (_done || hurry.IsCancellationRequested || _nodes - _since >= nodes))
+                        {
+                            long searched = _nodes - _answered;
+                            _answered = _nodes;
+                            return (_pick!, searched);
+                        }
+                        if (here && found != null && !ReferenceEquals(_pick, seen))
+                        {
+                            shown = (_pick!, _nodes - _answered);
+                            break;
+                        }
+                        Monitor.Wait(_posted);
+                    }
+                }
+                seen = shown.Pick;
+                found!(shown.Pick, shown.Nodes);
             }
         }
 

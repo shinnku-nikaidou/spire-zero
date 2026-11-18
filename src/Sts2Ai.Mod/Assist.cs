@@ -305,7 +305,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             if (_shown == 0) _shown = Environment.TickCount64;
             if (!answer.Searching) Play(asking, answer, run, me);
             string foot = answer.Searching && _asked != null
-                ? $"{answer.Answer.Brain} · {L10n.T("searching")} {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s"
+                ? $"{answer.Answer.Brain} · {L10n.T("searching")} {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s{Searched(answer.Answer)}"
                 : answer.Foot;
             panel.Show(champion, status, answer.Shown, Sub(answer), foot, answer.Route, answer.Plan, Drive());
             return;
@@ -514,7 +514,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 Note(shownEarly, early);
                 _answer = new(waiting.Id, waiting.Key, early, shownEarly, early.Brain, MapRoute.Of(early, waiting.Obs), CombatPlan.Of(early, waiting.Obs),
                     Searching: true);
-                ModLog.Write("decision", $"{waiting.Id} so far after {Environment.TickCount64 - waiting.Sent} ms: {early.Action}" +
+                ModLog.Write("decision", $"{waiting.Id} so far after {Environment.TickCount64 - waiting.Sent} ms, {early.Nodes} nodes{(early.Proved == true ? ", proved" : "")}: {early.Action}" +
                                          (early.Candidates is { Count: > 0 } so ? $"; {string.Join(", ", so.Take(3).Select(Candidate))}" : ""));
                 break;
             case Received { Message: Recommendation answer }:
@@ -532,7 +532,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                                          (answer.Candidates is { Count: > 0 } c ? $"; best {string.Join(", ", c.Take(3).Select(Candidate))}" : ""));
                 var shown = Describe.Recommendation(answer, asked.Obs);
                 Note(shown, answer);
-                _answer = new(asked.Id, asked.Key, answer, shown, $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s",
+                _answer = new(asked.Id, asked.Key, answer, shown, $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s{Searched(answer)}",
                     MapRoute.Of(answer, asked.Obs), CombatPlan.Of(answer, asked.Obs));
                 break;
             case Received { Message: WireError error }:
@@ -560,6 +560,14 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 break;
         }
     }
+
+    /// <summary>What the combat search did for an answer, as the panel's foot adds it: the nodes it searched, and that the
+    /// solver proved its pick.</summary>
+    private static string Searched(Recommendation answer) =>
+        (answer.Nodes is { } n && answer.Searching == true ? " · " + L10n.T("{0} nodes", Compact(n)) : "") + (answer.Proved == true ? " · " + L10n.T("proved") : "");
+
+    private static string Compact(long n) => n < 1_000 ? n.ToString(CultureInfo.InvariantCulture)
+        : n < 1_000_000 ? (n / 1e3).ToString("0", CultureInfo.InvariantCulture) + " k" : (n / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " M";
 
     /// <summary>A scored candidate in the log: its action, value and, from a fight's plan, its chance to win and HP left.</summary>
     private static string Candidate(Candidate c) =>

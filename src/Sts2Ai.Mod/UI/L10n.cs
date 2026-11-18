@@ -43,6 +43,8 @@ internal static class L10n
         ["{0} · the next room has one"] = ["{0} · la prochaine salle en aura une", "{0} · la próxima sala tendrá una", "{0} · 下个房间会有", "{0} · 下個房間會有", "{0} · 次の部屋にはあります"],
         ["no checkpoint"] = ["pas de point de sauvegarde", "sin punto de control", "没有存档点", "沒有存檔點", "チェックポイントなし"],
         ["searching"] = ["recherche", "buscando", "搜索中", "搜尋中", "探索中"],
+        ["{0} nodes"] = ["{0} nœuds", "{0} nodos", "{0} 节点", "{0} 節點", "{0} ノード"],
+        ["proved"] = ["prouvé", "demostrado", "已证明", "已證明", "証明済み"],
         ["Thinking…"] = ["Réflexion…", "Pensando…", "思考中…", "思考中…", "思考中…"],
         ["Mod error"] = ["Erreur du mod", "Error del mod", "Mod 出错", "Mod 出錯", "Modのエラー"],
         ["floor {0}"] = ["étage {0}", "piso {0}", "第 {0} 层", "第 {0} 層", "{0}階"],

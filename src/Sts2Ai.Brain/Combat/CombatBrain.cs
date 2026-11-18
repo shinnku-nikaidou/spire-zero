@@ -81,7 +81,7 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// Two worlds that plan alike search alike, so the log keeps it.</param>
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null, bool Proved = false);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again. A step is

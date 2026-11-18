@@ -21,7 +21,7 @@ namespace Sts2Ai.Protocol;
 public abstract record WireMessage
 {
     /// <summary>Bumped on any breaking change.</summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     [JsonPropertyOrder(-1)]
     public int V { get; init; } = Version;
@@ -76,10 +76,14 @@ public sealed record DecisionRequest(long DecisionId, string ObsHash, string Sur
 /// <param name="Plan">What the brain planned after <paramref name="Action"/>: the rest of the turn from a searching
 /// combat brain, the rest of the act's route from the macro brain on the map.</param>
 /// <param name="Candidates">The first actions it scored, best first.</param>
-/// <param name="Searching">True on the brain's pick so far while it searches on (max's solver in the mod's brain): the
-/// final answer to the same decision follows, and it is the one the host's AI plays. Null on a final answer.</param>
+/// <param name="Searching">True on the brain's pick so far while it searches on (max's solver in the mod's brain): one
+/// comes at once, another each time the pick changes, and the final answer to the same decision follows, which is the
+/// one the host's AI plays. Null on a final answer.</param>
+/// <param name="Nodes">The actions a combat search simulated for the decision so far.</param>
+/// <param name="Proved">True when the solver proved its pick the best there is.</param>
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
-    IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, bool? Searching = null) : WireMessage;
+    IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, bool? Searching = null, long? Nodes = null,
+    bool? Proved = null) : WireMessage;
 
 /// <summary>Host → brain: the action taken for a decision, and whether it worked.</summary>
 public sealed record Executed(long DecisionId, string Action, bool Ok, string? Error = null) : WireMessage;
