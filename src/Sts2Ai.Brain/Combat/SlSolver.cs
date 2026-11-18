@@ -23,6 +23,13 @@ namespace Sts2Ai.Brain.Combat;
 ///
 /// The combat goes on under it (<see cref="Advance"/>): the root moves to where it went, the states that can still be
 /// reached stay with all that was found of them, and the rest go.
+///
+/// One rule is written by hand, for speed (the user, 2026-11-18: 「max下引入手寫剪枝規則，如果一個枝葉算下去hp+max hp已經
+/// 低於目前最好的hp+max hp，就剪掉…這是必要的為了性能上的犧牲」): a state that cannot end the combat with as much HP plus
+/// max HP (<see cref="Reach"/>) as the best of the wins found so far ends with (<see cref="Bound"/>) is dropped, in a
+/// turn's search as soon as a line reaches it (<see cref="PlanJob.LifeBound"/>), and among the states waiting when a win
+/// raises the bound. A line the pick would take for its potions or a relic's counter can go so; a proof is a proof under
+/// this rule.
 /// </summary>
 /// <param name="decay">The turn decay of the pick (<see cref="Budget.TurnDecay"/>).</param>
 /// <param name="batch">The states searched at a time, a turn's search each, which a <see cref="TurnSearcher"/> can run
@@ -30,9 +37,11 @@ namespace Sts2Ai.Brain.Combat;
 public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1, int batch = 16)
 {
     /// <summary>A state the solver reached: a turn's start, or the root, where the combat stands.</summary>
-    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, ulong moves, long order)
+    private sealed class Node(ulong key, double value, int turns, IReadOnlyList<EnemyTurns> history, ulong moves, long order, int reach)
     {
         public readonly ulong Key = key;
+        /// <summary>The most HP plus max HP the combat can end with from the state (<see cref="SlSolver.Reach"/>).</summary>
+        public readonly int Reach = reach;
         /// <summary>The leaf's value of the state; 0 at the root, as a turn start the beam has not valued.</summary>
         public readonly double Value = value;
         /// <summary>The turns ended to the state since the solver began, for its worth.</summary>
@@ -50,6 +59,8 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         /// <summary>The best end of the combat the state's turn reaches, by the actions from the state, if any.</summary>
         public TurnEnd? Over;
         public bool Cut;
+        /// <summary>The bound the state's turn was searched with: its ends below it were dropped.</summary>
+        public int SearchedAt = int.MinValue;
     }
 
     /// <summary>The actions from a state to a state where its turn ends, with the hash of each one's observation.</summary>
@@ -59,13 +70,16 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
     /// <summary>The records of enemy moves the states hold, each once, by hash.</summary>
     private Dictionary<ulong, IReadOnlyList<EnemyTurns>> _moves = [];
     private readonly PriorityQueue<Node, (double Worth, long Order)> _queue = new();
-    private Node _root = new(0, 0, 0, history, 0, 0);
+    private Node _root = new(0, 0, 0, history, 0, 0, int.MaxValue);
     private long _order, _nodes;
     private int _searched, _cuts;
     private (TurnEnd Line, SlPlanner.Rank Rank)? _best;
     private (TurnEnd Line, double From)? _seed;
     private Dictionary<CombatAction, TurnEnd> _byFirst = [];
     private bool _started;
+    private int _bound = int.MinValue;
+    /// <summary>The bound the waiting states were last checked against (<see cref="Bound"/>).</summary>
+    private int _purged = int.MinValue;
 
     /// <summary>The actions simulated so far, over every turn's search.</summary>
     public long Nodes => _nodes;
@@ -78,6 +92,10 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
 
     /// <summary>The states reached and not searched yet.</summary>
     public int Left => _started ? _queue.Count : 1;
+
+    /// <summary>The most HP plus max HP a win found from the root ends the combat with: a state that cannot end it with
+    /// as much is dropped (<see cref="Reach"/>); <see cref="int.MinValue"/> before a win is found.</summary>
+    public int Bound => _bound;
 
     /// <summary>Whether the pick is the best line there is: nothing is left to search, and no turn's search was cut.</summary>
     public bool Proved => _started && _queue.Count == 0 && _cuts == 0 && _best != null;
@@ -103,22 +121,40 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         while (_queue.Count > 0 && _nodes < until)
         {
             var states = new List<Node>();
-            while (states.Count < batch && _queue.TryDequeue(out var node, out _)) states.Add(node);
-            var found = search([.. states.Select(n => new PlanJob(Path(n).Actions, n.History))], SlPlanner.Unlimited, int.MaxValue);
+            while (states.Count < batch && _queue.TryDequeue(out var node, out _))
+                if (node.Reach >= _bound) states.Add(node);
+                else _table.Remove(node.Key);
+            if (states.Count == 0) continue;
+            int bound = _bound;
+            var found = search([.. states.Select(n => new PlanJob(Path(n).Actions, n.History, bound))], SlPlanner.Unlimited, int.MaxValue);
             for (int i = 0; i < states.Count; i++) Expand(states[i], found[i]);
+            if (_bound > _purged) Purge();
         }
+    }
+
+    /// <summary>The waiting states that can no longer end the combat with the best win's HP plus max HP go (<see cref="Bound"/>).</summary>
+    private void Purge()
+    {
+        _purged = _bound;
+        var left = _queue.UnorderedItems.ToList();
+        _queue.Clear();
+        foreach (var (node, priority) in left)
+            if (node.Reach >= _purged) _queue.Enqueue(node, priority);
+            else _table.Remove(node.Key);
     }
 
     /// <summary>
     /// The combat went on from the root by <paramref name="played"/>, to where its record of enemy moves is
     /// <paramref name="moves"/>: the root moves there, and its turn is searched again by <paramref name="search"/>, from
     /// there. What it reaches stays with all that was found of it, each state with a line from the new root; the rest
-    /// goes. The seeded line stays if the combat went its way.
+    /// goes. The seeded line stays if the combat went its way. The bound is the wins' the new root still reaches; where
+    /// that is lower than before, a state whose turn was searched with a higher one is searched again, as one whose ends
+    /// went since.
     /// </summary>
     public void Advance(IReadOnlyList<CombatAction> played, IReadOnlyList<EnemyTurns> moves, TurnSearcher search)
     {
         if (played.Count == 0) return;
-        _root = new(0, 0, _root.Turns + EndTurns(played), moves, 0, ++_order);
+        _root = new(0, 0, _root.Turns + EndTurns(played), moves, 0, ++_order, int.MaxValue);
         if (_seed is { } seed)
             _seed = seed.Line.Actions.Count > played.Count && seed.Line.Actions.Take(played.Count).SequenceEqual(played)
                 ? (seed.Line with { Actions = [.. seed.Line.Actions.Skip(played.Count)], Hashes = [.. seed.Line.Hashes.Skip(played.Count)] }, seed.From)
@@ -147,30 +183,44 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
     private void Start(TurnSearcher search)
     {
         _started = true;
-        Expand(_root, search([new PlanJob([], _root.History)], SlPlanner.Unlimited, int.MaxValue)[0]);
+        // The pick and its bound come from lines the root still reaches: the seed's, then what its turn and the states
+        // kept find.
+        int before = _bound;
+        (_best, _byFirst, _bound) = (null, [], int.MinValue);
+        if (_seed is { } carried) Consider(carried.Line, carried.From);
+        Expand(_root, search([new PlanJob([], _root.History, _bound)], SlPlanner.Unlimited, int.MaxValue)[0]);
+        // A state a turn reached may have been dropped since, by the pick's HP (Purge).
         var kept = new Dictionary<ulong, Node>();
         var order = new List<Node> { _root };
         for (int i = 0; i < order.Count; i++)
             foreach (var edge in order[i].Edges ?? [])
-                if (kept.TryAdd(edge.Key, _table[edge.Key])) order.Add(_table[edge.Key]);
+                if (_table.TryGetValue(edge.Key, out var next) && kept.TryAdd(edge.Key, next)) order.Add(next);
         // A state whose line came through one that is gone takes the first state kept that reaches it, in the order
         // reached from the root; the turns only go forward, so every line goes back to the root.
         var reached = order.ToHashSet();
         foreach (var node in order)
             foreach (var edge in node.Edges ?? [])
-                if (kept[edge.Key] is var next && (next.Parent == null || !reached.Contains(next.Parent)))
+                if (kept.TryGetValue(edge.Key, out var next) && (next.Parent == null || !reached.Contains(next.Parent)))
                     (next.Parent, next.From) = (node, edge);
         _table = kept;
         _moves = order.Skip(1).GroupBy(n => n.Moves).ToDictionary(g => g.Key, g => g.First().History);
         _queue.Clear();
-        (_cuts, _best, _byFirst) = (0, null, []);
+        (_cuts, _best, _byFirst, _bound) = (0, null, [], int.MinValue);
         if (_seed is { } seed) Consider(seed.Line, seed.From);
+        foreach (var node in order)
+            if (node.Over is { } over) Consider(Line(node, over), node.Value);
+        // Below a bound that fell, a turn searched with the higher one, or one whose ends were dropped since, is searched
+        // again: its turn has ends the bound keeps now.
+        if (_bound < before)
+            foreach (var node in order.Skip(1))
+                if (node.Edges is { } edges && (node.SearchedAt > _bound || edges.Any(e => !kept.ContainsKey(e.Key))))
+                    (node.Edges, node.Over, node.Cut, node.SearchedAt) = (null, null, false, int.MinValue);
         foreach (var node in order)
         {
             if (node.Cut) _cuts++;
             if (node.Edges == null) _queue.Enqueue(node, (-Worth(node), node.Order));
-            else if (node.Over is { } over) Consider(Line(node, over), node.Value);
         }
+        Purge();
     }
 
     /// <summary>A state's turn, as searched: its end of the combat a candidate for the pick, its ends at the next turn's
@@ -190,21 +240,24 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
                 Consider(Line(node, end), node.Value);
                 continue;
             }
+            if (end.Reach < _bound) continue;
             ulong moves = ProtocolJson.Hash(end.History);
             var edge = new Edge(end.Actions, end.Hashes, SlPlanner.Mix(end.Key, moves));
             node.Edges.Add(edge);
             if (_table.ContainsKey(edge.Key)) continue;
             if (!_moves.TryGetValue(moves, out var shared)) _moves[moves] = shared = end.History;
-            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), shared, moves, ++_order) { Parent = node, From = edge };
+            var next = new Node(edge.Key, end.Value, node.Turns + EndTurns(end.Actions), shared, moves, ++_order, end.Reach) { Parent = node, From = edge };
             _table[edge.Key] = next;
             _queue.Enqueue(next, (-Worth(next), next.Order));
         }
+        node.SearchedAt = _bound;
     }
 
     private void Consider(TurnEnd line, double from)
     {
         var rank = SlPlanner.Rank.Of(line, decay, from);
         if (_best is not { } best || rank.Beats(best.Rank)) _best = (line, rank);
+        if (line.Status == CombatStatus.Won) _bound = Math.Max(_bound, line.Life);
         if (!_byFirst.TryGetValue(line.Actions[0], out var first) || rank.Worth > SlPlanner.Rank.Of(first, decay, 0).Worth)
             _byFirst[line.Actions[0]] = line;
     }
@@ -225,6 +278,48 @@ public sealed class SlSolver(IReadOnlyList<EnemyTurns> history, double decay = 1
         for (var n = node; n.Parent != null; n = n.Parent) edges.Add(n.From!);
         edges.Reverse();
         return ([.. edges.SelectMany(e => e.Actions)], [.. edges.SelectMany(e => e.Hashes)]);
+    }
+
+    /// <summary>
+    /// The most HP plus max HP the player can end the combat with from this state, for max's pruning: the HP now,
+    /// raised by every heal the state still holds but never past the max HP, plus the max HP, raised by every gain it
+    /// holds. The heals and gains are every one the game has on the player in a fight or at its end (v0.113.1, each
+    /// <c>CreatureCmd.Heal</c> and <c>GainMaxHp</c>; the user, 2026-11-18: 「注意遊戲結束回血的遺物和+10生命的卡片…如果有
+    /// 這倆遺物還有再生藥水，得額外加上最大可能回血值」):
+    /// <list type="bullet">
+    /// <item>after a win: Burning Blood heals 6, Black Blood 12, Meat on the Bone 12 (at half HP or less); Chosen Cheese
+    /// gives 1 max HP at the combat's end;</item>
+    /// <item>potions held: Blood Potion heals 20 % of max HP, Ambergris 50 %, Regen Potion 15 (Regen 5, one less each
+    /// turn), Fruit Juice gives 5 max HP;</item>
+    /// <item>Regen on the player heals its amount, one less each turn;</item>
+    /// <item>may heal to full, by no amount fixed here: Not Yet in any pile (it heals 10, 13 upgraded, and a replay
+    /// plays it again), Lizard Tail unused (50 % on dying), Fairy in a Bottle (30 % on dying), Book Repair Knife (3 a
+    /// kill by Doom), Book of Five Rings (20 each fifth card added to the deck), and a potion made in the fight (Alchemize,
+    /// Entropic Brew), which can be a Blood Potion;</item>
+    /// <item>max HP by no amount fixed here, so no bound: Feed in any pile (3, 4 upgraded, a kill, again on a replay),
+    /// Dragon Fruit (1 a gain of gold), Darkstone Periapt (6 a curse added to the deck).</item>
+    /// </list>
+    /// Before combat (Blood Vial, Bath Towel, Pantograph and the like) it has healed already. Demon Tongue heals back
+    /// what the player's own turn took, never past the HP before.
+    /// </summary>
+    public static int Reach(CombatObservation obs)
+    {
+        static bool Unused(RelicView relic) => relic.Status != "Disabled";
+        var relics = obs.Relics.Where(Unused).Select(r => r.Id).ToList();
+        var potions = obs.Potions.OfType<string>().ToList();
+        var cards = obs.Hand.Concat(obs.Draw).Concat(obs.Discard).Concat(obs.Exhaust).Select(c => c.Id).ToHashSet();
+        if (cards.Contains("FEED") || relics.Contains("DRAGON_FRUIT") || relics.Contains("DARKSTONE_PERIAPT")) return int.MaxValue;
+        int maxHp = obs.Player.MaxHp + relics.Count(r => r == "CHOSEN_CHEESE") + 5 * potions.Count(p => p == "FRUIT_JUICE");
+        bool full = cards.Contains("NOT_YET") || cards.Contains("ALCHEMIZE") || potions.Contains("FAIRY_IN_A_BOTTLE") || potions.Contains("ENTROPIC_BREW")
+                    || relics.Contains("LIZARD_TAIL") || relics.Contains("BOOK_REPAIR_KNIFE") || relics.Contains("BOOK_OF_FIVE_RINGS");
+        long heal = full ? maxHp : 0;
+        foreach (var relic in relics)
+            heal += relic switch { "BURNING_BLOOD" => 6, "BLACK_BLOOD" => 12, "MEAT_ON_THE_BONE" => 12, _ => 0 };
+        foreach (var potion in potions)
+            heal += potion switch { "BLOOD_POTION" => (maxHp * 20 + 99) / 100, "AMBERGRIS" => (maxHp * 50 + 99) / 100, "REGEN_POTION" => 15, _ => 0 };
+        foreach (var power in obs.Player.Powers)
+            if (power.Id == "REGEN_POWER" && power.Amount > 0) heal += (long)power.Amount * (power.Amount + 1) / 2;
+        return (int)Math.Min(maxHp, obs.Player.Hp + heal) + maxHp;
     }
 
     private static int EndTurns(IEnumerable<CombatAction> actions) => actions.Count(a => a.Kind == CombatActionKind.EndTurn);

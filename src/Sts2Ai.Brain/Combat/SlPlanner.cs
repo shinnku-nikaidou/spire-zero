@@ -4,7 +4,9 @@ namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A beam state as a turn's search needs it: the actions from the decision to it, and the record of enemy
 /// moves up to it, for the leaves.</summary>
-public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<EnemyTurns> History);
+/// <param name="LifeBound">The HP plus max HP a line of the turn must still be able to end the combat with, else it
+/// stops there (max's pruning, <see cref="SlSolver.Reach"/>); <see cref="int.MinValue"/>: none.</param>
+public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<EnemyTurns> History, int LifeBound = int.MinValue);
 
 /// <summary>Searches one turn from each job's state (<see cref="SlPlanner.SearchTurn"/>), in job order, wherever the
 /// world lives (this process, or a worker), each with <paramref name="nodes"/> nodes, keeping
@@ -118,7 +120,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             world.Restore(root);
             foreach (var action in job.Path) world.Execute(action);
-            return SearchTurn(world, job.History, nodes, keep);
+            return SearchTurn(world, job.History, nodes, keep, job.LifeBound);
         })]);
         world.Forget(root);
         return plan;
@@ -315,10 +317,12 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     /// combat the turn can reach, if any, and the best <paramref name="keep"/> distinct states at the next turn's start.
     /// </summary>
     /// <param name="history">The record of enemy moves up to the world's state; each end's goes on from it.</param>
-    public TurnSearch SearchTurn(ICombatWorld world, IReadOnlyList<EnemyTurns> history, int nodes, int keep) =>
-        new TurnDfs(world, leaf, history, nodes).Run(keep);
+    /// <param name="lifeBound">A line stops where the combat can no longer end with this much HP plus max HP
+    /// (<see cref="PlanJob.LifeBound"/>).</param>
+    public TurnSearch SearchTurn(ICombatWorld world, IReadOnlyList<EnemyTurns> history, int nodes, int keep, int lifeBound = int.MinValue) =>
+        new TurnDfs(world, leaf, history, nodes, lifeBound).Run(keep);
 
-    private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes)
+    private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes, int lifeBound)
     {
         private readonly HashSet<(ulong Obs, ulong Hidden)> _seen = [];
         private readonly HashSet<ulong> _keys = [];
@@ -336,7 +340,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly List<LoopPoint> _path = [];
         /// <summary>Snapshots of states the search has left that a cycle found there starts from: kept until the cycles are run.</summary>
         private readonly List<WorldSnapshot> _kept = [];
-        private int _nodes, _round, _limit;
+        private int _nodes, _round, _limit, _pruned;
         private bool _cut;
         private LoopSearch _loops = null!;
 
@@ -353,7 +357,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
             var over = _ends.Where(e => e.Status != CombatStatus.InProgress).MaxBy(e => e.Value);
             var going = _ends.Where(e => e.Status == CombatStatus.InProgress).OrderByDescending(e => e.Value).ToList();
             if (going.Count > keep) _cut = true;
-            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut);
+            return new([.. over == null ? [] : new[] { over }, .. going.Take(keep)], _nodes, _cut, _pruned);
         }
 
         /// <summary>
@@ -399,7 +403,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 _hashes.Add(hash);
                 var status = world.Status;
                 var after = world.Observe();
-                if (status != CombatStatus.InProgress) Ends(status, after);
+                if (lifeBound > int.MinValue && SlSolver.Reach(after) < lifeBound) _pruned++;
+                else if (status != CombatStatus.InProgress) Ends(status, after);
                 else if (after.Prompt != null) Visit(after, to);
                 else if (action.Kind == CombatActionKind.EndTurn || after.Round != _round) Ends(status, after);
                 else if (!_loops.Intercept(_path, after, _actions, _hashes)) Visit(after);
@@ -417,17 +422,18 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         /// the same one differ only by their potions. 0 once the combat is over.</param>
         private sealed record Ended(LeafState State, IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, ulong Key, ulong Bare = 0)
         {
-            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, State.Status, outcome.Value, Key, State.History, outcome.Win, outcome.Hp);
+            public TurnEnd Valued(LeafOutcome outcome) => Light().Valued(outcome);
 
             /// <summary>What is kept of the line once the leaf has valued it: no observation or run.</summary>
-            public Priced Light() => new(Actions, Hashes, State.Status, Key, Bare, State.Obs.Potions, State.History);
+            public Priced Light() => new(Actions, Hashes, State.Status, Key, Bare, State.Obs.Potions, State.History,
+                State.Obs.Player.Hp + State.Obs.Player.MaxHp, SlSolver.Reach(State.Obs));
         }
 
         /// <summary>A line the leaf has valued (<see cref="Ended"/>), with the potions <see cref="Thrown"/> compares.</summary>
         private sealed record Priced(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, ulong Key, ulong Bare,
-            IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History)
+            IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History, int Life, int Reach)
         {
-            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp);
+            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp, Life, Reach);
         }
 
         /// <summary>
