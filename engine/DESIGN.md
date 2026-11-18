@@ -34,8 +34,8 @@ decision between actions (the mod from the real game, `run --check`'s host from 
 brain) and `run --check` plan in the engine too; a card prompt is crossed on the node's clone in the workers, as in
 `sim run`. A NoSL host sends none.
 
-NoSL's PIMC (`--policy pimc`) searches only in the engine (`EnginePimc`), in the run's own process, with no search
-workers. Its worlds are drawn from the real combat: the host sends the live combat in NoSL too, the engine takes it in
+NoSL's PIMC (`--policy pimc`) searches only in the engine (`EnginePimc`, `src/search/pimc.rs`), in the run's own process,
+with no search workers. Its worlds are drawn from the real combat: the host sends the live combat in NoSL too, the engine takes it in
 once a decision, and each world is that combat with everything the player cannot see drawn again
 (`sz_world_determinize`, `determinize.rs`): every random stream, the run's and the player's seeds, the relic grab
 bag, the order of the draw pile from its public record since the last shuffle (`drawlog.rs`, below), and an enemy's
@@ -62,7 +62,7 @@ one key) is dealt evenly.
 | `engine/crates/sts2ai-engine/src/manual/` | the parts of the game's core that are not translated but written by hand, one module per C# class | hand |
 | `engine/crates/sts2ai-engine/src/gen/` | the translated classes, the dispatchers, the state, the kinds, the stubs; `schema.json`, `report.txt`, `manual.txt` | `port` (ignored by git) |
 | `engine/crates/sts2ai-engine/src/{world,import,observe,ffi}.rs` | a combat as the brain uses it; a live combat taken in; the observation; the C ABI | hand |
-| `engine/crates/sts2ai-engine/src/search/` | the SL planner's search: the beam, the solver, a turn's search, the combat net (through ONNX Runtime) | hand |
+| `engine/crates/sts2ai-engine/src/search/` | the combat search: the SL planner's (the beam, the solver, a turn's search), NoSL's PIMC, the combat net (through ONNX Runtime) | hand |
 | `engine/gen.sh`, `engine/quarantine.py` | decompiled game → `src/gen/`; with `--check`, until `cargo check` passes | hand |
 | `src/Sts2Ai.GameBridge/EngineExport.cs` | the live combat written out along the schema (sim and mod) | hand |
 | `src/Sts2Ai.Engine/` | P/Invoke, `EngineWorld : ICombatWorld`, the in-process planner; no game references | hand |
@@ -627,11 +627,13 @@ cards, in the pile's own order) and reads only the random streams, the monsters'
 (the same nodes, the same ends in the same order, the same values; plans/2026-11-18-2132-sl-search-rust.md), then the
 C# search deleted (2026-11-19): the beam over turns (`beam.rs`), the solver (`solver.rs`), one turn searched depth
 first (`turn.rs`) with its cycles (`loops.rs`), the actions' order (`order.rs`), the pruning by HP (`bound.rs`), the
-combat net's tokens and inputs (`tokens.rs`) and its endings priced (`leaf.rs`). Each module's head gives its rules and
-their reasons. NoSL's PIMC keeps its C# copies of the cycles (`LoopSearch`), the tokens (`CombatTokens`) and the net
-(`CombatNet`, `FreeDisposal`), so a change to those is made on both sides. The C# side keeps the route, V and the
-crossing of a card prompt on the node's clone. Its tests are the search's (`toy.rs`, `tests.rs`): a small exact combat
-and toy leaves.
+combat net's tokens and inputs (`tokens.rs`) and its endings priced (`leaf.rs`). NoSL's PIMC (`pimc.rs`) followed
+the same way (plans/2026-11-19-0030-nosl-search-rust.md): each world drawn and searched in the engine's threads, its
+walk first and its ends valued after it, a batch of the net at a time, and its C# search deleted (2026-11-19). Each
+module's head gives its rules and their reasons. The C# side keeps the route, V, the merge of PIMC's worlds and the
+crossing of a card prompt on the node's clone; it keeps its own tokens (`CombatTokens`) and net (`CombatNet`,
+`FreeDisposal`) for the training's token server and the macro brain's fights, so a change to those is made on both
+sides. Its tests are the search's (`toy.rs`, `tests.rs`): a small exact combat and toy leaves.
 
 A state of the search is a world standing where the player is asked, with what is read of it once (the observation,
 the two keys, the observation's hash). A plan rooted at a card prompt stands on the node's clone until the player can
@@ -656,6 +658,8 @@ int32_t  sz_plan(uint64_t net, uint64_t world, const uint8_t *asked, size_t len,
                  const int32_t *stop, sz_buf *out);          // the beam, up to C#'s PlanOf.Found; 2 where told to stop
 int32_t  sz_plan_crossed(uint64_t net, sz_cross cross, void *cross_ctx, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
                          void *ctx, int32_t threads, const int32_t *stop, sz_buf *out);   // the same from a card prompt on the clone
+int32_t  sz_pimc(uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx, int32_t nosl,
+                 int32_t threads, sz_buf *out);              // NoSL's worlds drawn from the real combat and searched: each one's lines
 void     sz_sink_put(void *sink, const uint8_t *bytes, size_t len);
 uint64_t sz_solver_new(const uint8_t *history, size_t len, double decay, int32_t batch);
 void     sz_solver_free(uint64_t solver);

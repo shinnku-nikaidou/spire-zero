@@ -19,9 +19,14 @@
 //! Where the search goes depends only on the nodes and the shares, never on what a line is worth, so a world's search
 //! is first walked to its ends and the ends are valued after it: a line found is kept as what it is made of until then
 //! (`Found`), and the best of each state's lines is taken once the values are known, the first of the best as C#'s
-//! `>` takes it. An end the world reaches twice with the same observation and run is valued once: the leaf reads
-//! nothing else, so it is worth the same to the last bit. The cycles a world finds are cashed out as they are found,
-//! their ends valued at once (`Loops`): how far they are repeated hangs on the values.
+//! `>` took it. An end the world reaches twice with the same observation and run is valued once: the leaf reads
+//! nothing else. The ends are valued in the order found, `leaf::BATCH` to an evaluation of the net, which is far cheaper
+//! a state than one each (the user, 2026-11-19: 全做啊). A batch pads every state to its widest, so a value can differ
+//! in its last bits from the one it gets alone (C#'s search asked one state at a time, and this one did too until
+//! then): a decision between two first actions worth the same to about 1e-7 can go the other way. The batches follow
+//! from the world alone, so a decision is still the same on any number of threads. The cycles a world finds are cashed
+//! out as they are found, their ends valued at once, one at a time (`Loops`): how far they are repeated hangs on the
+//! values, and the search's walk on how far they went.
 
 use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
@@ -405,9 +410,10 @@ impl WorldSearch<'_> {
         self.found.len() - 1
     }
 
-    /// The world's ends valued, in the order found: each by itself, as C#'s PimcBrain asks the leaf.
+    /// The world's ends valued, in the order found, `leaf::BATCH` to an evaluation.
     fn valued(&self) -> Result<Vec<LeafOutcome>, String> {
-        self.ends.iter().map(|end| self.leaf.outcome(end)).collect()
+        let ends: Vec<&LeafState> = self.ends.iter().collect();
+        self.leaf.outcomes(&ends)
     }
 
     /// Every line found, with the ends' values: an end is worth its slot's; a state, its best action's line, the first

@@ -224,7 +224,7 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 
     /// <summary>
     /// NoSL's search of a decision in the engine (search/pimc.rs, C#: PimcBrain): <paramref name="worlds"/> worlds drawn
-    /// from the real combat this world is, the k-th from <c>WorldSeed(seed, k)</c>, each searched for the best line
+    /// from the real combat this world is, the k-th from <c>world_seed(seed, k)</c>, each searched for the best line
     /// after each of <paramref name="first"/> with <paramref name="nodesPerFirst"/> nodes, in
     /// <paramref name="threads"/> of the engine's threads, which ask V (<paramref name="value"/>) any number at once;
     /// every state is read in NoSL where <paramref name="nosl"/>. The lines by world, in world order, then by first

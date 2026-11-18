@@ -1142,3 +1142,36 @@ fn an_end_reached_again_is_valued_once() {
     assert_eq!(vec![200.0, 200.0], lines.iter().map(|l| l.value).collect::<Vec<_>>());
     assert_eq!(3, leaf.0.get());
 }
+
+#[test]
+fn copies_in_the_hand_do_not_make_a_cycle() {
+    // The first R comes back once, as Music Box copies the first attack of a turn; three more R in the hand would let
+    // the probe repeat it, but the hand is not back after the second play.
+    let start = Loop::new(Rules { runs_out: 2, copies: 4, ..Rules::new(1_000) }).state();
+    let path = vec![loops::LoopPoint {
+        obs: start.obs.clone(),
+        depth: 0,
+        state: start.copy(),
+    }];
+    let after = played(start.copy(), &[R]);
+    let mut found = loops::Loops::new(1);
+
+    assert!(loops::recurs(&start.obs, &after.obs));
+    assert!(!found.intercept(&path, &after, &[R], &[start.hash]).expect("a probe"));
+    assert!(!found.any);
+}
+
+#[test]
+fn a_state_at_a_prompt_has_no_plays_and_takes_only_its_answers() {
+    let mut world = played(Loop::new(Rules { prompted: Prompted::GivesR, ..Rules::new(50) }).state(), &[POTION]);
+
+    assert!(world.obs.prompt.is_some());
+    assert!(world.legal().is_empty());
+    let (answers, cut) = order::actions(&mut world, 10);
+    assert_eq!(vec![Action::pick(vec![0]), Action::pick(vec![1]), Action::pick(vec![2])], answers);
+    assert!(!cut);
+    // A prompt has to be answered: with no node left, its first answer is still tried.
+    let (answers, cut) = order::actions(&mut world, 0);
+    assert_eq!(vec![Action::pick(vec![0])], answers);
+    assert!(cut);
+}
