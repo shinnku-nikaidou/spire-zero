@@ -1,0 +1,51 @@
+# The NoSL self-play dataset v0g0-nosl-3: more of v0g0-nosl's games, played until a deadline (the user, 2026-11-19
+# 02:50 Taiwan, once v0g0-nosl-2 ran on NoSL's combat search in the engine: 繼續打10小時). The same games, tiers,
+# champion and proportions as v0g0-nosl (a character's runs: A10 half, the Dread mode 15 %, A0-A9 35 %), with far more
+# runs than fit (a character 6,000): v0g0-nosl-2 goes first (launched first, the same priority), this file fills the
+# rest of the ten hours, and the dealer keeps its rows' proportions at the cut. Together with v0g0-nosl and v0g0-nosl-2,
+# NoSL's first data for its own pair v0-nosl-1 + c0-nosl-1. What follows is v0g0-nosl's text.
+#
+# The NoSL self-play dataset v0g0-nosl (plans/2026-11-18-1340-nosl-v0.md, 3.2; the user, 2026-11-18: 24,000 runs):
+# NoSL's first data for its own pair of nets, v0-nosl-1 + c0-nosl-1, played by nosl.json's champion, the pair d2
+# (v-sl-td4-12-1-d2 + c-sl-12-1-d2, v0-nosl-0 on NoSL's line): pimc, 8 worlds of 300 nodes drawn from the real combat.
+# Every event option whose result its button does not show is also played out on the node's clone for V's training
+# (run --event-lines, which box.py gives every NoSL job). The plan's example doubled: a character 4,000 runs, A10 2,000,
+# the Dread mode 600, A0-A9 1,400 (140 each: the low ascensions reach acts 2 and 3, which NoSL at A10 rarely does).
+name = "v0g0-nosl-3"
+deadline = "2026-11-19 04:50 UTC"   # ten hours from the user's word; box.py deadline v0g0-nosl-3 UNTIL moves it
+priority = 0
+seeds = 4900000                     # the ledger's blocks 4900000-5499999, one a character (the FOOL's 5400000-5499999)
+characters = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
+champion = "eval/champions/sl.json" # the file's format asks for it; no SL game here
+nosl_champion = "eval/champions/nosl.json"   # pimc c-sl-12-1-d2 8x300, l0 v-sl-td4-12-1-d2
+workers = 4
+
+# The A10 generations' tiers: a third of each row's runs a tier, a decision drawn evenly with chance epsilon, the
+# others by a softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game in NoSL; its budget is nosl_champion's worlds and nodes.
+[games.nosl]
+env = "nosl"
+auto_win = []
+
+# The Dread mode in NoSL, which the game plays at ascension 10 only.
+[games.nosldread]
+env = "nosl"
+mode = "dread"
+auto_win = []
+
+[[runs]]
+game = "nosl"
+asc = 10
+n = 3000
+
+[[runs]]
+game = "nosldread"
+asc = 10
+n = 900
+
+[[runs]]
+game = "nosl"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [210, 210, 210, 210, 210, 210, 210, 210, 210, 210]
