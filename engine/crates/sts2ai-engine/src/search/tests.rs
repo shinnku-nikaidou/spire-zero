@@ -67,7 +67,7 @@ fn outcome(state: &mut State) -> LeafOutcome {
 
 /// C#: SlPlanner.SearchTurn from the state, with no record of enemy moves.
 fn search(state: &mut State, leaf: &dyn Leaf, nodes: i32, keep: usize, bounds: &Bounds) -> TurnSearch {
-    turn::search(state, &none(), nodes, keep, bounds, leaf).expect("the turn's search")
+    turn::search(state, &none(), nodes, keep, bounds, false, leaf).expect("the turn's search")
 }
 
 /// C#: SlPlanner.Plan, the plan of an unproved loss stopping after `replan` turns.
@@ -322,7 +322,7 @@ fn the_full_beam_takes_the_dives_turns_instead_of_searching_them_again() {
             jobs.iter()
                 .map(|job| {
                     searched.borrow_mut().push(text(&job.path));
-                    turn::search(&mut played(root.copy(), &job.path), &job.history, nodes, keep, &Bounds::new(), &ToyLeaf)
+                    turn::search(&mut played(root.copy(), &job.path), &job.history, nodes, keep, &Bounds::new(), job.crossing, &ToyLeaf)
                 })
                 .collect()
         }),
@@ -559,6 +559,80 @@ fn the_solvers_root_moves_with_the_combat() {
     assert!(there.proved);
     assert_near(best(&off, 24, false), there.value, 9);
     assert_replays(&there, 24, &off, false);
+}
+
+#[test]
+fn the_solvers_root_crosses_a_prompt_at_a_turns_start_to_the_states_it_holds() {
+    // Each turn's start after the first asks for a card to exhaust (Toasty Mittens). Past the turn's end the combat
+    // stands at that prompt, inside the edges to the next turn's starts: the root's turn ends where the player can
+    // play, at the states the solver holds already, and the answer moves the root onto one of them as it is. One batch
+    // is searched first: no win is found in two turns, so no bound has pruned a state below the one the line goes
+    // through.
+    const HP: i32 = 30;
+    let root = || Toy::new(HP, None, false).mittens().state();
+    let searcher = |gone: &[Action]| Replay {
+        root: played(root(), gone),
+        leaf: &ToyLeaf,
+        bounds: true,
+    };
+    let moves = |gone: &[Action]| {
+        let (mut world, mut record) = (root(), Vec::new());
+        for action in gone {
+            world = world.step(action).expect("a legal action");
+            if world.status == Status::InProgress && world.round() != 1 {
+                record = state::witness(&record, &world.obs);
+            }
+        }
+        Arc::new(record)
+    };
+    let mut solver = solver(16);
+    solver.run(&searcher(&[]), 1).expect("a search");
+    let line = result(&solver).line.actions.clone();
+    let end = line.iter().position(|a| a.is_end_turn()).expect("a turn's end") + 1;
+    assert!(matches!(line[end], Action::Pick(_)));
+    let (searched, nodes) = (solver.searched(), solver.nodes());
+
+    let crossed = &line[..end];
+    solver.advance(crossed, moves(crossed), &searcher(crossed)).expect("the root's turn");
+    assert_eq!(searched + 1, solver.searched());
+    let prompt = played(root(), crossed).obs.prompt.clone().expect("the prompt");
+    assert_eq!(order::answers(&prompt, i64::MAX).0.len() as i64, solver.nodes() - nodes, "a node for each answer");
+
+    let answered = &line[..end + 1];
+    solver.advance(&line[end..end + 1], moves(answered), &searcher(answered)).expect("the root's turn");
+    assert_eq!(searched + 1, solver.searched());
+    solver.run(&searcher(answered), i64::MAX).expect("a search");
+    let plan = result(&solver);
+    assert!(plan.proved);
+    let mut world = played(root(), answered);
+    let mut known = HashMap::new();
+    assert_near(answers_too(&mut world, &mut known), plan.value, 9);
+    for step in plan.steps() {
+        world = world.step(&step).expect("a step of the plan");
+    }
+    assert_eq!(plan.end, world.status);
+}
+
+/// `brute_force` with every answer tried where a prompt waits.
+fn answers_too(state: &mut State, known: &mut HashMap<(u64, u64), f64>) -> f64 {
+    if state.status != Status::InProgress {
+        return outcome(state).value;
+    }
+    let key = (state.hash, state.hidden_key);
+    if let Some(&value) = known.get(&key) {
+        return value;
+    }
+    let actions = match &state.obs.prompt {
+        Some(prompt) => order::answers(prompt, i64::MAX).0,
+        None => state.legal(),
+    };
+    let mut best = f64::NEG_INFINITY;
+    for action in actions {
+        let mut after = state.step(&action).expect("a legal action");
+        best = best.max(answers_too(&mut after, known));
+    }
+    known.insert(key, best);
+    best
 }
 
 #[test]

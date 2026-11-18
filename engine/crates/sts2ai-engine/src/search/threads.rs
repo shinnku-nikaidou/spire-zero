@@ -40,7 +40,7 @@ impl Threads<'_> {
     fn job(&self, root: &State, job: &Job, nodes: i32, keep: usize) -> Result<TurnSearch, String> {
         let mut state = start(root, job)?;
         let leaf = self.net.leaf(self.base, self.price);
-        let mut found = turn::search(&mut state, &job.history, nodes, keep, &job.bounds, &leaf)?;
+        let mut found = turn::search(&mut state, &job.history, nodes, keep, &job.bounds, job.crossing, &leaf)?;
         found.start = Some(state);
         Ok(found)
     }

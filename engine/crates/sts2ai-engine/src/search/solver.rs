@@ -21,7 +21,9 @@
 //! the pick is proved: there is no better line under these rules.
 //!
 //! The combat goes on under it (`advance`): the root moves to where it went, the states that can still be reached stay
-//! with all that was found of them, and the rest go. The states live in an arena, by index; what the root no longer
+//! with all that was found of them, and the rest go. Where it went is a turn's start searched already, or a prompt
+//! between a turn's end and the next turn's start, whose answers reach turns' starts the solver holds; elsewhere, the
+//! root's turn is searched to its end again. The states live in an arena, by index; what the root no longer
 //! reaches is let go when the root moves (`start`).
 //!
 //! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
@@ -94,6 +96,16 @@ impl Node {
             dropped: false,
         }
     }
+}
+
+/// Where the combat went from the root (`Solver::reached`).
+enum Reached {
+    /// A turn's start whose turn was searched in full already: the state, which becomes the root as it is.
+    Searched(usize),
+    /// A prompt between a turn's end and the next turn's start: the root's turn ends where the player can play.
+    Crossing,
+    /// Anywhere else: the root's turn is searched to its end.
+    Turn,
 }
 
 /// A state waiting in the queue: the least (-worth, order) first (C#: PriorityQueue by (-Worth, Order)).
@@ -221,7 +233,7 @@ impl Solver {
     /// C#: Run. Searches on for at least `nodes` more actions, or until nothing is left.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         if !self.started {
-            self.start(search, false)?;
+            self.start(search, Reached::Turn)?;
         }
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
         while !self.queue.is_empty() && self.nodes < until {
@@ -249,6 +261,7 @@ impl Solver {
                         path,
                         history: self.nodes_of[n].history.clone(),
                         bounds: self.bounds.clone(),
+                        crossing: false,
                     }
                 })
                 .collect();
@@ -288,12 +301,12 @@ impl Solver {
             return Ok(());
         }
         let turns = self.nodes_of[self.root].turns + end_turns(played);
-        let searched = self.searched_at(played);
+        let reached = self.reached(played);
         self.order += 1;
         let root = Node::new(0, 0.0, turns, moves, 0, self.order, i32::MAX, String::new(), 0);
-        match searched {
+        match reached {
             // The root as a search of its turn would make it, with that turn's search.
-            Some(at) => {
+            Reached::Searched(at) => {
                 let node = &mut self.nodes_of[at];
                 *node = Node {
                     edges: node.edges.take(),
@@ -302,7 +315,7 @@ impl Solver {
                 };
                 self.root = at;
             }
-            None => {
+            Reached::Crossing | Reached::Turn => {
                 self.nodes_of.push(root);
                 self.root = self.nodes_of.len() - 1;
             }
@@ -322,27 +335,46 @@ impl Solver {
                 None
             };
         }
-        self.start(search, searched.is_some())
+        self.start(search, reached)
     }
 
-    /// The state `played` leads to from the root, where it is a turn's start whose turn was searched in full and would be
-    /// searched the same again: reached along the root's edges, each to its state's own world (`exact`), its turn not
-    /// cut, no line or end of it pruned (so the bounds a search now has prune none either), and every state its turn
-    /// reached still kept. Searched again, the root's turn would give these same edges, to these same states.
-    fn searched_at(&self, played: &[Action]) -> Option<usize> {
+    /// Where `played` leads from the root, along the root's edges, each to its state's own world (`exact`).
+    ///
+    /// To a turn's start whose turn was searched in full and would be searched the same again (`Searched`): its turn
+    /// not cut, no line or end of it pruned (so the bounds a search now has prune none either), and every state its
+    /// turn reached still kept. Searched again, the root's turn would give these same edges, to these same states.
+    ///
+    /// Into an edge where only answers to prompts are left of it (`Crossing`): an edge ends where the player can play
+    /// after the turn's end, so the combat stands at a prompt the turn's end or the next turn's start raised (Toasty
+    /// Mittens' exhaust, Tools of the Trade's discard, a curse the Knowledge Demon offers), and the states its answers
+    /// reach are turns' starts the solver holds already, by their keys.
+    fn reached(&self, played: &[Action]) -> Reached {
         let (mut at, mut done) = (self.root, 0);
         while done < played.len() {
-            let edges = self.nodes_of[at].edges.as_ref()?;
-            let edge = edges.iter().find(|e| played[done..].starts_with(&e.actions))?;
-            let &next = self.table.get(&edge.key)?;
+            let Some(edges) = self.nodes_of[at].edges.as_ref() else {
+                return Reached::Turn;
+            };
+            let Some(edge) = edges.iter().find(|e| played[done..].starts_with(&e.actions)) else {
+                let into = edges.iter().any(|e| {
+                    e.actions.len() > played.len() - done
+                        && e.actions.starts_with(&played[done..])
+                        && e.actions[played.len() - done..].iter().all(|a| matches!(a, Action::Pick(_)))
+                });
+                return if into { Reached::Crossing } else { Reached::Turn };
+            };
+            let Some(&next) = self.table.get(&edge.key) else {
+                return Reached::Turn;
+            };
             if self.nodes_of[next].exact != edge.exact {
-                return None;
+                return Reached::Turn;
             }
             (at, done) = (next, done + edge.actions.len());
         }
         let node = &self.nodes_of[at];
-        let edges = node.edges.as_ref()?;
-        (!node.cut && !node.dropped && edges.iter().all(|e| self.table.contains_key(&e.key))).then_some(at)
+        match node.edges.as_ref() {
+            Some(edges) if !node.cut && !node.dropped && edges.iter().all(|e| self.table.contains_key(&e.key)) => Reached::Searched(at),
+            _ => Reached::Turn,
+        }
     }
 
     /// C#: Result, up to the plan C#'s PlanOf.Found makes of it.
@@ -374,9 +406,9 @@ impl Solver {
         })
     }
 
-    /// C#: Start. Searches the root's turn (unless `searched`: the root's turn was searched already, `advance`), then keeps
-    /// the states it reaches, by the table, and lets the rest go.
-    fn start(&mut self, search: &dyn Searcher, searched: bool) -> Result<(), String> {
+    /// C#: Start. Searches the root's turn (unless it was searched already, `advance`), then keeps the states it
+    /// reaches, by the table, and lets the rest go.
+    fn start(&mut self, search: &dyn Searcher, reached: Reached) -> Result<(), String> {
         self.started = true;
         let before = std::mem::take(&mut self.bounds);
         self.best = None;
@@ -385,12 +417,13 @@ impl Solver {
             self.consider(line, from);
         }
         let root = self.root;
-        if !searched {
+        if !matches!(reached, Reached::Searched(_)) {
             let job = Job {
                 path: Vec::new(),
                 history: self.nodes_of[root].history.clone(),
                 bounds: self.bounds.clone(),
                 from: None,
+                crossing: matches!(reached, Reached::Crossing),
             };
             let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
             self.expand(root, found);

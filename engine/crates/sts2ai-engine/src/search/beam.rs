@@ -59,6 +59,8 @@ pub struct Job {
     pub history: Arc<History>,
     pub bounds: Bounds,
     pub from: Option<(usize, State)>,
+    /// The job's state is a prompt between its turn's end and the next turn's start (`turn::search`'s `crossing`).
+    pub crossing: bool,
 }
 
 /// C#: TurnSearcher. Searches one turn from each job's state, in job order, each with `nodes` nodes, keeping `keep`.
@@ -341,6 +343,7 @@ impl Beam<'_> {
                     history: states[i].history.clone(),
                     bounds: self.bounds.clone(),
                     from: self.worlds.nearest(&states[i].actions),
+                    crossing: false,
                 })
                 .collect();
             let replies = self.searcher.search(&jobs, self.nodes_per_state, if dive { usize::MAX } else { keep })?;

@@ -198,6 +198,11 @@ pub struct Toy {
     drawn: i32,
     hand: Vec<(u32, Str)>,
     held: bool,
+    /// Whether each turn's start after the first asks for a card of the hand to exhaust before the player can play,
+    /// as Toasty Mittens does (`Toy::mittens`).
+    mittens: bool,
+    /// The combat waits on that prompt.
+    exhausting: bool,
 }
 
 impl Toy {
@@ -214,9 +219,17 @@ impl Toy {
             drawn: 0,
             hand: Vec::new(),
             held: potion.is_some(),
+            mittens: false,
+            exhausting: false,
         };
         toy.draw();
         toy
+    }
+
+    /// The toy where each turn's start after the first asks for a card of the hand to exhaust first.
+    pub fn mittens(mut self) -> Toy {
+        self.mittens = true;
+        self
     }
 
     /// The search's state at the toy.
@@ -263,6 +276,18 @@ impl ToyWorld for Toy {
         obs.discard = Vec::new();
         obs.potions = vec![if self.held { self.potion } else { None }, None, None];
         obs.enemies = vec![enemy(&start, self.enemy, self.enemy_hp, self.attack())];
+        obs.prompt = self.exhausting.then(|| CardChoice {
+            options: obs.hand.clone(),
+            min: 1,
+            max: 1,
+            context: ChoiceContext {
+                purpose: Str::lit("hand_select"),
+                source: Some(Str::lit("TOASTY_MITTENS")),
+                cancelable: false,
+                in_combat: true,
+                ..ChoiceContext::default()
+            },
+        });
         obs
     }
 
@@ -275,7 +300,7 @@ impl ToyWorld for Toy {
     }
 
     fn legal(&self) -> Vec<Action> {
-        if self.status() != Status::InProgress {
+        if self.status() != Status::InProgress || self.exhausting {
             return Vec::new();
         }
         let mut legal = vec![Action::EndTurn];
@@ -292,7 +317,11 @@ impl ToyWorld for Toy {
     }
 
     fn execute(&mut self, action: &Action) -> Result<(), String> {
-        if !self.legal().contains(action) {
+        let takes = match action {
+            Action::Pick(picks) => self.observe().prompt.as_ref().is_some_and(|p| p.accepts(picks)),
+            other => self.legal().contains(other),
+        };
+        if !takes {
             return Err(format!("{} is not legal", action.text()));
         }
         match action {
@@ -304,6 +333,7 @@ impl ToyWorld for Toy {
                     self.hand.clear();
                 }
                 self.draw();
+                self.exhausting = self.mittens && self.hp > 0;
             }
             Action::Play { card, .. } => {
                 let at = self.hand.iter().position(|c| c.0 == *card).expect("a card in the hand");
@@ -315,7 +345,10 @@ impl ToyWorld for Toy {
                     self.block += 5;
                 }
             }
-            Action::Pick(_) => unreachable!("the toy asks nothing"),
+            Action::Pick(picks) => {
+                self.hand.remove(picks[0] as usize);
+                self.exhausting = false;
+            }
         }
         Ok(())
     }
@@ -620,7 +653,7 @@ impl Searcher for Replay<'_> {
         jobs.iter()
             .map(|job| {
                 let mut state = super::threads::start(&self.root, job)?;
-                let mut found = turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, self.leaf)?;
+                let mut found = turn::search(&mut state, &job.history, nodes, keep, if self.bounds { &job.bounds } else { &none }, job.crossing, self.leaf)?;
                 found.start = Some(state);
                 Ok(found)
             })

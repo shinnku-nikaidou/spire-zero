@@ -4,11 +4,12 @@
 //! Every action from the current state is tried, once per state: the plays where the player is on this turn
 //! (`order.rs`), the answers where a card prompt waits. At the turn's start the nodes are shared over the actions, each
 //! with an even share plus what the ones before it left, so every first action is looked at however many states the
-//! turn has; a prompt that one of them raises shares that action's nodes over its answers the same way. Below, a subtree
-//! spends its share depth first. A line ends with the combat, or where the player can play again after the turn's end: a
-//! prompt the end of the turn or the next turn's start raises is answered first, so the leaf reads a state the combat
-//! net knows. A move back to a state on the path with something gained is a cycle, which would spend every node on its
-//! own repeats: it goes to `Loops` instead of down.
+//! turn has; a prompt that one of them raises shares that action's nodes over its answers the same way. Below, a
+//! subtree spends its share depth first. A line ends with the combat, or where the player can play again after the
+//! turn's end: a prompt the end of the turn or the next turn's start raises is answered first, so the leaf reads a
+//! state the combat net knows. From a root that is such a prompt (`crossing`), the next turn's start is where a line
+//! ends. A move back to a state on the path with something gained is a cycle, which would spend every node on its own
+//! repeats: it goes to `Loops` instead of down.
 //!
 //! The search needs no end's value to go on, so the leaf is asked about a turn's ends together, `CHUNK` at a time; a
 //! state another line already ended at is not asked about again. A turn has had 169 thousand ends (a Regent's second
@@ -90,8 +91,12 @@ pub const CHUNK: usize = 16 * super::leaf::BATCH;
 
 /// C#: SlPlanner.SearchTurn. The rest of the turn from `root`, with `nodes` nodes: the best end of the combat the turn
 /// can reach, if any, and the best `keep` distinct states at the next turn's start. `history` is the record of enemy
-/// moves up to `root`; a line stops at a state below its potions' bound in `bounds`.
-pub fn search(root: &mut State, history: &Arc<History>, nodes: i32, keep: usize, bounds: &Bounds, leaf: &dyn Leaf) -> Result<TurnSearch, String> {
+/// moves up to `root`; a line stops at a state below its potions' bound in `bounds`. Where `crossing`, the root is a
+/// prompt between its turn's end and the next turn's start, and the next turn's start is where its lines end: the
+/// first state where the player can play.
+pub fn search(
+    root: &mut State, history: &Arc<History>, nodes: i32, keep: usize, bounds: &Bounds, crossing: bool, leaf: &dyn Leaf,
+) -> Result<TurnSearch, String> {
     let round = root.round();
     let mut dfs = Dfs {
         leaf,
@@ -114,6 +119,7 @@ pub fn search(root: &mut State, history: &Arc<History>, nodes: i32, keep: usize,
         cut: false,
         loops: Loops::new(round),
         records: Vec::new(),
+        crossing,
     };
     dfs.visit(root, Some(nodes))?;
     dfs.value();
@@ -245,6 +251,8 @@ struct Dfs<'a> {
     /// The records of enemy moves the ends hold, each once: a turn's ends mostly share one (1 to 13 among 6 to 55
     /// thousand ends in the big turns of a Regent run).
     records: Vec<Arc<History>>,
+    /// The root is a prompt between its turn's end and the next turn's start (`search`).
+    crossing: bool,
 }
 
 /// The state reached here, for the leaf (C#: Reached's LeafState): its record of enemy moves goes on from the
@@ -330,7 +338,7 @@ impl Dfs<'_> {
                 self.ends(&mut after)?;
             } else if after.obs.prompt.is_some() {
                 self.visit(&mut after, to)?;
-            } else if action.is_end_turn() || after.round() != self.round {
+            } else if action.is_end_turn() || after.round() != self.round || self.crossing {
                 self.ends(&mut after)?;
             } else if !self.loops.intercept(&self.path, &after, &self.actions, &self.hashes)? {
                 self.visit(&mut after, None)?;
