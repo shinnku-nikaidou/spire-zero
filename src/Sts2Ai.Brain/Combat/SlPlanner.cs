@@ -4,9 +4,9 @@ namespace Sts2Ai.Brain.Combat;
 
 /// <summary>A beam state as a turn's search needs it: the actions from the decision to it, and the record of enemy
 /// moves up to it, for the leaves.</summary>
-/// <param name="LifeBound">The HP plus max HP a line of the turn must still be able to end the combat with, else it
-/// stops there (max's pruning, <see cref="SlSolver.Reach"/>); <see cref="int.MinValue"/>: none.</param>
-public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<EnemyTurns> History, int LifeBound = int.MinValue);
+/// <param name="LifeBounds">By the potions held, the most HP plus max HP a win found ends the combat with: a line of the
+/// turn stops at a state holding those potions that cannot end it with as much (<see cref="LifeBound"/>).</param>
+public sealed record PlanJob(IReadOnlyList<CombatAction> Path, IReadOnlyList<EnemyTurns> History, IReadOnlyDictionary<string, int>? LifeBounds = null);
 
 /// <summary>Searches one turn from each job's state (<see cref="SlPlanner.SearchTurn"/>), in job order, wherever the
 /// world lives (this process, or a worker), each with <paramref name="nodes"/> nodes, keeping
@@ -64,9 +64,10 @@ public sealed class SlRoute(Budget budget)
 /// Each distinct state where the turn ends, after the enemies' turn, is scored by the leaf (<see cref="ICombatLeaf"/>,
 /// which reads the observation alone); the best <see cref="Budget.Beam"/> of all the states' ends, distinct by key, are the next turn's states. A
 /// line that ends the combat is scored by the leaf at its end. The beam stops when no state is left, or after
-/// <see cref="MaxTurns"/> turns. Nothing else prunes it: the leaf prices a win by V on the run the combat leaves, which a
-/// line can still raise past winning now with what the state holds (max HP or gold gained, a card grown), so no state's
-/// value caps its lines'. A greedy dive, a beam of one, goes first.
+/// <see cref="MaxTurns"/> turns. The leaf prices a win by V on the run the combat leaves, which a line can still raise
+/// past winning now with what the state holds (max HP or gold gained, a card grown), so no state's value caps its lines';
+/// one rule written by hand does, for speed: a line stops at a state that cannot end the combat with the HP plus max HP of
+/// a win found with the same potions (<see cref="LifeBound"/>). A greedy dive, a beam of one, goes first.
 /// Every loss is worth the same, so among losing lines the one that died from the turn
 /// start the leaf valued highest is the pick. Among wins worth exactly the same, the one that drinks the fewest potions
 /// is, then the one with the fewest turns ended: a combat no line loses HP in has many, and the dive, which goes first,
@@ -120,7 +121,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         {
             world.Restore(root);
             foreach (var action in job.Path) world.Execute(action);
-            return SearchTurn(world, job.History, nodes, keep, job.LifeBound);
+            return SearchTurn(world, job.History, nodes, keep, job.LifeBounds);
         })]);
         world.Forget(root);
         return plan;
@@ -146,6 +147,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
         private readonly Dictionary<CombatAction, TurnEnd> _byFirst = [];
         private TurnEnd? _best;
         private Rank _bestRank;
+        /// <summary>The pruning's bounds, by the potions the wins found end with (<see cref="LifeBound"/>).</summary>
+        private readonly Dictionary<string, int> _bounds = [];
         private List<TurnEnd> _left = [];
         private int _nodes, _turns;
         private bool _complete;
@@ -179,6 +182,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                             continue;
                         }
                         Note(line);
+                        LifeBound.Note(_bounds, line);
                         var rank = Rank.Of(line, decay, states[i].Value);
                         if (_best == null || rank.Beats(_bestRank)) (_best, _bestRank) = (line, rank);
                     }
@@ -188,7 +192,7 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 // A stable sort: ties stay in the order the states were searched in, so the beam does not depend on timing.
                 foreach (var line in next.OrderByDescending(l => l.Value))
                 {
-                    if (!seen.Add(line.Key)) continue;
+                    if (!seen.Add(line.Key) || LifeBound.Below(_bounds, line.Potions, line.Reach)) continue;
                     if (states.Count == width)
                     {
                         _complete = false;
@@ -216,7 +220,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 if (_searched.TryGetValue(PathKey(states[i].Actions), out var full)) found[i] = Narrow(full, width) with { Nodes = 0 };
                 else asked.Add(i);
             if (asked.Count == 0) return [.. found];
-            var replies = search([.. asked.Select(i => new PlanJob(states[i].Actions, states[i].History))], nodesPerState,
+            var bounds = new Dictionary<string, int>(_bounds);
+            var replies = search([.. asked.Select(i => new PlanJob(states[i].Actions, states[i].History, bounds))], nodesPerState,
                 dive ? int.MaxValue : width);
             for (int k = 0; k < asked.Count; k++)
             {
@@ -317,12 +322,13 @@ public sealed class SlPlanner(ICombatLeaf leaf)
     /// combat the turn can reach, if any, and the best <paramref name="keep"/> distinct states at the next turn's start.
     /// </summary>
     /// <param name="history">The record of enemy moves up to the world's state; each end's goes on from it.</param>
-    /// <param name="lifeBound">A line stops where the combat can no longer end with this much HP plus max HP
-    /// (<see cref="PlanJob.LifeBound"/>).</param>
-    public TurnSearch SearchTurn(ICombatWorld world, IReadOnlyList<EnemyTurns> history, int nodes, int keep, int lifeBound = int.MinValue) =>
-        new TurnDfs(world, leaf, history, nodes, lifeBound).Run(keep);
+    /// <param name="lifeBounds">A line stops at a state below its potions' bound (<see cref="PlanJob.LifeBounds"/>).</param>
+    public TurnSearch SearchTurn(ICombatWorld world, IReadOnlyList<EnemyTurns> history, int nodes, int keep,
+        IReadOnlyDictionary<string, int>? lifeBounds = null) =>
+        new TurnDfs(world, leaf, history, nodes, lifeBounds).Run(keep);
 
-    private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes, int lifeBound)
+    private sealed class TurnDfs(ICombatWorld world, ICombatLeaf leaf, IReadOnlyList<EnemyTurns> history, int nodes,
+        IReadOnlyDictionary<string, int>? lifeBounds)
     {
         private readonly HashSet<(ulong Obs, ulong Hidden)> _seen = [];
         private readonly HashSet<ulong> _keys = [];
@@ -403,7 +409,8 @@ public sealed class SlPlanner(ICombatLeaf leaf)
                 _hashes.Add(hash);
                 var status = world.Status;
                 var after = world.Observe();
-                if (lifeBound > int.MinValue && SlSolver.Reach(after) < lifeBound) _pruned++;
+                if (lifeBounds is { Count: > 0 } && lifeBounds.TryGetValue(LifeBound.Potions(after.Potions), out int bound) && LifeBound.Reach(after) < bound)
+                    _pruned++;
                 else if (status != CombatStatus.InProgress) Ends(status, after);
                 else if (after.Prompt != null) Visit(after, to);
                 else if (action.Kind == CombatActionKind.EndTurn || after.Round != _round) Ends(status, after);
@@ -426,14 +433,15 @@ public sealed class SlPlanner(ICombatLeaf leaf)
 
             /// <summary>What is kept of the line once the leaf has valued it: no observation or run.</summary>
             public Priced Light() => new(Actions, Hashes, State.Status, Key, Bare, State.Obs.Potions, State.History,
-                State.Obs.Player.Hp + State.Obs.Player.MaxHp, SlSolver.Reach(State.Obs));
+                State.Obs.Player.Hp + State.Obs.Player.MaxHp, LifeBound.Reach(State.Obs));
         }
 
         /// <summary>A line the leaf has valued (<see cref="Ended"/>), with the potions <see cref="Thrown"/> compares.</summary>
         private sealed record Priced(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, ulong Key, ulong Bare,
             IReadOnlyList<string?> Potions, IReadOnlyList<EnemyTurns> History, int Life, int Reach)
         {
-            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp, Life, Reach);
+            public TurnEnd Valued(LeafOutcome outcome) => new(Actions, Hashes, Status, outcome.Value, Key, History, outcome.Win, outcome.Hp, Life, Reach,
+                LifeBound.Potions(Potions));
         }
 
         /// <summary>

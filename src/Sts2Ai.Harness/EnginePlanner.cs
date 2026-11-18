@@ -52,7 +52,7 @@ public sealed class EnginePlanner(ICombatLeaf leaf, int threads)
                 Parallel.For(0, jobs.Count, new ParallelOptions { MaxDegreeOfParallelism = threads }, i =>
                 {
                     foreach (var action in jobs[i].Path) worlds[i].Execute(action);
-                    found[i] = _planner.SearchTurn(worlds[i], jobs[i].History, nodes, keep, jobs[i].LifeBound);
+                    found[i] = _planner.SearchTurn(worlds[i], jobs[i].History, nodes, keep, jobs[i].LifeBounds);
                 });
             }
             catch (AggregateException e)

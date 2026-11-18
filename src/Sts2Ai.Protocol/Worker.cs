@@ -23,10 +23,11 @@ public abstract record WorkerRequest(long Id);
 /// <see cref="Keep"/> states at the next turn's start, and the best end of the combat, searched with <see cref="Nodes"/>
 /// nodes. <see cref="History"/> is the record of enemy moves up to the state, for the leaves.
 /// </summary>
-/// <param name="LifeBound">A line stops at a state that cannot end the combat with this much HP plus max HP
-/// (<c>SlSolver.Reach</c>): max's pruning, with its best line's so far; <see cref="int.MinValue"/> prunes nothing.</param>
+/// <param name="LifeBounds">By the potions held (<c>LifeBound.Potions</c>), the most HP plus max HP a win found so far
+/// ends the combat with: a line stops at a state holding those potions that cannot end it with as much
+/// (<c>LifeBound.Reach</c>); none, or no bound for its potions, prunes nothing.</param>
 public sealed record SlTurnRequest(long Id, NodeClone Node, IReadOnlyList<CombatAction> Path, int Nodes, int Keep,
-    IReadOnlyList<EnemyTurns> History, int LifeBound = int.MinValue) : WorkerRequest(Id);
+    IReadOnlyList<EnemyTurns> History, IReadOnlyDictionary<string, int>? LifeBounds = null) : WorkerRequest(Id);
 
 /// <summary>
 /// L0's probes of a decision outside combat in a run: <see cref="Node"/> loaded and replayed
@@ -79,7 +80,7 @@ public sealed record PlannedLine(double Value, IReadOnlyList<CombatAction> Actio
 /// <param name="Ends">The best end of the combat, if the turn can reach one, then the states at the next turn's start, best first.</param>
 /// <param name="Nodes">The actions the search simulated.</param>
 /// <param name="Cut">Whether anything was left out: the nodes ran out, or more states were found than kept.</param>
-/// <param name="Pruned">The lines the search left at a state below its life bound (<see cref="SlTurnRequest.LifeBound"/>).</param>
+/// <param name="Pruned">The lines the search left at a state below its potions' bound (<see cref="SlTurnRequest.LifeBounds"/>).</param>
 public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut, int Pruned = 0);
 
 /// <summary>
@@ -95,9 +96,10 @@ public sealed record TurnSearch(IReadOnlyList<TurnEnd> Ends, int Nodes, bool Cut
 /// <param name="History">The record of enemy moves up to the state.</param>
 /// <param name="Win">The chance to win the combat from the state, as the leaf predicts it: 1 or 0 once the combat is over.</param>
 /// <param name="Hp">The HP held at the end of a win from the state, as the leaf expects it: the HP held once the combat is won.</param>
-/// <param name="Life">The player's HP plus max HP at the state: at a line's end, what max's pruning keeps lines up to
-/// (<see cref="SlTurnRequest.LifeBound"/>).</param>
-/// <param name="Reach">The most HP plus max HP the combat can end with from the state, as max's pruning bounds it
-/// (<c>SlSolver.Reach</c>).</param>
+/// <param name="Life">The player's HP plus max HP at the state: at a win's end, the bound the planner's pruning keeps
+/// lines with the same potions up to (<see cref="SlTurnRequest.LifeBounds"/>).</param>
+/// <param name="Reach">The most HP plus max HP the combat can end with from the state, as the pruning bounds it
+/// (<c>LifeBound.Reach</c>).</param>
+/// <param name="Potions">The potions held at the state, as the pruning tells states apart (<c>LifeBound.Potions</c>).</param>
 public sealed record TurnEnd(IReadOnlyList<CombatAction> Actions, IReadOnlyList<ulong> Hashes, CombatStatus Status, double Value,
-    ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0, int Life = 0, int Reach = 0);
+    ulong Key, IReadOnlyList<EnemyTurns> History, double Win = 0, double Hp = 0, int Life = 0, int Reach = 0, string Potions = "");

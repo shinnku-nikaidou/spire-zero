@@ -569,7 +569,7 @@ public class SlPlannerTests
     {
         var world = new Toy(enemyHp);
         foreach (var action in played.Concat(job.Path)) world.Execute(action);
-        return new SlPlanner(Leaf).SearchTurn(world, job.History, nodes, keep);
+        return new SlPlanner(Leaf).SearchTurn(world, job.History, nodes, keep, job.LifeBounds);
     })];
 
     /// <summary>The record of enemy moves after <paramref name="played"/>, as a decision there has it: each round's
@@ -722,29 +722,40 @@ public class SlPlannerTests
             Hand = [], Draw = [], Discard = [], Exhaust = [], Potions = [null, null, null], Relics = [],
         };
         static RelicView Relic(string id, string? status = null) => new() { Id = id, Status = status };
-        Assert.Equal(110, SlSolver.Reach(bare));
-        Assert.Equal(116, SlSolver.Reach(bare with { Relics = [Relic("BURNING_BLOOD")] }));
+        static CardView Card(string id, bool exhausts = true, int? up = null) => new() { Id = id, Up = up, Keywords = exhausts ? ["Exhaust"] : null };
+        Assert.Equal(110, LifeBound.Reach(bare));
+        Assert.Equal(116, LifeBound.Reach(bare with { Relics = [Relic("BURNING_BLOOD")] }));
         // A heal fills the HP up to the max HP and no further.
-        Assert.Equal(160, SlSolver.Reach(bare with { Player = bare.Player with { Hp = 75 }, Relics = [Relic("BLACK_BLOOD")] }));
-        Assert.Equal(125, SlSolver.Reach(bare with { Potions = ["REGEN_POTION", null, null] }));
-        Assert.Equal(126, SlSolver.Reach(bare with { Potions = ["BLOOD_POTION", null, null] }));
-        Assert.Equal(116, SlSolver.Reach(bare with { Player = bare.Player with { Powers = [new("REGEN_POWER", 3)] } }));
-        Assert.Equal(115, SlSolver.Reach(bare with { Potions = ["FRUIT_JUICE", null, null] }));
-        Assert.Equal(111, SlSolver.Reach(bare with { Relics = [Relic("CHOSEN_CHEESE")] }));
-        // A heal with no amount fixed may fill the HP; a used Lizard Tail heals nothing.
-        Assert.Equal(160, SlSolver.Reach(bare with { Draw = [new CardView { Id = "NOT_YET" }] }));
-        Assert.Equal(160, SlSolver.Reach(bare with { Relics = [Relic("LIZARD_TAIL")] }));
-        Assert.Equal(110, SlSolver.Reach(bare with { Relics = [Relic("LIZARD_TAIL", "Disabled")] }));
-        // Max HP with no amount fixed: no bound.
-        Assert.Equal(int.MaxValue, SlSolver.Reach(bare with { Discard = [new CardView { Id = "FEED" }] }));
+        Assert.Equal(160, LifeBound.Reach(bare with { Player = bare.Player with { Hp = 75 }, Relics = [Relic("BLACK_BLOOD")] }));
+        Assert.Equal(122, LifeBound.Reach(bare with { Relics = [Relic("MEAT_ON_THE_BONE")] }));
+        Assert.Equal(111, LifeBound.Reach(bare with { Relics = [Relic("CHOSEN_CHEESE")] }));
+        Assert.Equal(150, LifeBound.Reach(bare with { Relics = [Relic("LIZARD_TAIL")] }));
+        Assert.Equal(110, LifeBound.Reach(bare with { Relics = [Relic("LIZARD_TAIL", "Disabled")] }));
+        // A potion heals when drunk, and Regen goes on healing after.
+        Assert.Equal(125, LifeBound.Reach(bare with { Potions = ["REGEN_POTION", null, null] }));
+        Assert.Equal(126, LifeBound.Reach(bare with { Potions = ["BLOOD_POTION", null, null] }));
+        Assert.Equal(150, LifeBound.Reach(bare with { Potions = ["AMBERGRIS", null, null] }));
+        Assert.Equal(134, LifeBound.Reach(bare with { Potions = ["FAIRY_IN_A_BOTTLE", null, null] }));
+        Assert.Equal(115, LifeBound.Reach(bare with { Potions = ["FRUIT_JUICE", null, null] }));
+        Assert.Equal(116, LifeBound.Reach(bare with { Player = bare.Player with { Powers = [new("REGEN_POWER", 3)] } }));
+        // A card that heals or gives max HP, in any pile, by its amount while it exhausts; no bound once it does not.
+        Assert.Equal(120, LifeBound.Reach(bare with { Draw = [Card("NOT_YET")] }));
+        Assert.Equal(123, LifeBound.Reach(bare with { Exhaust = [Card("NOT_YET", up: 1)] }));
+        Assert.Equal(113, LifeBound.Reach(bare with { Discard = [Card("FEED")] }));
+        Assert.Equal(int.MaxValue, LifeBound.Reach(bare with { Hand = [Card("NOT_YET", exhausts: false)] }));
+        Assert.Equal(int.MaxValue, LifeBound.Reach(bare with { Hand = [Card("FEED", exhausts: false)] }));
+        // A gain with no amount to count: no bound.
+        Assert.Equal(int.MaxValue, LifeBound.Reach(bare with { Relics = [Relic("DRAGON_FRUIT")] }));
     }
 
     [Fact]
-    public void ATurnsSearchStopsTheLinesThatCannotEndWithTheBound()
+    public void ATurnsSearchStopsTheLinesBelowTheBoundOfTheirPotions()
     {
-        // The toy starts at 20 of 20 and heals nothing: with a bound of 40, only the ends that took no damage stay.
+        // The toy starts at 20 of 20 and heals nothing: with a bound of 40 for no potions, only the ends that took no
+        // damage stay.
+        var bounds = new Dictionary<string, int> { [""] = 40 };
         var all = new SlPlanner(Leaf).SearchTurn(new Toy(), [], SlPlanner.Unlimited, int.MaxValue);
-        var bound = new SlPlanner(Leaf).SearchTurn(new Toy(), [], SlPlanner.Unlimited, int.MaxValue, lifeBound: 40);
+        var bound = new SlPlanner(Leaf).SearchTurn(new Toy(), [], SlPlanner.Unlimited, int.MaxValue, bounds);
 
         Assert.Equal(0, all.Pruned);
         Assert.True(bound.Pruned > 0);
@@ -753,12 +764,17 @@ public class SlPlannerTests
         Assert.Contains(all.Ends, e => e.Reach < 40);
         Assert.All(all.Ends, e => Assert.Equal(e.Life, e.Reach));
 
-        // The solver's bound is its best win's HP plus max HP, and its pick still the best there is.
+        // A state that still holds a potion is held to its own potions' bound, none here.
+        var held = new SlPlanner(Leaf).SearchTurn(new Toy(potion: "SWIFT_POTION"), [], SlPlanner.Unlimited, int.MaxValue, bounds);
+        Assert.Contains(held.Ends, e => e.Potions == "SWIFT_POTION" && e.Reach < 40);
+        Assert.All(held.Ends, e => Assert.True(e.Potions != "" || e.Reach >= 40));
+
+        // The solver's bound is its wins' HP plus max HP by their potions, and its pick still the best there is.
         var solver = new SlSolver([]);
         solver.Run(ToySearcher([]), long.MaxValue);
         var plan = solver.Result(1);
         Assert.True(plan.Proved);
-        Assert.Equal(plan.Line!.Life, solver.Bound);
+        Assert.Equal(plan.Line!.Life, solver.Bounds[plan.Line.Potions]);
         Assert.Equal(Best([]), plan.Value, 9);
     }
 }

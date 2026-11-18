@@ -92,6 +92,6 @@ internal static class Serve
     {
         using var world = new NodeWorld(pump, r.Node);
         foreach (var action in r.Path) world.Execute(action);
-        return planner.SearchTurn(world, r.History, r.Nodes, r.Keep, r.LifeBound);
+        return planner.SearchTurn(world, r.History, r.Nodes, r.Keep, r.LifeBounds);
     }
 }
