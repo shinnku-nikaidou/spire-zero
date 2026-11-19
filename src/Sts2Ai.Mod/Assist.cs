@@ -248,7 +248,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             (_run, _champion, _failure, _next, _sentNode) = (id, null, null, 0, -1);
             link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName, settings.TurnDecay));
-            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName ?? "the brain's"}, turn decay {(settings.TurnDecay ? "on" : "off")}");
+            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName}, turn decay {(settings.TurnDecay ? "on" : "off")}");
         }
         // HasRunEnded, not IsGameOver: a prevented death (Fairy in a Bottle, Lizard Tail) sits at 0 HP until it heals.
         bool over = RunManager.Instance.HasRunEnded;

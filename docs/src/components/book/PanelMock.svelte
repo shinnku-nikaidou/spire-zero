@@ -29,7 +29,6 @@
     'Your move': ['等你操作', '等你操作'],
     'Auto on': ['自动中', '自動中'],
     Effort: ['思考深度', '思考深度'],
-    Brain: ['大脑默认', '大腦預設'],
     Low: ['低', '低'],
     Medium: ['中', '中'],
     High: ['高', '高'],
@@ -162,7 +161,7 @@
   const bars = $derived(considered === 'bars' && !routes);
   const types = $derived(routes && a ? [...new Set(a.options.flatMap((o) => o.rooms ?? []))] : []);
 
-  const EFFORTS = ['Brain', 'Low', 'Medium', 'High', 'Max'];
+  const EFFORTS = ['Low', 'Medium', 'High', 'Max'];
 </script>
 
 <div class="vfig">
@@ -226,7 +225,7 @@
         </div>
         <div class="row" style="gap: 8px;">
           <span class="muted" style="font-size: 11px;">{T('Effort')}</span>
-          <span class="toggles">{#each EFFORTS as e (e)}<span class:on={e === 'Brain'}>{T(e)}</span>{/each}</span>
+          <span class="toggles">{#each EFFORTS as e (e)}<span class:on={e === 'Medium'}>{T(e)}</span>{/each}</span>
         </div>
         {#if auto}
           <div class="row" style="gap: 8px;">

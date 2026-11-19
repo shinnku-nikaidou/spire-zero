@@ -90,7 +90,6 @@ internal static class L10n
         ["Medium"] = ["Moyen", "Medio", "中", "中", "普通"],
         ["Fast"] = ["Rapide", "Rápido", "快", "快", "速い"],
         ["Effort"] = ["Réflexion", "Esfuerzo", "思考深度", "思考深度", "思考の深さ"],
-        ["Brain"] = ["Cerveau", "Cerebro", "大脑默认", "大腦預設", "既定"],
         ["Low"] = ["Bas", "Bajo", "低", "低", "低"],
         ["High"] = ["Haut", "Alto", "高", "高", "高"],
         ["Max"] = ["Max", "Máx", "最高", "最高", "最大"],

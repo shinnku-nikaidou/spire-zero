@@ -172,17 +172,17 @@ internal sealed class Panel
         _toolbar.Visible = false;
         column.AddChild(_toolbar);
 
-        // How hard the SL planner searches: the brain's own effort or a preset, switched in the run.
+        // How hard the SL planner searches: one of its presets, switched in the run.
         var effort = Row(8);
         effort.AddChild(_effortLabel = Text("", 11, Muted));
         var efforts = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
-        var five = Row(2);
-        efforts.AddChild(five);
+        var presets = Row(2);
+        efforts.AddChild(presets);
         foreach (var value in Enum.GetValues<SearchEffort>())
         {
             var button = Toggle("");
             button.Pressed += () => Settings.Set(Settings.Current with { Effort = value });
-            five.AddChild(button);
+            presets.AddChild(button);
             _efforts.Add((button, value));
         }
         effort.AddChild(efforts);

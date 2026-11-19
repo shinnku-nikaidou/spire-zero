@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Sts2Ai.Protocol;
 
@@ -13,8 +14,8 @@ internal enum RouteMode { Off, Next, Whole }
 /// <summary>How long auto-play waits before each of the AI's actions, so the player can follow it.</summary>
 internal enum AutoSpeed { Slow, Medium, Fast }
 
-/// <summary>How hard the SL planner searches each fight: the brain's own effort, or one of its presets.</summary>
-internal enum SearchEffort { Brain, Low, Medium, High, Max }
+/// <summary>How hard the SL planner searches each fight: one of its presets.</summary>
+internal enum SearchEffort { Low, Medium, High, Max }
 
 /// <summary>
 /// The player's choices for the mod, set in the game's settings screen (<see cref="SettingsTab"/>) and some in the
@@ -45,11 +46,11 @@ internal sealed record Settings(
     float PanelY = 132f,
     AutoSpeed Speed = AutoSpeed.Medium,
     bool StopAtElites = true,
-    SearchEffort Effort = SearchEffort.Brain,
+    SearchEffort Effort = SearchEffort.Medium,
     bool TurnDecay = true)
 {
-    /// <summary>The effort as hello names it; null for the brain's own.</summary>
-    public string? EffortName => Effort == SearchEffort.Brain ? null : Effort.ToString().ToLowerInvariant();
+    /// <summary>The effort as hello names it.</summary>
+    public string EffortName => Effort.ToString().ToLowerInvariant();
 
     /// <summary>The wait before each auto-play action at <see cref="Speed"/>, in milliseconds.</summary>
     public int Delay => Speed switch { AutoSpeed.Slow => 1500, AutoSpeed.Medium => 800, _ => 200 };
@@ -82,12 +83,24 @@ internal sealed record Settings(
         }
     }
 
+    /// <summary>
+    /// Settings from their JSON. An effort the mod no longer offers (an older mod's "Brain") is left out, so the effort
+    /// takes its default and the player's other settings stay.
+    /// </summary>
+    private static Settings Parse(string json)
+    {
+        if (JsonNode.Parse(json) is not JsonObject node) return new();
+        if (node["Effort"] is JsonValue effort && effort.TryGetValue(out string? name) && !Enum.TryParse<SearchEffort>(name, ignoreCase: true, out _))
+            node.Remove("Effort");
+        return node.Deserialize<Settings>(Json) ?? new();
+    }
+
     /// <summary>The kept settings; the defaults until the player changes one.</summary>
     private static Settings Read()
     {
         try
         {
-            return File.Exists(Kept) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(Kept), Json) ?? new() : new();
+            return File.Exists(Kept) ? Parse(File.ReadAllText(Kept)) : new();
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
