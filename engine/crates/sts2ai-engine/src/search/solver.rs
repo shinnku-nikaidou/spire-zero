@@ -16,9 +16,11 @@
 //!
 //! The pick is the beam's (`beam.rs`): the best end of the combat by worth, wins worth the same by fewer potions drunk and
 //! then fewer turns, and losses, all 0, by the value of the turn start they died from. Until a line ends the combat, the
-//! line to the state valued highest. A line another search found (the beam's, `seed`) is a candidate too, so the
-//! solver's pick is never worse than it. When no state is left and no turn's search was cut (a cycle, `loops.rs`, is),
-//! the pick is proved: there is no better line under these rules.
+//! line to the state valued highest, waiting or paused. A line another search found (the beam's, `seed`) is a candidate
+//! too, and so is the pick the combat went on along (`playing`), each as far as the combat went its way: a line found
+//! from the root ends the combat as it did, so the pick is never worse than either, whatever the states that held it
+//! became. When no state is left and no turn's search was cut (a cycle, `loops.rs`, is), the pick is proved: there is no
+//! better line under these rules.
 //!
 //! The combat goes on under it (`advance`): the root moves to where it went, the states that can still be reached stay
 //! with all that was found of them, and the rest go. Where it went is a turn's start searched already, or a prompt
@@ -32,11 +34,13 @@
 //!
 //! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
 //! of a win found with the same potions is dropped, in a turn's search as soon as a line reaches it, and among the states
-//! waiting when a win raises its potions' bound. The states searched at a time (`batch`) are a turn's search each, run
-//! apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs. A run shares the nodes
-//! it is asked for over each batch's states (`PIECE` at the least): a turn with more pauses there (`turn::Turn`) and
-//! goes on in the next batch before any state waiting starts, so a run ends near its nodes however big a turn is (one
-//! batch of whole turns ran 30 to 100 thousand nodes on a run of 16,384 in big Regent turns).
+//! waiting when a win raises its potions' bound. Where a bound falls as the root moves (the win that made it is out of
+//! reach), a turn it pruned is to be searched again (`again`): until it is, all it found stays, its ends and the states
+//! below it, and its new search takes the place of the old. The states searched at a time (`batch`) are a turn's search
+//! each, run apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs. A run shares
+//! the nodes it is asked for over each batch's states (`PIECE` at the least): a turn with more pauses there
+//! (`turn::Turn`) and goes on in the next batch before any state waiting starts, so a run ends near its nodes however
+//! big a turn is (one batch of whole turns ran 30 to 100 thousand nodes on a run of 16,384 in big Regent turns).
 //!
 //! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
@@ -79,6 +83,9 @@ struct Node {
     over: Option<TurnEnd>,
     cut: bool,
     dropped: bool,
+    /// Its turn is to be searched again, a bound it was searched under having fallen (`Solver::settle`): it waits as a
+    /// state not searched does, and keeps what it found until its new search takes its place (`Solver::expand`).
+    again: bool,
     /// Its turn's search, paused where its piece of a run ended (`Solver::run`).
     turn: Option<Box<Turn>>,
     /// What its turn's search went through, where it was big enough to keep (`GRAPH_NODES`).
@@ -105,6 +112,7 @@ impl Node {
             over: None,
             cut: false,
             dropped: false,
+            again: false,
             turn: None,
             graph: None,
         }
@@ -473,7 +481,9 @@ impl Solver {
         }
         let node = &self.nodes_of[at];
         match node.edges.as_ref() {
-            Some(edges) if !node.cut && !node.dropped && edges.iter().all(|e| self.table.contains_key(&e.key)) => Reached::Searched(at),
+            Some(edges) if !node.cut && !node.dropped && !node.again && edges.iter().all(|e| self.table.contains_key(&e.key)) => {
+                Reached::Searched(at)
+            }
             _ => Reached::Turn,
         }
     }
@@ -496,7 +506,7 @@ impl Solver {
 
     /// The pick so far, with the value of the turn start a losing pick died from: the line played while the root's turn
     /// is searched (before it begins, the seed's), else the best end of the combat found, else the line to the state
-    /// valued highest.
+    /// valued highest of those waiting, in the queue or paused (`going`).
     fn pick(&self) -> Option<(TurnEnd, f64)> {
         if !self.started {
             return self.seed.clone();
@@ -507,7 +517,20 @@ impl Solver {
         if let Some((line, rank)) = &self.best {
             return Some((line.clone(), rank.from));
         }
-        let top = self.queue.peek()?;
+        let top = self
+            .going
+            .iter()
+            .map(|&n| Waiting {
+                worth: self.worth(n),
+                order: self.nodes_of[n].order,
+                node: n,
+            })
+            .chain(self.queue.peek().map(|w| Waiting {
+                worth: w.worth,
+                order: w.order,
+                node: w.node,
+            }))
+            .max()?;
         let (actions, hashes) = self.path(top.node);
         let node = &self.nodes_of[top.node];
         let mut pick = beam::start(node.history.clone());
@@ -579,8 +602,8 @@ impl Solver {
     }
 
     /// Once the root's turn is searched: keeps the states the root reaches, by the table, and lets the rest go; the
-    /// pick's candidates and the bounds made again of the ends they hold, and where a bound fell from `before`, a turn
-    /// it pruned searched again.
+    /// pick's candidates and the bounds made again of the ends they hold and of the pick played along, and where a bound
+    /// fell from `before`, a turn it pruned to be searched again.
     fn settle(&mut self, before: Bounds) {
         let root = self.root;
         // What the root reaches, each state on its own line or one to the same world, in the order reached.
@@ -656,6 +679,11 @@ impl Solver {
         self.by_first = ByFirst::default();
         self.bounds = Bounds::new();
         self.consider_seed();
+        if let Some((line, from)) = self.playing.clone()
+            && line.status != Status::InProgress
+        {
+            self.consider(line, from);
+        }
         for n in 0..count {
             if let Some(over) = self.nodes_of[n].over.clone() {
                 let line = self.line(n, &over);
@@ -663,18 +691,13 @@ impl Solver {
                 self.consider(line, from);
             }
         }
-        // Where a bound fell or went, a turn the pruning took lines or ends from is searched again, a paused one from
-        // its start.
+        // Where a bound fell or went, a turn the pruning took lines or ends from is to be searched again, keeping what
+        // it found until then; a paused one goes on from its start.
         if before.iter().any(|(potions, &was)| self.bounds.get(potions).is_none_or(|&now| now < was)) {
             for n in 1..count {
                 let node = &self.nodes_of[n];
-                let again = node.edges.as_ref().is_some_and(|edges| node.dropped || edges.iter().any(|e| !self.table.contains_key(&e.key)));
-                if again {
-                    let node = &mut self.nodes_of[n];
-                    node.edges = None;
-                    node.over = None;
-                    node.cut = false;
-                    node.dropped = false;
+                if node.edges.as_ref().is_some_and(|edges| node.dropped || edges.iter().any(|e| !self.table.contains_key(&e.key))) {
+                    self.nodes_of[n].again = true;
                 }
             }
             let nodes = &mut self.nodes_of;
@@ -687,10 +710,12 @@ impl Solver {
             });
         }
         for n in 0..count {
-            if self.nodes_of[n].cut {
+            // A turn to be searched again is cut or not as its new search is.
+            let node = &self.nodes_of[n];
+            if node.cut && !node.again {
                 self.cuts += 1;
             }
-            if self.nodes_of[n].edges.is_none() && self.nodes_of[n].turn.is_none() {
+            if (node.edges.is_none() || node.again) && node.turn.is_none() {
                 let waiting = Waiting {
                     worth: self.worth(n),
                     order: self.nodes_of[n].order,
@@ -702,12 +727,14 @@ impl Solver {
         self.purge();
     }
 
-    /// C#: Expand. A state's turn, as searched.
+    /// C#: Expand. A state's turn, as searched; searched again (`Node::again`), in the place of what it found before.
     fn expand(&mut self, n: usize, found: TurnSearch) {
         self.nodes += found.nodes as i64;
         self.searched += 1;
         {
             let node = &mut self.nodes_of[n];
+            node.again = false;
+            node.over = None;
             node.edges = Some(Vec::new());
             node.cut = found.cut;
             node.dropped = found.pruned > 0;

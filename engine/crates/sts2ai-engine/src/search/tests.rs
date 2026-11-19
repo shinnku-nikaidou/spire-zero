@@ -1021,6 +1021,78 @@ fn the_solvers_seed_stays_only_where_the_combat_went_its_way() {
     assert_replays(&plan, 24, &off, false);
 }
 
+#[test]
+fn the_solvers_pick_with_every_waiting_turn_paused_is_the_state_valued_highest() {
+    // The root's turn searched, then every state it reaches in one batch, each paused after a node: none waits in the
+    // queue and nothing ends the combat yet, and the pick is still the line to the state valued highest.
+    const HP: i32 = 500;
+    let mut solver = solver(1000).with_piece(1);
+    solver.run(&toy_searcher(&[], HP, false), 1).expect("the root's turn");
+    let before = result(&solver);
+    let left = solver.left();
+    solver.run(&toy_searcher(&[], HP, false), 1).expect("a batch");
+    assert_eq!(left, solver.left(), "every state paused");
+    let plan = picked(solver.result().expect("a pick with every turn paused"), 1);
+
+    assert_eq!(Status::InProgress, plan.end);
+    assert_eq!(before.line.actions, plan.line.actions);
+    assert_replays(&plan, HP, &[], false);
+}
+
+#[test]
+fn the_solvers_root_moved_along_a_won_line_keeps_it() {
+    // Searched in full, then the combat goes another way than the pick: the wins the pick's way are out of reach, and
+    // where the bound they made falls, the turns it pruned are to be searched again. Along the won line picked there,
+    // an action at a time with only the root's turn searched again at each, the pick stays that line, as good. (On
+    // this toy, the potion drunk first, the win was lost two actions on: the turns to be searched again had let go of
+    // what they found, and the pick was made again of what the states held.)
+    let root = || Toy::new(38, Some("P"), true).mittens().state();
+    let searcher = |gone: &[Action]| Replay {
+        root: played(root(), gone),
+        leaf: &ToyLeaf,
+        bounds: true,
+    };
+    let moves = |gone: &[Action]| {
+        let (mut world, mut record) = (root(), Vec::new());
+        for action in gone {
+            world = world.step(action).expect("a legal action");
+            if world.status == Status::InProgress && world.round() != 1 {
+                record = state::witness(&record, &world.obs);
+            }
+        }
+        Arc::new(record)
+    };
+    let mut full = solver(16);
+    full.run(&searcher(&[]), i64::MAX).expect("a search");
+    let first = result(&full).line.actions[0].clone();
+    let mut walked = 0;
+    for off in root().legal().into_iter().filter(|a| *a != first) {
+        let mut solver = solver(16);
+        solver.run(&searcher(&[]), i64::MAX).expect("a search");
+        let mut gone = vec![off];
+        solver.advance(&gone, moves(&gone), &searcher(&gone)).expect("the root's turn");
+        solver.run(&searcher(&gone), 1).expect("the root's turn");
+        let there = result(&solver);
+        if there.end != Status::Won {
+            continue;
+        }
+        let line = there.line.actions.clone();
+        for (i, step) in line[..line.len() - 1].iter().enumerate() {
+            gone.push(step.clone());
+            solver.advance(std::slice::from_ref(step), moves(&gone), &searcher(&gone)).expect("the root's turn");
+            solver.run(&searcher(&gone), 1).expect("the root's turn");
+            let now = result(&solver);
+            assert_eq!(Status::Won, now.end, "after {}", text(&gone));
+            assert!(now.value >= there.value - 1e-9, "after {}: {} of {}", text(&gone), now.value, there.value);
+            if now.value <= there.value + 1e-9 {
+                assert_eq!(line[i + 1..].to_vec(), now.line.actions, "after {}", text(&gone));
+            }
+            walked += 1;
+        }
+    }
+    assert!(walked > 0, "a won line off the pick");
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // The bound (C#: SlPlannerTests' LifeBound tests)
 // ---------------------------------------------------------------------------------------------------------------------
