@@ -406,9 +406,11 @@ public class SlRouteTests
 
     /// <summary>Plays the toy's combat to its end by the solver's route (<see cref="SolverRoute"/>); at each decision,
     /// <paramref name="hand"/> may take another action than the route's. With <paramref name="background"/>, the solver
-    /// searches between decisions too, and <paramref name="between"/> runs after each.</summary>
+    /// searches between decisions too, and <paramref name="between"/> runs after each. Each search of the solvers waits
+    /// <paramref name="slow"/> milliseconds first.</summary>
     private static (List<CombatAction> Played, SolverRoute Route) PlayBySolver(Budget budget, Func<int, CombatAction, CombatAction>? hand = null,
-        bool background = false, Action<int>? between = null, Action<int, CombatDecisionResult>? early = null)
+        bool background = false, Action<int>? between = null, Action<int, CombatDecisionResult>? early = null,
+        Action<int, CombatDecisionResult>? after = null, int slow = 0)
     {
         var route = new SolverRoute(budget, background);
         var world = new Toy();
@@ -417,8 +419,9 @@ public class SlRouteTests
         {
             var at = played.ToList();
             int decision = d;
-            var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => ToyTaken(at),
-                () => throw new InvalidOperationException("the toy is always taken in"), early == null ? null : r => early(decision, r)).First;
+            var answer = route.Decide(world.Observe(), world.Legal(), Moves(played), () => ToyTaken(at, slow),
+                () => throw new InvalidOperationException("the toy is always taken in"), early == null ? null : r => early(decision, r),
+                after: after == null ? null : r => after(decision, r)).First;
             var taken = hand?.Invoke(d, answer) ?? answer;
             world.Execute(taken);
             played.Add(taken);
@@ -528,5 +531,40 @@ public class SlRouteTests
         using var moved = new CancellationTokenSource();
         moved.Cancel();
         Assert.True(Decide(moved.Token).Nodes < Decide(CancellationToken.None).Nodes);
+    }
+
+    [Fact]
+    public void TheSolverInTheBackgroundTellsThePlanAfterItsAnswerUntilTheNextDecision()
+    {
+        // One node a decision, a slow search, and time after the first answer: the solver searches on from where it leads
+        // to the end, and the answer is told again as the plan after its step changes, the last time proved, with the best
+        // line after that step. The next decision's pick so far is that plan, and nothing more of the first answer is told
+        // once it begins. None without the background.
+        var budget = new Budget(NodesPerWorld: 10, Beam: 1, Solve: 1);
+        var told = new List<(string Kind, int Decision, CombatDecisionResult Pick)>();
+        var (played, _) = PlayBySolver(budget, background: true, between: d =>
+        {
+            if (d == 0) Thread.Sleep(3000);
+        }, early: (d, r) =>
+        {
+            lock (told) told.Add(("early", d, r));
+        }, after: (d, r) =>
+        {
+            lock (told) told.Add(("after", d, r));
+        }, slow: 20);
+        var first = told.Where(t => t is ("after", 0, _)).Select(t => t.Pick).ToList();
+        Assert.NotEmpty(first);
+        Assert.All(first, p => Assert.Equal(played[0], p.First));
+        var best = BestLine([played[0]]);
+        Assert.NotEqual(Greedy([played[0]]), best);
+        Assert.True(first[^1].Proved);
+        Assert.Equal(best, first[^1].Plan);
+        var next = told.FindIndex(t => t is ("early", 1, _));
+        Assert.Equal(best, [told[next].Pick.First, .. told[next].Pick.Plan]);
+        Assert.DoesNotContain(told.Skip(next), t => t is ("after", 0, _));
+
+        var none = new List<int>();
+        PlayBySolver(budget, after: (d, _) => none.Add(d), slow: 20);
+        Assert.Empty(none);
     }
 }

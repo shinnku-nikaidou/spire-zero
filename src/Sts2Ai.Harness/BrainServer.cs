@@ -19,7 +19,9 @@ namespace Sts2Ai.Harness;
 ///
 /// A brain that searches on before it answers (max's solver in the background) sends its pick so far first
 /// (<see cref="Recommendation.Searching"/>), and the host's Cancel of the decision it is on makes it answer at once:
-/// messages are read on a thread of their own, and handled in order as before.
+/// messages are read on a thread of their own, and handled in order as before. One that searches on after it answers
+/// sends the plan after the answer each time it changes (<see cref="Recommendation.After"/>), from its searching thread,
+/// after the answer: every message goes out whole, one at a time.
 /// </summary>
 public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
     Action<WireMessage>? received = null, Action<Dispatcher>? answered = null)
@@ -44,6 +46,11 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
     {
         var inbox = new BlockingCollection<WireMessage>();
         var gate = new object();
+        var sending = new object();
+        void Send(WireMessage message)
+        {
+            lock (sending) wire.Send(message);
+        }
         (long Id, CancellationTokenSource Hurry)? deciding = null;
         Exception? lost = null;
         var reader = new Thread(() =>
@@ -86,11 +93,11 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     try
                     {
                         (run, var shown) = harness(next);
-                        wire.Send(new Ready(run.Champion, shown));
+                        Send(new Ready(run.Champion, shown));
                     }
                     catch (Exception e)
                     {
-                        wire.Send(new WireError(Describe(e)));
+                        Send(new WireError(Describe(e)));
                     }
                     break;
                 case DecisionRequest request:
@@ -104,14 +111,28 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                             if (request.DecisionId <= last) throw new InvalidDataException($"decision {request.DecisionId} after decision {last}");
                             last = request.DecisionId;
                             run.Steps(request.Trace);
-                            var (recommendation, state) = Answer(run, request, wire.Send, hurry.Token);
+                            // The plan after the answer goes out after it: the last one told before it, then each one told.
+                            bool sent = false;
+                            Recommendation? held = null;
+                            void Later(Recommendation later)
+                            {
+                                lock (sending)
+                                    if (sent) wire.Send(later);
+                                    else held = later;
+                            }
+                            var (recommendation, state) = Answer(run, request, Send, hurry.Token, Later);
                             if (state is { } given) states[request.DecisionId] = given;
-                            wire.Send(recommendation);
+                            lock (sending)
+                            {
+                                wire.Send(recommendation);
+                                sent = true;
+                                if (held != null) wire.Send(held);
+                            }
                             answered?.Invoke(run);
                         }
                         catch (Exception e)
                         {
-                            wire.Send(new WireError(Describe(e)));
+                            Send(new WireError(Describe(e)));
                         }
                         finally
                         {
@@ -143,7 +164,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                 case Executed or Cancel:
                     break;
                 default:
-                    wire.Send(new WireError($"unexpected {message.GetType().Name}"));
+                    Send(new WireError($"unexpected {message.GetType().Name}"));
                     break;
             }
         }
@@ -154,8 +175,10 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
     /// <returns>The answer, and the state it was given at, if the run keeps one (<see cref="MacroAnswer.State"/>).</returns>
     /// <param name="send">Sends the pick so far of a combat brain that searches on (<see cref="CombatDecision.Early"/>).</param>
     /// <param name="hurry">Cancelled when the host cancels the decision (<see cref="CombatDecision.Hurry"/>).</param>
+    /// <param name="later">Sends the answer again with each plan after it of a combat brain that searches on after it
+    /// answers (<see cref="CombatDecision.After"/>).</param>
     private static (Recommendation Answer, ulong? State) Answer(Dispatcher harness, DecisionRequest request, Action<Recommendation> send,
-        CancellationToken hurry)
+        CancellationToken hurry, Action<Recommendation> later)
     {
         var obs = request.Obs;
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
@@ -169,13 +192,20 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             send(new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, plan ? note.Plan : null, note.Candidates, true, note.Nodes,
                 note.Proved));
         }
+        void After(CombatDecisionResult result, string action, bool plan)
+        {
+            var note = harness.Note(result);
+            later(new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, plan ? note.Plan : null, note.Candidates, Nodes: note.Nodes,
+                Proved: note.Proved, After: true));
+        }
         var (action, note, state) = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs,
-                export, r => Early(r, r.First.ToString(), plan: true), hurry))),
+                export, r => Early(r, r.First.ToString(), plan: true), hurry, r => After(r, r.First.ToString(), plan: true)))),
             // A card prompt's plan goes on with plays of the combat, which the prompt's screen has no cards to name.
             (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs,
-                early: r => Early(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false), hurry: hurry))),
+                early: r => Early(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false), hurry: hurry,
+                after: r => After(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false)))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };

@@ -35,7 +35,11 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CombatObserva
 /// (<see cref="CombatDecision.Early"/>), at once and before any search: the rest of the plan given at the last answer
 /// while the combat goes its way, the beam's plan where a solver begins; then again each time the solver's pick changes
 /// (the user, 2026-11-18: 「ai得能及時給出來怎麼走，並且同時在搜索更好的」). A host that moved on from the decision
-/// (<see cref="CombatDecision.Hurry"/>) gets the pick at once.
+/// (<see cref="CombatDecision.Hurry"/>) gets the pick at once. After the answer, while the solver searches on from where
+/// it leads, the host is told the answer again each time the plan after its action changes, a better line found or the
+/// pick there proved (<see cref="CombatDecision.After"/>), until the next decision (the user, 2026-11-19, of the panel
+/// showing the answer's plan unchanged while the solver had found a better one: 「肯定要更新啊」); the plan told last is
+/// then the line the combat goes along from that decision.
 /// </summary>
 public sealed class SolverRoute(Budget budget, bool background = false)
 {
@@ -51,6 +55,15 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// <summary>The pick so far the host was last told at this decision, as it shows it (<see cref="Shown"/>).</summary>
     private string? _told;
 
+    // Under _afterLock: the answer whose plan after it the host is told (a token of its own, null when none), the answer
+    // as the host was last told it (Shown), and where it was told again, the whole line from that decision and how many of
+    // its steps the plan told held.
+    private readonly object _afterLock = new();
+    private object? _afterFor;
+    private string? _afterShown;
+    private TurnEnd? _afterLine;
+    private int _afterGiven;
+
     /// <summary>How many solvers the route began: one a combat while the combat goes the picks' way.</summary>
     public int Begun { get; private set; }
 
@@ -59,9 +72,13 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// <param name="beam">The beam's decision, where no solver can begin.</param>
     /// <param name="early">In the background, told the pick so far before the decision's search.</param>
     /// <param name="hurry">In the background, cancelled when the host moved on: the decision's search ends there.</param>
+    /// <param name="after">In the background, told the answer again with each plan after its action the search shows
+    /// otherwise, until the next decision.</param>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, IReadOnlyList<EnemyTurns> history,
-        Func<TakenCombat?> start, Func<CombatDecisionResult> beam, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
+        Func<TakenCombat?> start, Func<CombatDecisionResult> beam, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default,
+        Action<CombatDecisionResult>? after = null)
     {
+        Quiet();
         ulong hash = ProtocolJson.Hash(observation);
         // Past the line's last step the combat goes on where it ends; the root's search there shows whether it does.
         bool along = _line is { } line && (_taken < line.Actions.Count
@@ -96,7 +113,59 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         }
         (_line, _taken, _given) = (plan.Line, 0, plan.Result.Plan.Count + 1);
         Took(plan.Line.Actions[0]);
-        return plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved };
+        var answer = plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved };
+        if (after != null && _background != null) Watch(answer, after);
+        return answer;
+    }
+
+    /// <summary>From now on, until the next decision, <paramref name="after"/> is told <paramref name="answer"/> again each
+    /// time the solver's pick from where it leads shows its plan otherwise (<see cref="After"/>).</summary>
+    private void Watch(CombatDecisionResult answer, Action<CombatDecisionResult> after)
+    {
+        var (line, token) = (_line!, new object());
+        lock (_afterLock) (_afterFor, _afterShown, _afterLine) = (token, Shown(answer), null);
+        _background!.Watch((pick, since) =>
+        {
+            var (told, whole) = After(answer, line, pick, since);
+            lock (_afterLock)
+            {
+                if (_afterFor != token || Shown(told) == _afterShown) return;
+                (_afterShown, _afterLine, _afterGiven) = (Shown(told), whole, told.Plan.Count + 1);
+                after(told);
+            }
+        });
+    }
+
+    /// <summary>The answer with the plan after its action as the solver's pick from there has it: that pick's steps, its
+    /// line's chance to win and HP left, whether it is proved, and the nodes searched since the decision was asked; and the
+    /// whole line from the decision, <paramref name="line"/>'s first step and then the pick's.</summary>
+    /// <param name="since">The nodes the solver searched since the answer.</param>
+    private static (CombatDecisionResult Told, TurnEnd Line) After(CombatDecisionResult answer, TurnEnd line, SlPlan pick, long since)
+    {
+        var rest = pick.Line!;
+        var whole = rest with { Actions = [line.Actions[0], .. rest.Actions], Hashes = [line.Hashes[0], .. rest.Hashes] };
+        var top = new Candidate(answer.First.ToString(), rest.Value, 0, 1, [Math.Round(rest.Value, 4)], Math.Round(rest.Win, 4), Math.Round(rest.Hp, 1));
+        var told = answer with
+        {
+            Plan = [pick.Result.First, .. pick.Result.Plan],
+            PlanHashes = [rest.Hashes[0], .. pick.Result.PlanHashes ?? []],
+            Candidates = [top, .. answer.Candidates.Skip(1)],
+            Nodes = (int)Math.Min((answer.Nodes ?? 0) + since, int.MaxValue),
+            Proved = pick.Proved,
+        };
+        return (told, whole);
+    }
+
+    /// <summary>The plan after the last answer is told no more. Where it was told again, the line told last is the line the
+    /// combat goes along from that decision (<see cref="Given"/>).</summary>
+    private void Quiet()
+    {
+        _background?.Watch(null);
+        lock (_afterLock)
+        {
+            if (_afterLine is { } told) (_line, _given) = (told, _afterGiven);
+            (_afterFor, _afterShown, _afterLine) = (null, null, null);
+        }
     }
 
     /// <summary>Tells the host the pick so far, unless it shows what it was last told.</summary>
@@ -184,12 +253,13 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         _solver?.Dispose();
         (_solver, _background, _line, _taken, _given) = (null, null, null, 0, 0);
         _since.Clear();
+        lock (_afterLock) (_afterFor, _afterShown, _afterLine) = (null, null, null);
     }
 
     /// <summary>
     /// A solver searching on a thread of its own, which owns it: each step posted moves its root as soon as the thread
     /// is between two of its searches, and between the steps it searches on, a batch of turns at a time, until nothing
-    /// is left. After each it shows its pick at the root (<see cref="Await"/>).
+    /// is left. After each it shows its pick at the root (<see cref="Await"/>, <see cref="Watch"/>).
     /// </summary>
     private sealed class Background : IDisposable
     {
@@ -213,6 +283,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         private bool _done;
         private SlPlan? _pick;
         private Exception? _failed;
+        /// <summary>Who is told each pick shown where the root stands at the steps posted when it was set
+        /// (<see cref="Watch"/>), and how many steps those were.</summary>
+        private Action<SlPlan, long>? _watcher;
+        private int _watchAt;
 
         /// <param name="round">The round of the observation the solver began at, whose intents <paramref name="history"/> has
         /// as that decision got it.</param>
@@ -230,6 +304,21 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                 _posted.Add(step);
                 Monitor.PulseAll(_posted);
             }
+        }
+
+        /// <summary>From now on <paramref name="watcher"/> gets each pick the solver shows where the root stands at every
+        /// step posted so far, with the nodes it searched since the last pick <see cref="Await"/> took: the pick there
+        /// already at once, on this thread, and each after a search on the searching thread; none once another watcher, or
+        /// none, is set.</summary>
+        public void Watch(Action<SlPlan, long>? watcher)
+        {
+            (SlPlan Pick, long Nodes)? now = null;
+            lock (_posted)
+            {
+                (_watcher, _watchAt) = (watcher, _posted.Count);
+                if (watcher != null && _moved == _posted.Count && _pick != null) now = (_pick, _nodes - _answered);
+            }
+            if (now is { } shown) watcher!(shown.Pick, shown.Nodes);
         }
 
         /// <summary>Waits until the root stands at every step posted and the solver has searched at least
@@ -298,12 +387,17 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                     }
                     else _solver.Run(1, _stop.Token);
                     var pick = _solver.Result(_replan);
+                    Action<SlPlan, long>? watcher;
+                    long since;
                     lock (_posted)
                     {
                         if (steps.Length > 0) (_moved, _since) = (_moved + steps.Length, _solver.Nodes);
                         (_nodes, _done, _pick) = (_solver.Nodes, _solver.Left == 0, pick);
+                        watcher = _moved == _watchAt && _posted.Count == _watchAt ? _watcher : null;
+                        since = _nodes - _answered;
                         Monitor.PulseAll(_posted);
                     }
+                    watcher?.Invoke(pick, since);
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested)

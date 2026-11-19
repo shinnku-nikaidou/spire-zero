@@ -44,6 +44,8 @@ public sealed record Route<T>(string Brain, T Policy);
 /// <param name="Nodes">Where the SL planner planned: the actions its search simulated
 /// (<see cref="CombatDecisionResult.Nodes"/>); absent otherwise.</param>
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
+/// <param name="Proved">True when the solver proved its pick the best there is (<see cref="CombatDecisionResult.Proved"/>);
+/// absent otherwise.</param>
 /// <param name="Event">NoSL, at an event, for V's training: in self-play each option whose result its button does not
 /// show with where NoSL's line from it ends (<see cref="MacroAnswer.Event"/>), and the option taken if it is one
 /// (<see cref="EventLine.Taken"/>).</param>
@@ -52,7 +54,7 @@ public sealed record DecisionEntry(
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     CombatObservation? Obs = null, RunView? RunView = null,
     IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null, int? Nodes = null, int? Turns = null,
-    IReadOnlyList<EventLine>? Event = null);
+    IReadOnlyList<EventLine>? Event = null, bool? Proved = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, long? Nodes = null,
@@ -161,7 +163,7 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
-                Replanned: Mark(result.Replanned), Nodes: result.Nodes, Turns: result.Turns));
+                Replanned: Mark(result.Replanned), Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved)));
         return (result.First, note);
     }
 
@@ -197,13 +199,13 @@ public sealed class Dispatcher(
         if (choice.Context.InCombat && Fought(decision) is var (around, shown))
         {
             var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown,
-                early: decision.Early, hurry: decision.Hurry));
+                early: decision.Early, hurry: decision.Hurry, after: decision.After));
             if (result.First.Kind != CombatActionKind.Pick || !choice.Accepts(result.First.Picks))
                 throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
             if (log)
                 _log.Add(new(runId, at, env.ToString(), Surfaces.CardChoice, combat.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                     result.First.Answer!, note.Plan, note.Candidates, combat.Budget?.For(around.Room), drawn, took, Replanned: Mark(result.Replanned),
-                    Nodes: result.Nodes, Turns: result.Turns));
+                    Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved)));
             // The plan goes on with plays of the combat, which a host showing the prompt's screen has no cards to name.
             return (new([.. result.First.Picks]), note with { Plan = null });
         }
@@ -314,7 +316,7 @@ public sealed class Dispatcher(
 
     private static string Hex(ulong hash) => hash.ToString("x16");
 
-    /// <summary>The log marks explored and replanned steps only.</summary>
+    /// <summary>The log marks explored, replanned and proved steps only.</summary>
     private static bool? Mark(bool explored) => explored ? true : null;
 
     /// <summary>SplitMix64 of <paramref name="a"/> stepped <paramref name="b"/> + 1 times.</summary>

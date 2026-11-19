@@ -12,10 +12,11 @@ public sealed record CombatExport(byte[] Bytes, RunView Run);
 /// observation around the combat too (<paramref name="inRun"/> makes it from the combat's); a combat started on its
 /// own has none. A host that holds the live game can write the combat out for the engine (<paramref name="export"/>),
 /// where the game stands between actions: not at a card prompt. A host that shows answers as they come and may move on
-/// before one comes gives <paramref name="early"/> and <paramref name="hurry"/>.
+/// before one comes gives <paramref name="early"/>, <paramref name="hurry"/> and <paramref name="after"/>.
 /// </summary>
 public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null,
-    Func<CombatExport>? export = null, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
+    Func<CombatExport>? export = null, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default,
+    Action<CombatDecisionResult>? after = null)
 {
     private CombatObservation? _observation;
     private Observation? _runObservation;
@@ -38,6 +39,11 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
     /// <summary>Cancelled when the host moved on from the decision: a brain waiting on its search answers at once.</summary>
     public CancellationToken Hurry { get; } = hurry;
+
+    /// <summary>Told, after the answer, the answer again with the plan after its action each time the search the brain
+    /// goes on with from there changes it (a better line, or one proved), on the searching thread, until the brain's next
+    /// decision or the combat's end (<see cref="SolverRoute"/>); null for a host that only takes answers.</summary>
+    public Action<CombatDecisionResult>? After { get; } = after;
 }
 
 /// <summary>
@@ -81,8 +87,9 @@ public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> leg
 /// </summary>
 /// <param name="early">During a combat, as a combat decision's (<see cref="CombatDecision.Early"/>).</param>
 /// <param name="hurry">During a combat, as a combat decision's (<see cref="CombatDecision.Hurry"/>).</param>
+/// <param name="after">During a combat, as a combat decision's (<see cref="CombatDecision.After"/>).</param>
 public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe = null, IMacroClone? clone = null,
-    Action<CombatDecisionResult>? early = null, CancellationToken hurry = default)
+    Action<CombatDecisionResult>? early = null, CancellationToken hurry = default, Action<CombatDecisionResult>? after = null)
 {
     private Observation? _observation;
 
@@ -95,8 +102,10 @@ public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe
 
     public CancellationToken Hurry { get; } = hurry;
 
+    public Action<CombatDecisionResult>? After { get; } = after;
+
     /// <summary>The same prompt with <paramref name="node"/>'s clone.</summary>
-    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node, Early, Hurry);
+    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node, Early, Hurry, After);
 
     /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
     public Observation? Observation => _observation ??= observe?.Invoke();

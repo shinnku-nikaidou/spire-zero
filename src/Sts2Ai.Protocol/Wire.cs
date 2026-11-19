@@ -80,10 +80,15 @@ public sealed record DecisionRequest(long DecisionId, string ObsHash, string Sur
 /// comes at once, another each time the pick changes, and the final answer to the same decision follows, which is the
 /// one the host's AI plays. Null on a final answer.</param>
 /// <param name="Nodes">The actions a combat search simulated for the decision so far.</param>
-/// <param name="Proved">True when the solver proved its pick the best there is.</param>
+/// <param name="Proved">True when the solver proved its pick the best there is: on a pick after the answer
+/// (<paramref name="After"/>), the plan after the answer's action.</param>
+/// <param name="After">True on the plan after the final answer, by a brain that searches on from where its answer leads
+/// (max's solver in the mod's brain): the same action, with the plan after it, its chance to win and HP left and whether
+/// it is proved, as the search has them now. One comes each time they change, until the host asks the next decision.
+/// Null otherwise.</param>
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, bool? Searching = null, long? Nodes = null,
-    bool? Proved = null) : WireMessage;
+    bool? Proved = null, bool? After = null) : WireMessage;
 
 /// <summary>Host → brain: the action taken for a decision, and whether it worked.</summary>
 public sealed record Executed(long DecisionId, string Action, bool Ok, string? Error = null) : WireMessage;

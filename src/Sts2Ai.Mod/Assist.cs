@@ -67,10 +67,12 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     /// <param name="Cancelled">When the state moved on and the mod cancelled it, or null.</param>
     private sealed record Asked(long Id, string Key, Observation Obs, long Sent, long? Cancelled = null);
 
-    /// <summary>An answer as it is shown, and what it is for. A brain still searching sent it as its pick so far
-    /// (<see cref="Recommendation.Searching"/>): the panel shows it, and the AI waits for the final answer.</summary>
-    private sealed record Answered(long Id, string Key, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route, CombatPlan? Plan,
-        bool Searching = false);
+    /// <summary>An answer as it is shown, and what it is for: the decision's observation, and when it was asked. A brain
+    /// still searching sent it as its pick so far (<see cref="Recommendation.Searching"/>): the panel shows it, and the AI
+    /// waits for the final answer. After that, a brain searching on sends the final answer again with each plan after it
+    /// (<see cref="Recommendation.After"/>), which the panel shows in its place.</summary>
+    private sealed record Answered(long Id, string Key, Observation Obs, long Sent, Recommendation Answer, Shown Shown, string Foot, MapRoute? Route,
+        CombatPlan? Plan, bool Searching = false);
 
     private readonly Screens _screens = new();
 
@@ -512,10 +514,25 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 if (_asked is not { Cancelled: null } waiting || waiting.Id != early.DecisionId) break;
                 var shownEarly = Describe.Recommendation(early, waiting.Obs);
                 Note(shownEarly, early);
-                _answer = new(waiting.Id, waiting.Key, early, shownEarly, early.Brain, MapRoute.Of(early, waiting.Obs), CombatPlan.Of(early, waiting.Obs),
-                    Searching: true);
-                ModLog.Write("decision", $"{waiting.Id} so far after {Environment.TickCount64 - waiting.Sent} ms, {early.Nodes} nodes{(early.Proved == true ? ", proved" : "")}: {early.Action}" +
+                _answer = new(waiting.Id, waiting.Key, waiting.Obs, waiting.Sent, early, shownEarly, early.Brain, MapRoute.Of(early, waiting.Obs),
+                    CombatPlan.Of(early, waiting.Obs), Searching: true);
+                ModLog.Write("decision", $"{waiting.Id} so far after {Environment.TickCount64 - waiting.Sent} ms{Found(early)}: {early.Action}" +
                                          (early.Candidates is { Count: > 0 } so ? $"; {string.Join(", ", so.Take(3).Select(Candidate))}" : ""));
+                break;
+            case Received { Message: Recommendation { After: true } later }:
+                // The final answer again with the plan after it, as the brain searching on from there has it now: shown in
+                // its place while the decision lasts.
+                if (_answer is not { Searching: false } shownNow || shownNow.Id != later.DecisionId) break;
+                var shownLater = Describe.Recommendation(later, shownNow.Obs);
+                Note(shownLater, later);
+                long laterMs = Environment.TickCount64 - shownNow.Sent;
+                _answer = shownNow with
+                {
+                    Answer = later, Shown = shownLater, Foot = $"{later.Brain} · {laterMs / 1000.0:0.0} s{Searched(later)}", Route = MapRoute.Of(later, shownNow.Obs),
+                    Plan = CombatPlan.Of(later, shownNow.Obs),
+                };
+                ModLog.Write("decision", $"{shownNow.Id} later after {laterMs} ms{Found(later)}: {later.Action}" +
+                                         (later.Candidates is { Count: > 0 } top ? $"; {string.Join(", ", top.Take(3).Select(Candidate))}" : ""));
                 break;
             case Received { Message: Recommendation answer }:
                 if (_asked?.Id != answer.DecisionId) break;
@@ -528,12 +545,13 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                     ModLog.Write("decision", $"{asked.Id} answered after it was cancelled: the mod waited {now - cancelled} ms for it");
                     break;
                 }
-                ModLog.Write("decision", $"{asked.Id} answered in {now - asked.Sent} ms by {answer.Brain}: {answer.Action}" +
+                ModLog.Write("decision", $"{asked.Id} answered in {now - asked.Sent} ms by {answer.Brain}{Found(answer)}: {answer.Action}" +
                                          (answer.Candidates is { Count: > 0 } c ? $"; best {string.Join(", ", c.Take(3).Select(Candidate))}" : ""));
                 var shown = Describe.Recommendation(answer, asked.Obs);
                 Note(shown, answer);
-                _answer = new(asked.Id, asked.Key, answer, shown, $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s{Searched(answer)}",
-                    MapRoute.Of(answer, asked.Obs), CombatPlan.Of(answer, asked.Obs));
+                _answer = new(asked.Id, asked.Key, asked.Obs, asked.Sent, answer, shown,
+                    $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s{Searched(answer)}", MapRoute.Of(answer, asked.Obs),
+                    CombatPlan.Of(answer, asked.Obs));
                 break;
             case Received { Message: WireError error }:
                 ModLog.Warn("brain", $"brain: {error.Message}");
@@ -561,10 +579,16 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         }
     }
 
-    /// <summary>What the combat search did for an answer, as the panel's foot adds it: the nodes it searched, and that the
-    /// solver proved its pick.</summary>
+    /// <summary>What the combat search did for an answer, as the panel's foot adds it: the nodes it searched, while it
+    /// searches on, and that the solver proved its pick.</summary>
     private static string Searched(Recommendation answer) =>
-        (answer.Nodes is { } n && answer.Searching == true ? " · " + L10n.T("{0} nodes", Compact(n)) : "") + (answer.Proved == true ? " · " + L10n.T("proved") : "");
+        (answer.Nodes is { } n && (answer.Searching == true || answer.After == true) ? " · " + L10n.T("{0} nodes", Compact(n)) : "") +
+        (answer.Proved == true ? " · " + L10n.T("proved") : "");
+
+    /// <summary>What the combat search did for an answer, as the log adds it: the nodes it searched, where it says, and
+    /// that the solver proved its pick.</summary>
+    private static string Found(Recommendation answer) =>
+        (answer.Nodes is { } n ? $", {n} nodes" : "") + (answer.Proved == true ? ", proved" : "");
 
     private static string Compact(long n) => n < 1_000 ? n.ToString(CultureInfo.InvariantCulture)
         : n < 1_000_000 ? (n / 1e3).ToString("0", CultureInfo.InvariantCulture) + " k" : (n / 1e6).ToString("0.0", CultureInfo.InvariantCulture) + " M";
