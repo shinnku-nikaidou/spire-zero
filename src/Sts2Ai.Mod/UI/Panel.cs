@@ -1,5 +1,6 @@
 using System.Globalization;
 using Godot;
+using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod.UI;
 
@@ -34,7 +35,7 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 }
 
 /// <summary>
-/// The mod's panel over the game: a card with the champion and the mod's status,
+/// The mod's panel over the game: a card with the champion, the mod's status and an SL/NoSL switch,
 /// the toolbar that lets the AI play (auto, one step, to the end of the turn or the room) and the SL planner's effort,
 /// then either the brain's
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
@@ -69,6 +70,7 @@ internal sealed class Panel
     private readonly PanelContainer _card;
     private readonly Label _champion;
     private readonly Label _status;
+    private readonly (Button Button, PlayEnvironment Env)[] _switch;
     private readonly Control _toolbar;
     private readonly Button _auto, _step, _finish;
     private readonly Control _options;
@@ -94,6 +96,7 @@ internal sealed class Panel
     private bool _dragged;
     private object? _built;
     private Drive? _drive;
+    private PlayEnvironment? _envStyled;
     private (bool, AutoSpeed, bool, SearchEffort)? _toolStyled;
 
     /// <param name="pressed">What the toolbar and its keys do; null leaves the toolbar out (the mod is off).</param>
@@ -106,7 +109,7 @@ internal sealed class Panel
         cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
         cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
         cardStyle.ShadowSize = 12;
-        // Wide enough for the champion's name in the head ("net v11-0-td4 + c11-0 beam 16x300").
+        // Wide enough for the champion's name in the head ("net v11-0-td4 + c11-0 beam 16x300") beside the switch.
         _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(380, 0) });
         _card.AddThemeStyleboxOverride("panel", cardStyle);
         var column = Column(10);
@@ -132,6 +135,21 @@ internal sealed class Panel
         names.AddChild(_champion = Clipped(Text("", 13, Fg)));
         names.AddChild(_status = Clipped(Text("", 11, Muted)));
         head.AddChild(names);
+        // SL or NoSL: the same setting as Environment in Settings → AI; a change starts the run anew for the brain.
+        if (pressed != null)
+        {
+            var frame = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
+            var pair = Row(2);
+            frame.AddChild(pair);
+            _switch = [(Toggle("SL"), PlayEnvironment.SL), (Toggle("NoSL"), PlayEnvironment.NoSL)];
+            foreach (var (button, env) in _switch)
+            {
+                button.Pressed += () => Settings.Set(Settings.Current with { Env = env });
+                pair.AddChild(button);
+            }
+            head.AddChild(frame);
+        }
+        else _switch = [];
         head.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
         {
             float now = Settings.Current.Opacity;
@@ -288,6 +306,11 @@ internal sealed class Panel
         Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
         _champion.Text = champion;
         _status.Text = status;
+        if (settings.Env != _envStyled)
+        {
+            _envStyled = settings.Env;
+            foreach (var (button, which) in _switch) Restyle(button, which == settings.Env);
+        }
         _drive = drive;
         _toolbar.Visible = _effortRow.Visible = drive != null && _pressed != null;
         _options.Visible = drive is { Auto: true };

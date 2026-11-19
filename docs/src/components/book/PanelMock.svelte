@@ -78,7 +78,7 @@
   type Text = Record<Lang, string>;
   type Option = { name: Text; value: number; ci: number; win: number | null; hp: number | null; rooms: (string | null)[] | null };
   type Answer = {
-    source: { champion: string; decision: number };
+    source: { champion: string; decision: number; env: string };
     status: Text;
     floor: number;
     surface: 'combat' | 'map' | 'other';
@@ -115,6 +115,8 @@
   const base = ANSWERS.sl_combat;
   const champion = $derived(a ? a.source.champion : msg.champion ? base.source.champion : '—');
   const status = $derived(a ? a.status[lang] : msg.status === 'line' ? base.status[lang] : T(msg.status));
+  // The switch shows the environment set; a message keeps SL's, the default.
+  const env = $derived(a ? a.source.env : 'SL');
   const drive = $derived(a !== null || !!msg.drive);
   const run = $derived(a ?? base);
   const surface = $derived(a ? a.surface : 'combat');
@@ -196,6 +198,9 @@
         <div class="names">
           <div class="clip" style="font-size: 13px;">{champion}</div>
           <div class="clip muted" style="font-size: 11px;">{status}</div>
+        </div>
+        <div class="switch">
+          <span class:on={env === 'SL'}>SL</span><span class:on={env === 'NoSL'}>NoSL</span>
         </div>
         <span class="muted" style="font-size: 11px;">F8</span>
       </div>
@@ -425,6 +430,7 @@
     border: 2px solid #bf59ff;
     box-sizing: border-box;
   }
+  .switch,
   .toggles {
     display: inline-flex;
     gap: 2px;
@@ -433,6 +439,7 @@
     padding: 3px;
     font-size: 12px;
   }
+  .switch span,
   .toggles span {
     display: inline-flex;
     align-items: center;
@@ -447,6 +454,7 @@
     gap: 8px;
     padding: 0;
   }
+  .switch span.on,
   .toggles span.on {
     background: #bf59ff;
     color: #14081f;

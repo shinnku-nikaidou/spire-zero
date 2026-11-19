@@ -22,7 +22,7 @@ internal enum SearchEffort { Brain, Low, Medium, High, Max }
 /// profile, and read once at start; every change is written back at once.
 /// </summary>
 /// <param name="Assist">Off: the mod asks the brain nothing and draws nothing.</param>
-/// <param name="Env">SL or NoSL, set only in the settings screen, its last setting; a change starts the run anew for the brain.</param>
+/// <param name="Env">SL or NoSL, set in the settings screen, its last setting, and by the panel's switch; a change starts the run anew for the brain.</param>
 /// <param name="Numbers">Order numbers on the cards the plan plays this turn.</param>
 /// <param name="Marks">The plan's target and end-turn marks.</param>
 /// <param name="Panel">The panel's card and its marks (combat, map) show; its orb opens and closes them.</param>
