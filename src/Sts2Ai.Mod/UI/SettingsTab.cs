@@ -109,6 +109,8 @@ internal static class SettingsTab
         content.AddChild(Choice(L10n.T("Stop before elites and bosses"), "", font, onOff, bools, s => s.StopAtElites, (s, v) => s with { StopAtElites = v }, refresh));
         content.AddChild(Choice(L10n.T("Stop at ancients"), L10n.T("you pick the ancient's offer, then press auto-play again"), font,
             onOff, bools, s => s.StopAtAncients, (s, v) => s with { StopAtAncients = v }, refresh));
+        content.AddChild(Choice(L10n.T("Stop at combat rewards"), L10n.T("you take the rewards and pick the card, then press auto-play again"), font,
+            onOff, bools, s => s.StopAtRewards, (s, v) => s with { StopAtRewards = v }, refresh));
         // The environment comes last, under its own header; the panel's switch sets it too.
         content.AddChild(Header(L10n.T("Advanced"), font));
         content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,

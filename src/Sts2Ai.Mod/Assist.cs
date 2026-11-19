@@ -1,7 +1,9 @@
 using System.Globalization;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
 using Sts2Ai.GameBridge;
+using Sts2Ai.GameBridge.Actions;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Mod;
@@ -107,6 +109,9 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private string? _waived;
     /// <summary>The run and act whose ancient auto-play stopped at: it stops there once.</summary>
     private (string? Run, int Act)? _ancient;
+    /// <summary>The fight's rewards auto-play stopped at, and the player's acts then: it stops there once, and once the
+    /// player took any of them, what is left is theirs.</summary>
+    private (RewardsSet Set, int Acts)? _rewards;
     private long _idle;
     private string _surface = Surfaces.Combat;
     private readonly List<string> _recent = [];
@@ -377,17 +382,22 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             Stop(reason);
             return;
         }
+        // Back on at the fight's rewards it stopped at, after the player took some: it leaves the rest, as it is.
+        string play = _goal == Goal.Auto && _rewards is { } stopped && ReferenceEquals(asking.Source, stopped.Set)
+                      && NodeRecord.PlayerActs != stopped.Acts && asking.Legal.Contains(MacroAction.RewardsDone.ToString())
+            ? MacroAction.RewardsDone.ToString()
+            : answer.Answer.Action;
         Acted done;
         // Before the press: a button's handler may take the step at once, inside it.
-        NodeRecord.Expect(Step(asking, answer.Answer.Action));
+        NodeRecord.Expect(Step(asking, play));
         try
         {
-            done = Executor.Run(asking, answer.Answer.Action, run, me);
+            done = Executor.Run(asking, play, run, me);
         }
         catch (Exception e)
         {
             NodeRecord.Expect(null);
-            ModLog.Warn("auto", $"could not play {answer.Answer.Action}: {e}");
+            ModLog.Warn("auto", $"could not play {play}: {e}");
             Stop(L10n.T("the AI cannot press this: {0}", e.Message));
             return;
         }
@@ -400,10 +410,14 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             return;
         }
         (_acted, _waiting) = ((answer.Key, now), null);
-        ModLog.Write("auto", $"AI pressed {answer.Answer.Action} for decision {answer.Id} ({asking.Surface})");
-        link.Send(new Executed(answer.Id, answer.Answer.Action, true));
-        _recent.Insert(0, $"{L10n.T("floor {0}", asking.Obs.Run.Floor)} · {answer.Shown.Next}{Value(answer)}");
-        if (_recent.Count > Remembered) _recent.RemoveAt(_recent.Count - 1);
+        ModLog.Write("auto", $"AI pressed {play} for decision {answer.Id} ({asking.Surface})");
+        // The brain's answer played, or the player's rewards left, which the brain never chose.
+        if (play == answer.Answer.Action)
+        {
+            link.Send(new Executed(answer.Id, play, true));
+            _recent.Insert(0, $"{L10n.T("floor {0}", asking.Obs.Run.Floor)} · {answer.Shown.Next}{Value(answer)}");
+            if (_recent.Count > Remembered) _recent.RemoveAt(_recent.Count - 1);
+        }
         (_acts, _lastSurface) = (_acts + 1, asking.Surface);
         bool ended = CombatAction.TryParse(answer.Answer.Action, out var action) && action.Kind == CombatActionKind.EndTurn;
         if (_goal == Goal.One || _goal == Goal.Turn && ended) _goal = Goal.Off;
@@ -432,6 +446,12 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             _ancient = (_run, asking.Obs.Run.Act);
             return L10n.T("an ancient is here");
+        }
+        // Once at each fight's rewards (the rewards screen that ends its room), not an event's or a chest's.
+        if (settings.StopAtRewards && asking.Source is RewardsSet set && RewardActions.IsTerminal(set) && !ReferenceEquals(set, _rewards?.Set))
+        {
+            _rewards = (set, NodeRecord.PlayerActs);
+            return L10n.T("the combat rewards are here");
         }
         return null;
     }

@@ -67,6 +67,7 @@ internal static class L10n
         ["Stopped"] = ["Arrêté", "Detenido", "已停下", "已停下", "停止"],
         ["an elite is next"] = ["un élite est le prochain", "lo siguiente es un élite", "下一个是精英", "下一個是菁英", "次はエリート"],
         ["an ancient is here"] = ["un Ancien est là", "aquí hay un Antiguo", "这里是先古之民", "這裡是遠古之民", "エンシェントがいる"],
+        ["the combat rewards are here"] = ["les récompenses du combat sont là", "llegan las recompensas del combate", "战斗奖励到了", "戰鬥獎勵到了", "戦闘報酬です"],
         ["the boss is next"] = ["le boss est le prochain", "lo siguiente es el jefe", "下一个是 Boss", "下一個是頭目", "次はボス"],
         ["the action did nothing"] = ["l'action n'a rien fait", "la acción no hizo nada", "动作没有生效", "動作沒有生效", "操作が反映されない"],
         ["the AI cannot press this: {0}"] = ["l'IA ne peut pas faire ceci : {0}", "la IA no puede hacer esto: {0}", "AI 按不了：{0}", "AI 按不了：{0}", "AIには押せない：{0}"],
@@ -97,6 +98,7 @@ internal static class L10n
         ["Stop at"] = ["Arrêt", "Parar", "停在", "停在", "停止"],
         ["elites, bosses"] = ["élites, boss", "élites, jefes", "精英、Boss 前", "菁英、頭目前", "エリート・ボス前"],
         ["ancients"] = ["Anciens", "Antiguos", "先古之民", "遠古之民", "エンシェント"],
+        ["rewards"] = ["récompenses", "recompensas", "战斗奖励", "戰鬥獎勵", "戦闘報酬"],
 
         // The answer.
         ["Win chance"] = ["Chance de victoire", "Prob. de ganar", "本局胜率", "本局勝率", "勝率"],
@@ -181,6 +183,8 @@ internal static class L10n
         ["you pick the ancient's offer, then press auto-play again"] = ["vous choisissez l'offre de l'Ancien, puis relancez le jeu automatique",
             "eliges la oferta del Antiguo y vuelves a pulsar el juego automático", "你自己选先古之民的馈赠，再按一次自动打",
             "你自己選遠古之民的饋贈，再按一次自動打", "エンシェントの贈り物は自分で選び、もう一度オートプレイを押す"],
+        ["Stop at combat rewards"] = ["S'arrêter aux récompenses de combat", "Parar en las recompensas de combate", "在战斗奖励停下", "在戰鬥獎勵停下", "戦闘報酬で止まる"],
+        ["you take the rewards and pick the card, then press auto-play again"] = ["vous prenez les récompenses et choisissez la carte, puis relancez le jeu automatique", "tomas las recompensas y eliges la carta, luego pulsa otra vez el juego automático", "你自己领奖励、选卡，再按一次自动打", "你自己領獎勵、選卡，再按一次自動打", "報酬を受け取りカードを選んでから、もう一度オートプレイを押してください"],
         ["Advanced"] = ["Avancé", "Avanzado", "高级", "進階", "詳細設定"],
         ["Environment"] = ["Environnement", "Entorno", "环境", "環境", "環境"],
         ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",
