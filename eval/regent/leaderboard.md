@@ -6,6 +6,13 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 ## REGENT, ascension 0: promotion-1-100
 
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 72.0 % (72/100, 62.5 %–79.9 %) | 45.68 | 98 | 250.8 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 60.0 % (60/100, 50.2 %–69.1 %) | 40.15 | 94 | 218.5 |
+
 ### SL
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
@@ -24,6 +31,15 @@ The two environments are never ranked together, nor two characters, ascensions o
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 99.5 % (199/200, 97.2 %–99.9 %) | 47.98 | 200 | 279.1 |
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 99.5 % (198/199, 97.2 %–99.9 %) | 47.98 | 199 | 321.0 |
 | combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 98.0 % (196/200, 95.0 %–99.2 %) | 47.68 | 199 | 402.3 |
+
+## REGENT, ascension 10: promotion-1-100
+
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 **(champion)** | 2026-11-19 | `62f2bef` | 11.0 % (11/100, 6.3 %–18.6 %) | 32.35 | 88 | 125.5 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 4.0 % (4/100, 1.6 %–9.8 %) | 24.46 | 76 | 76.3 |
 
 ## REGENT, ascension 10: promotion-1-200
 

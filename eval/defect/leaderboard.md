@@ -6,6 +6,13 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 ## DEFECT, ascension 0: promotion-1-100
 
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 90.0 % (90/100, 82.6 %–94.5 %) | 47.29 | 100 | 271.6 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 74.0 % (74/100, 64.6 %–81.6 %) | 43.56 | 96 | 194.2 |
+
 ### SL
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
@@ -24,6 +31,15 @@ The two environments are never ranked together, nor two characters, ascensions o
 | combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 99.5 % (199/200, 97.2 %–99.9 %) | 47.91 | 200 | 342.8 |
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 99.0 % (198/200, 96.4 %–99.7 %) | 48.00 | 200 | 239.7 |
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 98.0 % (196/200, 95.0 %–99.2 %) | 47.98 | 200 | 273.4 |
+
+## DEFECT, ascension 10: promotion-1-100
+
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 **(champion)** | 2026-11-19 | `62f2bef` | 19.0 % (19/100, 12.5 %–27.8 %) | 38.64 | 92 | 172.4 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 13.0 % (13/100, 7.8 %–21.0 %) | 30.75 | 82 | 144.4 |
 
 ## DEFECT, ascension 10: promotion-1-200
 

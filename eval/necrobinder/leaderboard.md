@@ -6,6 +6,13 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 ## NECROBINDER, ascension 0: promotion-1-100
 
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 85.0 % (85/100, 76.7 %–90.7 %) | 46.39 | 100 | 251.5 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 65.0 % (65/100, 55.3 %–73.6 %) | 41.24 | 94 | 298.8 |
+
 ### SL
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
@@ -24,6 +31,15 @@ The two environments are never ranked together, nor two characters, ascensions o
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 98.0 % (196/200, 95.0 %–99.2 %) | 47.65 | 199 | 308.8 |
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 97.5 % (195/200, 94.3 %–98.9 %) | 47.55 | 199 | 289.4 |
 | combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 96.5 % (193/200, 93.0 %–98.3 %) | 47.31 | 198 | 453.7 |
+
+## NECROBINDER, ascension 10: promotion-1-100
+
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 **(champion)** | 2026-11-19 | `62f2bef` | 11.0 % (11/100, 6.3 %–18.6 %) | 31.38 | 87 | 90.1 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 7.0 % (7/100, 3.4 %–13.7 %) | 24.83 | 75 | 80.3 |
 
 ## NECROBINDER, ascension 10: promotion-1-200
 

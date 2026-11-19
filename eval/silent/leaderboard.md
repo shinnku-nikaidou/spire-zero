@@ -38,6 +38,13 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 ## SILENT, ascension 0: promotion-1-100
 
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 94.0 % (94/100, 87.5 %–97.2 %) | 47.93 | 100 | 211.0 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 65.0 % (65/100, 55.3 %–73.6 %) | 42.10 | 95 | 184.3 |
+
 ### SL
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
@@ -77,6 +84,15 @@ The two environments are never ranked together, nor two characters, ascensions o
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1 clone, macro prompts l0 v7-1 clone | 2026-10-31 | `b0ec4b7` | 29.0 % (145/500, 25.2 %–33.1 %) | 37.78 | 480 | 434.8 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v7-1e clone, macro prompts l0 v7-1e clone | 2026-10-31 | `b0ec4b7` | 14.8 % (74/500, 12.0 %–18.2 %) | 35.86 | 463 | 412.3 |
 | combat plan c2 beam 8x300 easy 4 loss plans 3, combat prompts p0, macro l0 v6-3-2 clone, macro prompts l0 v6-3-2 clone | 2026-10-31 | `b013f95` | 10.2 % (51/500, 7.8 %–13.2 %) | 34.17 | 486 | 294.8 |
+
+## SILENT, ascension 10: promotion-1-100
+
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 **(champion)** | 2026-11-19 | `62f2bef` | 29.0 % (29/100, 21.0 %–38.5 %) | 36.99 | 89 | 123.0 |
+| combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 9.0 % (9/100, 4.8 %–16.2 %) | 29.44 | 78 | 93.3 |
 
 ## SILENT, ascension 10: promotion-1-200
 
