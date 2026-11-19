@@ -23,6 +23,9 @@
 //! order), a line the graph's bounds pruned, or a move a cycle could come back by (`loops::Recur` tells it without a
 //! world). It finds what a search without the memo finds, to the last bit but the leaf's values, which come from other
 //! batches. Measured on the 4 biggest turns of a Regent A10 run, from 12 states into each: 21.6 s alone, 1.7 s with it.
+//! A search that paused before its end is a memo too, of what it went through so far (`Memo::Paused`): an action it had
+//! not tried yet is stepped. A search with a memo keeps in its own graph what it took from it, so it is the next one's
+//! memo in turn; the steps it takes from a memo are no nodes of a job's (`job`), as they step no world.
 //!
 //! The search needs no end's value to go on, so the leaf is asked about a turn's ends together, `CHUNK` at a time; a
 //! state another line already ended at is not asked about again. A turn has had 169 thousand ends (a Regent's second
@@ -93,7 +96,7 @@ pub struct TurnSearch {
     /// of the turn is in `ends` yet.
     pub paused: Option<Box<Turn>>,
     /// What the search went through, where its job asked for it (`Job::record`) and it was not cut and found no
-    /// cycle: a later search of the turn from a state on it takes it instead of stepping the worlds again (`replay`).
+    /// cycle: a later search of the turn from a state on it takes it instead of stepping the worlds again (`Memo`).
     pub graph: Option<Arc<Graph>>,
 }
 
@@ -124,9 +127,17 @@ pub fn search(
     turn.end(leaf, keep)
 }
 
+/// What a search takes as its memo (`Turn::new`): an earlier search's graph, or an earlier search of the turn that
+/// paused before its end, whose graph so far is made when the search begins (`Turn::graph_so_far`).
+pub enum Memo {
+    Graph(Arc<Graph>),
+    Paused(Box<Turn>),
+}
+
 /// A job's turn (`Job`): the search it paused gone on with (`Job::resume`), else one from `state()`, each spending
 /// at most the job's `most` nodes before it pauses again (`TurnSearch::paused`). The nodes are the ones spent in this
-/// call; a search begun here gives back the world it began at (`TurnSearch::start`).
+/// call, steps taken from a memo not counted (`Dfs::replayed`); a search begun here gives back the world it began at
+/// (`TurnSearch::start`).
 #[allow(clippy::too_many_arguments)]
 pub fn job(
     job: &Job, state: impl FnOnce() -> Result<State, String>, nodes: i32, keep: usize, bounds: &Bounds, leaf: &dyn Leaf,
@@ -137,13 +148,17 @@ pub fn job(
         Some(turn) => (turn, None),
         None => {
             let state = state()?;
-            let memo = job.memo.clone();
+            let memo = match job.memo.lock().expect("a job's memo").take() {
+                Some(Memo::Graph(graph)) => Some(graph),
+                Some(Memo::Paused(turn)) => turn.graph_so_far(leaf)?,
+                None => None,
+            };
             (Box::new(Turn::new(&state, &job.history, nodes, bounds.clone(), job.crossing, job.record, memo)), Some(state))
         }
     };
-    let before = turn.dfs.nodes;
+    let before = turn.dfs.live();
     let done = turn.go(leaf, helpers, job.most.map(|most| before.saturating_add(most)))?;
-    let spent = turn.dfs.nodes - before;
+    let spent = turn.dfs.live() - before;
     let mut found = if done {
         (*turn).end(leaf, keep)?
     } else {
@@ -198,6 +213,7 @@ impl Turn {
                 path: Vec::new(),
                 stack: Vec::new(),
                 nodes: 0,
+                replayed: 0,
                 round,
                 limit: 0,
                 pruned: 0,
@@ -218,8 +234,22 @@ impl Turn {
         self.dfs.pruned
     }
 
-    /// Searches on, until the search is done (true) or has spent `until` nodes in all (false: it goes on from there
-    /// at the next call). The steps queued for `helpers` and not taken go when it stops: helpers live for one call.
+    /// What the search went through so far, for a search of the turn from a state on it to take as its memo, its ends
+    /// asked of the leaf now: the states it left with every action tried, and those still on its path with the actions
+    /// tried so far (the rest not tried, `To::Untried`). None where it keeps nothing, has not begun, or a cycle cut it.
+    pub fn graph_so_far(mut self, leaf: &dyn Leaf) -> Result<Option<Arc<Graph>>, String> {
+        let dfs = &mut self.dfs;
+        if self.root.is_some() || dfs.graph.is_none() || dfs.cut || dfs.loops.any {
+            return Ok(None);
+        }
+        dfs.price(leaf)?;
+        dfs.keep_ends();
+        Ok(dfs.graph.take().map(|recorder| Arc::new(recorder.graph)))
+    }
+
+    /// Searches on, until the search is done (true) or has spent `until` nodes in all, steps taken from its memo not
+    /// counted (false: it goes on from there at the next call). The steps queued for `helpers` and not taken go when it
+    /// stops: helpers live for one call.
     pub fn go(&mut self, leaf: &dyn Leaf, helpers: Option<&Helpers>, until: Option<i32>) -> Result<bool, String> {
         let cx = Cx { leaf, helpers };
         if let Some(mut root) = self.root.take() {
@@ -276,9 +306,10 @@ impl Turn {
     }
 }
 
-/// What a turn's search went through, for a later search of the same turn from a state on it (`replay`) to take
+/// What a turn's search went through, for a later search of the same turn from a state on it (`Memo`) to take
 /// instead of stepping the worlds and asking the leaf again: each state it came to the first time, with its world
 /// exactly and what each of its actions led to, and each end, with what the leaf said of it before `thrown`.
+#[derive(Default)]
 pub struct Graph {
     /// The actions of its steps, each once.
     actions: Vec<Action>,
@@ -384,24 +415,6 @@ impl Graph {
     pub fn nodes(&self) -> usize {
         self.steps.iter().filter(|step| !matches!(step.to, To::Untried)).count()
     }
-
-    /// The state `actions` lead to from state `from`, where each step is to the world the graph came to there exactly.
-    pub fn along(&self, from: u32, actions: &[Action]) -> Option<u32> {
-        let mut at = from;
-        for action in actions {
-            let state = &self.states[at as usize];
-            let steps = &self.steps[state.first as usize..(state.first + state.count) as usize];
-            let step = steps.iter().find(|step| self.actions[step.action as usize] == *action)?;
-            let To::State(next) = step.to else {
-                return None;
-            };
-            if self.states[next as usize].exact != step.exact {
-                return None;
-            }
-            at = next;
-        }
-        Some(at)
-    }
 }
 
 /// A graph as the search goes, with what it is found by.
@@ -414,25 +427,38 @@ struct Recorder {
     ends_by_key: HashMap<u64, u32>,
 }
 
-impl Default for Graph {
-    fn default() -> Graph {
-        Graph {
-            actions: Vec::new(),
-            states: Vec::new(),
-            by_key: HashMap::new(),
-            belts: Vec::new(),
-            steps: Vec::new(),
-            arrivals: Vec::new(),
-            ends: Vec::new(),
-        }
-    }
-}
-
 impl Recorder {
     /// A state the search came to the first time, with its actions to try; its place among the graph's states.
     fn state(&mut self, state: &State, exact: u64, plays: bool, todo: &[Action]) -> u32 {
+        let visited = Visited {
+            key: (state.state_key, state.hidden_key),
+            exact,
+            hash: state.hash,
+            belt: self.belt(bound::potions(&state.obs.potions)),
+            reach: bound::reach(&state.obs),
+            first: 0,
+            count: 0,
+            recur: plays.then(|| Recur::of(&state.obs)),
+        };
+        self.add(visited, todo.iter())
+    }
+
+    /// State `m` of the memo `graph`, come to the first time without a world (`Dfs::enter_memo`), as `state`.
+    fn known(&mut self, graph: &Graph, m: u32) -> u32 {
+        let state = &graph.states[m as usize];
+        let visited = Visited {
+            belt: self.belt(graph.belts[state.belt as usize].clone()),
+            recur: state.recur.clone(),
+            ..*state
+        };
+        let steps = &graph.steps[state.first as usize..(state.first + state.count) as usize];
+        self.add(visited, steps.iter().map(|step| &graph.actions[step.action as usize]))
+    }
+
+    /// `visited` with its actions `todo`, none tried yet.
+    fn add<'a>(&mut self, mut visited: Visited, todo: impl Iterator<Item = &'a Action>) -> u32 {
         let at = self.graph.states.len() as u32;
-        let first = self.graph.steps.len() as u32;
+        visited.first = self.graph.steps.len() as u32;
         for action in todo {
             let next = self.actions.len() as u32;
             let id = *self.actions.entry(action.clone()).or_insert_with(|| {
@@ -441,19 +467,9 @@ impl Recorder {
             });
             self.graph.steps.push(Step { action: id, to: To::Untried, exact: 0, same: true, belt: 0, reach: 0 });
         }
-        let key = (state.state_key, state.hidden_key);
-        self.graph.by_key.insert(key, at);
-        let belt = self.belt(bound::potions(&state.obs.potions));
-        self.graph.states.push(Visited {
-            key,
-            exact,
-            hash: state.hash,
-            belt,
-            reach: bound::reach(&state.obs),
-            first,
-            count: todo.len() as u32,
-            recur: plays.then(|| Recur::of(&state.obs)),
-        });
+        visited.count = self.graph.steps.len() as u32 - visited.first;
+        self.graph.by_key.insert(visited.key, at);
+        self.graph.states.push(visited);
         at
     }
 
@@ -627,6 +643,8 @@ struct Dfs {
     /// The states the search stands on, the root first.
     stack: Vec<Frame>,
     nodes: i32,
+    /// The nodes that were steps taken from the memo, no world stepped (`memo_step`).
+    replayed: i32,
     round: i32,
     limit: i32,
     pruned: i32,
@@ -755,6 +773,10 @@ impl Dfs {
         if !self.seen.insert(state.key) {
             return false;
         }
+        let gid = match &mut self.graph {
+            Some(recorder) => recorder.known(&graph, m),
+            None => u32::MAX,
+        };
         self.stack.push(Frame {
             state: None,
             memo: Some(m),
@@ -769,7 +791,7 @@ impl Dfs {
             next: 0,
             done: false,
             plays: state.recur.is_some(),
-            gid: u32::MAX,
+            gid,
         });
         true
     }
@@ -812,65 +834,87 @@ impl Dfs {
     }
 
     /// Action `i` of the memo's state `m`, `to` as for `walk`, as the memo's search took it: where the memo holds what
-    /// the search needs of the step (no world to step), what came of it (`Some(entered)` as for `enter`); else None,
-    /// and the search steps the world. The step is pruned by this search's bounds as a stepped one is, by the potions
-    /// and reach of what it came to; where the player can play after it, the search looks for a cycle back to a state
-    /// on the path first, which the memo holds where it came to that state with a world told the same (`Step::same`).
-    fn memo_step(&mut self, m: u32, i: usize, to: Option<i32>) -> Option<bool> {
+    /// the search needs of the step (no world to step), what came of it (`Some(entered)` as for `enter`), kept in this
+    /// search's graph as state `gid`'s, where it keeps one; else None, and the search steps the world. The step is
+    /// pruned by this search's bounds as a stepped one is, by the potions and reach of what it came to; where the
+    /// player can play after it, the search looks for a cycle back to a state on the path first, which the memo holds
+    /// where it came to that state with a world told the same (`Step::same`).
+    fn memo_step(&mut self, m: u32, i: usize, to: Option<i32>, gid: u32) -> Option<bool> {
         let graph = self.memo.clone()?;
         let step = graph.steps[(graph.states[m as usize].first as usize) + i];
         let below = |belt: u32, reach: i32| !self.bounds.is_empty() && self.bounds.get(&graph.belts[belt as usize]).is_some_and(|&b| reach < b);
-        match step.to {
+        let pruned = |belt: u32, reach: i32| (To::Pruned, (0, 0), 0, true, Some((graph.belts[belt as usize].clone(), reach)));
+        // What came of it, as `Recorder::step` keeps it.
+        let (entered, (to_step, key, exact, same, by)) = match step.to {
             To::End(a) => {
                 let arrival = &graph.arrivals[a as usize];
                 let valued = &graph.ends[arrival.end as usize];
                 if below(valued.belt, valued.reach) {
                     self.pruned += 1;
-                } else if valued.status != Status::InProgress || self.keys.insert(arrival.key) {
-                    let priced = Priced {
-                        actions: self.actions.clone(),
-                        hashes: self.hashes.clone(),
-                        status: valued.status,
-                        key: valued.key,
-                        bare: valued.bare,
-                        potions: valued.potions.clone(),
-                        history: valued.history.clone(),
-                        life: valued.life,
-                        reach: valued.reach,
-                        shown: arrival.shown,
-                        exact: arrival.exact,
+                    (false, pruned(valued.belt, valued.reach))
+                } else {
+                    let at = (self.priced.len() + self.ended.len()) as u32;
+                    let end = if valued.status != Status::InProgress || self.keys.insert(arrival.key) {
+                        let priced = Priced {
+                            actions: self.actions.clone(),
+                            hashes: self.hashes.clone(),
+                            status: valued.status,
+                            key: valued.key,
+                            bare: valued.bare,
+                            potions: valued.potions.clone(),
+                            history: valued.history.clone(),
+                            life: valued.life,
+                            reach: valued.reach,
+                            shown: arrival.shown,
+                            exact: arrival.exact,
+                        };
+                        self.ended.push(Pending::Known(priced, valued.outcome));
+                        if let Some(recorder) = &mut self.graph
+                            && valued.status == Status::InProgress
+                        {
+                            recorder.ends_by_key.insert(arrival.key, at);
+                        }
+                        at
+                    } else {
+                        // The state another line ended at first.
+                        self.graph.as_ref().map_or(0, |recorder| recorder.ends_by_key[&arrival.key])
                     };
-                    self.ended.push(Pending::Known(priced, valued.outcome));
+                    (false, (self.arrival(arrival.key, arrival.exact, arrival.shown, end), (0, 0), 0, true, None))
                 }
-                Some(false)
             }
             To::State(c) => {
                 let child = &graph.states[c as usize];
                 if below(child.belt, child.reach) {
                     self.pruned += 1;
-                    return Some(false);
+                    (false, pruned(child.belt, child.reach))
+                } else {
+                    let world = child.exact == step.exact;
+                    if let Some(now) = &child.recur
+                        && (!(world || step.same) || self.recurs_on_path(now))
+                    {
+                        return None;
+                    }
+                    let entered = if self.seen.contains(&child.key) {
+                        false
+                    } else if !world {
+                        return None;
+                    } else {
+                        self.enter_memo(c, if child.recur.is_none() { to } else { None })
+                    };
+                    (entered, (To::State(c), child.key, step.exact, step.same, None))
                 }
-                let world = child.exact == step.exact;
-                if let Some(now) = &child.recur
-                    && (!(world || step.same) || self.recurs_on_path(now))
-                {
-                    return None;
-                }
-                if self.seen.contains(&child.key) {
-                    return Some(false);
-                }
-                if !world {
-                    return None;
-                }
-                Some(self.enter_memo(c, if child.recur.is_none() { to } else { None }))
             }
             // Pruned by the graph's bounds and by these too, else made again.
             To::Pruned if below(step.belt, step.reach) => {
                 self.pruned += 1;
-                Some(false)
+                (false, pruned(step.belt, step.reach))
             }
-            To::Untried | To::Pruned | To::Cycle => None,
+            To::Untried | To::Pruned | To::Cycle => return None,
+        };
+        if let Some(recorder) = &mut self.graph {
+            recorder.step(gid, i, to_step, key, exact, same, by);
         }
+        Some(entered)
     }
 
     /// C#: Visit. Tries every action of the state on top of the path in turn, each line down depth first, until the
@@ -885,7 +929,7 @@ impl Dfs {
                 self.leave();
                 continue;
             }
-            if until.is_some_and(|until| self.nodes >= until) {
+            if until.is_some_and(|until| self.nodes - self.replayed >= until) {
                 return Ok(false);
             }
             let mut to = None;
@@ -910,8 +954,11 @@ impl Dfs {
             };
             self.actions.push(action.clone());
             self.hashes.push(hash);
-            let entered = match memo.and_then(|m| self.memo_step(m, i, to)) {
-                Some(entered) => entered,
+            let entered = match memo.and_then(|m| self.memo_step(m, i, to, gid)) {
+                Some(entered) => {
+                    self.replayed += 1;
+                    entered
+                }
                 None => self.step(cx, top, i, &action, to, gid)?,
             };
             if !entered {
@@ -1110,12 +1157,22 @@ impl Dfs {
         if let Err(error) = self.price(leaf) {
             panic!("the leaf failed: {error}");
         }
+        self.keep_ends();
         let mut outcomes = std::mem::take(&mut self.outcomes);
+        self.thrown(&mut outcomes);
+        for (priced, outcome) in std::mem::take(&mut self.priced).into_iter().zip(outcomes) {
+            self.ends.push(priced.valued(outcome));
+        }
+    }
+
+    /// The ends the leaf has valued go into the graph, where the search keeps one, with the leaf's outcomes before
+    /// `thrown`.
+    fn keep_ends(&mut self) {
         if let Some(recorder) = &mut self.graph {
             let ends: Vec<Valued> = self
                 .priced
                 .iter()
-                .zip(&outcomes)
+                .zip(&self.outcomes)
                 .map(|(priced, &outcome)| {
                     let belt = recorder.belt(bound::potions(&priced.potions));
                     Valued::of(priced, outcome, belt)
@@ -1123,10 +1180,11 @@ impl Dfs {
                 .collect();
             recorder.graph.ends = ends;
         }
-        self.thrown(&mut outcomes);
-        for (priced, outcome) in std::mem::take(&mut self.priced).into_iter().zip(outcomes) {
-            self.ends.push(priced.valued(outcome));
-        }
+    }
+
+    /// The nodes stepped in a world: all the nodes but those taken from the memo.
+    fn live(&self) -> i32 {
+        self.nodes - self.replayed
     }
 
     /// C#: Thrown. A potion can be thrown away in a fight too, for nothing: each end at the next turn's start takes the

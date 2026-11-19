@@ -517,7 +517,7 @@ impl Recurring for CombatObservation {
 /// What `recurs` reads of a state where the player can play, kept without its observation (a turn's graph keeps one
 /// for each such state it came to). What `recurs` reads as a set is kept in one order (the powers, the copies left),
 /// so that two states it tells the same are equal; the hand stays in its order, which its matching goes by.
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Recur {
     round: i32,
     energy: i32,

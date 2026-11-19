@@ -655,10 +655,12 @@ same on any number of threads. Threads a call has more of than jobs (the greedy 
 job's search comes to next while it goes down another action (`helpers.rs`): the search still visits, values and
 batches as one thread would. A turn's search keeps its path of states itself (`turn::Turn`), so it can pause after a
 number of nodes and go on later from there, finding what it would have found whole: the solver's turns come in pieces,
-a run of N nodes shared over each batch's states, so that a run ends near N however big a turn is. The solver's
+a run of N nodes shared over each batch's states, so that a run ends near N however big a turn is. The root's turn too
+is searched in the runs, the pick meanwhile the line the combat is playing (at the start, the beam's). The solver's
 searches keep what they went through (`turn::Graph`), and where the combat goes on into a turn, the search of the rest
-of it takes that as its memo: the same worlds' steps and ends without stepping or asking the leaf again. A search stops
-at its next step once the int it was given is not 0.
+of it takes that as its memo, or what a search paused there had gone through so far: the same worlds' steps and ends
+without stepping or asking the leaf again, steps not counted in a run's nodes. A search stops at its next step once
+the int it was given is not 0.
 
 ```c
 typedef int32_t (*sz_price)(void *ctx, const uint8_t *change, size_t len, double *value);   // V of the run with the change over it; 0 ok

@@ -560,6 +560,13 @@ fn the_solvers_root_moves_with_the_combat() {
         moved.run(&toy_searcher(&[], 24, false), i64::MAX).expect("a search");
         let searched = moved.searched();
         moved.advance(gone, moves(gone), &toy_searcher(gone, 24, false)).expect("the root's turn");
+        if count != turn {
+            // Into the turn, the root's turn is searched in the next run, and the pick meanwhile is the line played.
+            assert_eq!(searched, moved.searched());
+            assert!(!moved.proved());
+            assert_eq!(line[count..].to_vec(), result(&moved).line.actions);
+            moved.run(&toy_searcher(gone, 24, false), 1).expect("the root's turn");
+        }
 
         assert_eq!(searched + if count == turn { 0 } else { 1 }, moved.searched());
         assert!(moved.proved());
@@ -603,7 +610,7 @@ fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
             most: Some(1),
             resume: std::sync::Mutex::new(None),
             record: false,
-            memo: None,
+            memo: std::sync::Mutex::new(None),
         };
         let (mut calls, mut nodes) = (0, 0);
         let pieces = loop {
@@ -650,7 +657,7 @@ fn a_turns_search_with_the_graph_of_an_earlier_one_finds_what_it_finds_alone() {
         most: None,
         resume: std::sync::Mutex::new(None),
         record,
-        memo,
+        memo: std::sync::Mutex::new(memo.map(turn::Memo::Graph)),
     };
     let (mut held, mut compared, mut saved) = (0, 0, 0);
     for (root, played) in worlds {
@@ -719,11 +726,120 @@ fn a_turns_search_with_the_graph_of_an_earlier_one_finds_what_it_finds_alone() {
                     .collect()
             };
             assert_eq!(ends(&alone), ends(&taken), "after {}", text(&prefix));
-            assert_eq!((alone.nodes, alone.cut, alone.pruned), (taken.nodes, taken.cut, taken.pruned), "after {}", text(&prefix));
+            assert_eq!((alone.cut, alone.pruned), (taken.cut, taken.pruned), "after {}", text(&prefix));
+            // The steps taken from the memo are not counted: only those it made itself.
+            assert!(taken.nodes <= alone.nodes, "after {}", text(&prefix));
         }
     }
     assert!(held >= 3 && compared >= 30, "{held} graphs held, {compared} searches compared");
     assert!(saved > 0, "the memo saved no step");
+}
+
+#[test]
+fn a_turns_search_with_the_graph_of_one_paused_before_its_end_finds_what_it_finds_alone() {
+    // The root's turn searched a few nodes and paused: from each state a line of the turn goes through, a search taking
+    // what that one went through so far finds what a search alone finds. And that search, paused in turn, is the memo
+    // of a search one action further on: what it took from the first memo is in its own graph too.
+    let worlds = [
+        toy(24),
+        Toy::new(24, Some("P"), true).mittens().state(),
+        Toy::new(40, Some("P"), false).state(),
+        Loop::new(Rules { prompted: Prompted::GivesR, ..Rules::new(50) }).state(),
+        Loop::new(Rules { junk_every: 6, ..Rules::new(50) }).state(),
+    ];
+    let job = |history: &Arc<History>, most: Option<i32>, memo: Option<turn::Memo>| Job {
+        path: Vec::new(),
+        history: history.clone(),
+        bounds: Bounds::new(),
+        from: None,
+        crossing: false,
+        most,
+        resume: std::sync::Mutex::new(None),
+        record: true,
+        memo: std::sync::Mutex::new(memo),
+    };
+    let ends = |found: &TurnSearch| -> Vec<String> {
+        found
+            .ends
+            .iter()
+            .map(|e| format!("{} {:?} {} {} {} {} {} {}", text(&e.actions), e.status, e.key, e.exact, e.shown, e.value.to_bits(), e.reach, e.potions))
+            .collect()
+    };
+    let (mut compared, mut chained) = (0, 0);
+    for root in worlds {
+        let history = Arc::new(state::witness(&none(), &root.obs));
+        let whole = turn::search(&mut root.copy(), &history, UNLIMITED, usize::MAX, &Bounds::new(), false, &ToyLeaf, None).expect("a search");
+        let mut prefixes: Vec<Vec<Action>> = Vec::new();
+        for end in &whole.ends {
+            let turn = end.actions.iter().position(|a| a.is_end_turn()).unwrap_or(end.actions.len());
+            for k in 1..turn {
+                if !prefixes.contains(&end.actions[..k].to_vec()) {
+                    prefixes.push(end.actions[..k].to_vec());
+                }
+            }
+        }
+        let alone = |prefix: &[Action]| {
+            let mut there = played(root.copy(), prefix);
+            turn::search(&mut there, &history, UNLIMITED, usize::MAX, &Bounds::new(), false, &ToyLeaf, None).expect("a search")
+        };
+        // The search from `from`, paused after `most` nodes, with `memo`.
+        let paused = |from: &[Action], most: i32, memo: Option<turn::Memo>| {
+            let there = played(root.copy(), from);
+            turn::job(&job(&history, Some(most), memo), || Ok(there.copy()), UNLIMITED, usize::MAX, &Bounds::new(), &ToyLeaf, None)
+                .expect("a search")
+                .paused
+        };
+        let taken = |prefix: &[Action], memo: turn::Memo| {
+            let there = played(root.copy(), prefix);
+            turn::job(&job(&history, None, Some(memo)), || Ok(there.copy()), UNLIMITED, usize::MAX, &Bounds::new(), &ToyLeaf, None)
+                .expect("a search")
+        };
+        for most in [1, 3, 10, 40] {
+            for prefix in &prefixes {
+                let Some(first) = paused(&[], most, None) else {
+                    continue;
+                };
+                assert_eq!(ends(&alone(prefix)), ends(&taken(prefix, turn::Memo::Paused(first))), "{most} nodes, after {}", text(prefix));
+                compared += 1;
+                for next in prefixes.iter().filter(|p| p.len() == prefix.len() + 1 && p.starts_with(prefix)) {
+                    let first = paused(&[], most, None).expect("paused as before");
+                    let Some(second) = paused(prefix, 2, Some(turn::Memo::Paused(first))) else {
+                        continue;
+                    };
+                    assert_eq!(ends(&alone(next)), ends(&taken(next, turn::Memo::Paused(second))), "{most} then 2 nodes, after {}", text(next));
+                    chained += 1;
+                }
+            }
+        }
+    }
+    assert!(compared >= 30 && chained >= 30, "{compared} compared, {chained} with a memo of a memo");
+}
+
+#[test]
+fn the_solver_plays_the_seeds_line_until_its_roots_turn_is_searched() {
+    // The root's turn a node at a time: until it is searched, the pick is the seed's line; the combat goes on along it
+    // into the turn, where the root's turn is searched on with what its search went through so far. In the end, the
+    // same proved value as a solver that searched the root's turn whole there.
+    let beam = planned(&toy(24), &ToyLeaf, &budget(10, 1));
+    let mut solver = solver(1).with_piece(1);
+    solver.seed(beam.line.clone(), beam.from);
+    solver.run(&toy_searcher(&[], 24, false), 1).expect("a search");
+    assert_eq!(1, solver.left());
+    assert!(!solver.proved());
+    assert_eq!(beam.line.actions, result(&solver).line.actions);
+
+    let gone = vec![beam.line.actions[0].clone()];
+    solver.advance(&gone, moves(&gone), &toy_searcher(&gone, 24, false)).expect("the root's turn");
+    assert_eq!(beam.line.actions[1..].to_vec(), result(&solver).line.actions);
+    let mut runs = 0;
+    while !solver.proved() {
+        solver.run(&toy_searcher(&gone, 24, false), 1).expect("a search");
+        runs += 1;
+        assert!(runs < 100_000, "the solver ends");
+    }
+    let plan = result(&solver);
+    assert_near(best(&gone, 24, false), plan.value, 9);
+    assert_replays(&plan, 24, &gone, false);
 }
 
 #[test]
@@ -771,6 +887,8 @@ fn the_solvers_root_crosses_a_prompt_at_a_turns_start_to_the_states_it_holds() {
         Arc::new(record)
     };
     let mut solver = solver(16);
+    // The root's turn, then one batch.
+    solver.run(&searcher(&[]), 1).expect("a search");
     solver.run(&searcher(&[]), 1).expect("a search");
     let line = result(&solver).line.actions.clone();
     let end = line.iter().position(|a| a.is_end_turn()).expect("a turn's end") + 1;
@@ -779,6 +897,7 @@ fn the_solvers_root_crosses_a_prompt_at_a_turns_start_to_the_states_it_holds() {
 
     let crossed = &line[..end];
     solver.advance(crossed, moves(crossed), &searcher(crossed)).expect("the root's turn");
+    solver.run(&searcher(crossed), 1).expect("the root's turn");
     assert_eq!(searched + 1, solver.searched());
     let prompt = played(root(), crossed).obs.prompt.clone().expect("the prompt");
     assert_eq!(order::answers(&prompt, i64::MAX).0.len() as i64, solver.nodes() - nodes, "a node for each answer");
