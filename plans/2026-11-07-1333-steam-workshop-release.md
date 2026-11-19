@@ -432,3 +432,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   196 / 144 / 43, Necrobinder 193 / 127 / 40, the Fool 187 / 74 / 15 (of 200 but where named). Texts sent without
   `--content`, the 17 languages, all OK; checked on the public page in English, Traditional Chinese and German. The
   item stays 0.3.23.
+- 2026-11-20 01:14: mod 0.3.29 uploaded (the user: 升级mod+推送): Stop at Ancients and Stop at combat rewards (two
+  Workshop players' requests, both off by default), the panel's SL/NoSL switch back, search effort Low / Medium / High /
+  Max with Medium the default and no Brain option, the 3-point stop removed. Built at HEAD for all three platforms; the
+  packed brain answers the SL and NoSL wires exactly as 0.3.28 did (d2 and v0-nosl-1-2). The Mac's game was closed by
+  the user first. The first commit timed out with the content through (updated 17:14:38Z, the change note on the
+  changelog page); the texts were not sent again (none changed). This machine's subscribed copy equals out/Sts2Ai;
+  installed in `mods/` over 0.3.28 (moved to `tmp/modeng/old-installs/`). The Mac has no local copy and takes the
+  subscription.
