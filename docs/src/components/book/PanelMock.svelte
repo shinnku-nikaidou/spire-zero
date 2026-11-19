@@ -39,7 +39,6 @@
     Fast: ['快', '快'],
     'Stop at': ['停在', '停在'],
     'elites, bosses': ['精英、Boss 前', '菁英、頭目前'],
-    'win chance -3': ['胜率掉 3 点', '勝率掉 3 點'],
     'Win chance': ['本局胜率', '本局勝率'],
     Next: ['下一步', '下一步'],
     'Route to the boss': ['到 Boss 的路线', '到頭目的路線'],
@@ -231,7 +230,7 @@
           </div>
           <div class="row" style="gap: 8px; flex-wrap: wrap;">
             <span class="muted" style="font-size: 11px;">{T('Stop at')}</span>
-            <span class="toggles bare"><span class="on">{T('elites, bosses')}</span><span class="on">{T('win chance -3')}</span></span>
+            <span class="toggles bare"><span class="on">{T('elites, bosses')}</span></span>
           </div>
         {/if}
 

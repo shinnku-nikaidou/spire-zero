@@ -67,7 +67,6 @@ internal static class L10n
         ["Stopped"] = ["Arrêté", "Detenido", "已停下", "已停下", "停止"],
         ["an elite is next"] = ["un élite est le prochain", "lo siguiente es un élite", "下一个是精英", "下一個是菁英", "次はエリート"],
         ["the boss is next"] = ["le boss est le prochain", "lo siguiente es el jefe", "下一个是 Boss", "下一個是頭目", "次はボス"],
-        ["the win chance fell {0} points"] = ["la chance de victoire a perdu {0} points", "la probabilidad de ganar bajó {0} puntos", "胜率掉了 {0} 点", "勝率掉了 {0} 點", "勝率が{0}ポイント下がった"],
         ["the action did nothing"] = ["l'action n'a rien fait", "la acción no hizo nada", "动作没有生效", "動作沒有生效", "操作が反映されない"],
         ["the AI cannot press this: {0}"] = ["l'IA ne peut pas faire ceci : {0}", "la IA no puede hacer esto: {0}", "AI 按不了：{0}", "AI 按不了：{0}", "AIには押せない：{0}"],
         ["the run is over"] = ["la partie est finie", "la partida terminó", "本局结束", "本局結束", "ランが終わった"],
@@ -97,7 +96,6 @@ internal static class L10n
         ["Max"] = ["Max", "Máx", "最高", "最高", "最大"],
         ["Stop at"] = ["Arrêt", "Parar", "停在", "停在", "停止"],
         ["elites, bosses"] = ["élites, boss", "élites, jefes", "精英、Boss 前", "菁英、頭目前", "エリート・ボス前"],
-        ["win chance -3"] = ["victoire -3", "victoria -3", "胜率掉 3 点", "勝率掉 3 點", "勝率-3"],
 
         // The answer.
         ["Win chance"] = ["Chance de victoire", "Prob. de ganar", "本局胜率", "本局勝率", "勝率"],
@@ -178,7 +176,6 @@ internal static class L10n
         ["Speed of auto-play"] = ["Vitesse du jeu automatique", "Velocidad del juego automático", "自动打的速度", "自動打的速度", "オートプレイの速度"],
         ["the pause before each of the AI's actions"] = ["la pause avant chaque action de l'IA", "la pausa antes de cada acción de la IA", "AI 每个动作前停多久", "AI 每個動作前停多久", "AIの各操作の前の間"],
         ["Stop before elites and bosses"] = ["S'arrêter avant les élites et les boss", "Parar antes de élites y jefes", "精英、Boss 前停下", "菁英、頭目前停下", "エリート・ボスの前で止まる"],
-        ["Stop when the win chance falls 3 points"] = ["S'arrêter si la victoire perd 3 points", "Parar si la probabilidad de ganar baja 3 puntos", "胜率掉 3 点时停下", "勝率掉 3 點時停下", "勝率が3ポイント下がったら止まる"],
         ["Advanced"] = ["Avancé", "Avanzado", "高级", "進階", "詳細設定"],
         ["Environment"] = ["Environnement", "Entorno", "环境", "環境", "環境"],
         ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",

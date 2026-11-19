@@ -107,7 +107,6 @@ internal static class SettingsTab
         content.AddChild(Choice(L10n.T("Speed of auto-play"), L10n.T("the pause before each of the AI's actions"), font,
             [L10n.T("Slow"), L10n.T("Medium"), L10n.T("Fast")], [AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast], s => s.Speed, (s, v) => s with { Speed = v }, refresh));
         content.AddChild(Choice(L10n.T("Stop before elites and bosses"), "", font, onOff, bools, s => s.StopAtElites, (s, v) => s with { StopAtElites = v }, refresh));
-        content.AddChild(Choice(L10n.T("Stop when the win chance falls 3 points"), "", font, onOff, bools, s => s.StopOnDrop, (s, v) => s with { StopOnDrop = v }, refresh));
         // The environment comes last, under its own header, and is set only here.
         content.AddChild(Header(L10n.T("Advanced"), font));
         content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,

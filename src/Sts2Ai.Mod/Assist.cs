@@ -56,9 +56,6 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     /// <summary>How long auto-play waits on a screen with no decision before it presses on (a chest, a proceed button).</summary>
     private const long NudgeAfter = 1_200;
 
-    /// <summary>How far V's chance to win may fall below its best since auto-play started before it stops.</summary>
-    private const double Drop = 0.03;
-
     /// <summary>How many of the AI's last actions the panel lists.</summary>
     private const int Remembered = 4;
 
@@ -121,7 +118,6 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     // V's chance to win at the latest macro decisions, and the SL planner's expected end of the current fight.
     private double? _win;
     private double? _before;
-    private double? _best;
     private (double Win, double Hp)? _fight;
 
     private PlayEnvironment _env = Settings.Current.Env;
@@ -164,7 +160,6 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 break;
             case Command.Auto:
                 Begin(Goal.Auto);
-                _best = _win;
                 // The stop that paused it does not stop it again at the same decision.
                 _waived = _key;
                 break;
@@ -429,11 +424,6 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             if (type == "Elite") return L10n.T("an elite is next");
             if (type == "Boss") return L10n.T("the boss is next");
         }
-        if (settings.StopOnDrop && _win is { } win && _best is { } best && win < best - Drop)
-        {
-            _best = win;
-            return L10n.T("the win chance fell {0} points", Math.Round((best - win) * 100, 1).ToString(CultureInfo.InvariantCulture));
-        }
         return null;
     }
 
@@ -605,7 +595,6 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         {
             case ShownKind.Run:
                 (_before, _win, _fight) = (_win, candidates[0].Value, null);
-                if (_goal == Goal.Auto) _best = Math.Max(_best ?? _win.Value, _win.Value);
                 break;
             case ShownKind.Fight when candidates[0] is { Win: { } win, Hp: { } hp }:
                 _fight = (win, hp);
@@ -626,7 +615,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private void Reset()
     {
         (_goal, _stopped) = (Goal.Off, null);
-        (_win, _before, _best, _fight, _line) = (null, null, null, null, null);
+        (_win, _before, _fight, _line) = (null, null, null, null);
         _recent.Clear();
     }
 
