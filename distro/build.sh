@@ -6,8 +6,9 @@
 #   out/Sts2Ai/brain/RID/                 the brain for each platform, self-contained (BundledBrain starts it), and
 #                                         the engine its SL planner searches in: libsts2ai_engine and the schema the
 #                                         mod writes the live combat out along (sts2ai_engine.schema.json)
-#   out/Sts2Ai/brain/champion.json        the NoSL champion's file, its nets under brain/nets/: the brain plays it for
-#                                         NoSL and, with the SL planner and L0 on the node's clone, for SL
+#   out/Sts2Ai/brain/champion.json        the NoSL champion's file and sl-champion.json the SL champion's, their nets
+#   out/Sts2Ai/brain/sl-champion.json     under brain/nets/: each environment has its own pair (2026-11-18), and the
+#                                         brain plays each host with its environment's file
 #
 # The brain is a dotnet publish -r RID each with the profile Properties/PublishProfiles/brain.pubxml; the game's
 # assemblies are only compiled against, and the brain loads the player's own at run time (STS2_BIN_DIR).
@@ -84,16 +85,18 @@ if [ -z "$LINUX_ONLY" ]; then
   chmod +x "$launcher"
 fi
 
-# NoSL is not trained for now: it plays with SL's nets, the V and the combat net nosl.json names as sl.json does (PIMC
-# with them for NoSL hosts, the SL planner for SL hosts).
-champion=$B/src/eval/champions/nosl.json
+# The two champions, NoSL's (PIMC for NoSL hosts) and SL's (the SL planner and L0 on the node's clone for SL hosts),
+# each with its own nets (BundledBrain passes both files).
 mkdir -p "$B/brain/nets"
-# Net files are not in git, so the commit's export holds none: they come from this checkout's weights/all, which
-# weights/fetch.sh fills with the champions' nets.
-for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
-  cp "$R/$net" "$B/brain/nets/$(basename "$net" .json).net"
+for pair in nosl:champion sl:sl-champion; do
+  champion=$B/src/eval/champions/${pair%%:*}.json
+  # Net files are not in git, so the commit's export holds none: they come from this checkout's weights/all, which
+  # weights/fetch.sh fills with the champions' nets.
+  for net in $(grep -o 'weights/all/[^"]*\.json' "$champion" | sort -u); do
+    cp "$R/$net" "$B/brain/nets/$(basename "$net" .json).net"
+  done
+  sed 's#weights/all/\([^"]*\)\.json#nets/\1.net#g' "$champion" > "$B/brain/${pair#*:}.json"
 done
-sed 's#weights/all/\([^"]*\)\.json#nets/\1.net#g' "$champion" > "$B/brain/champion.json"
 
 if [ -z "$LINUX_ONLY" ]; then rm -rf "$R/out"; fi
 mkdir -p "$I"

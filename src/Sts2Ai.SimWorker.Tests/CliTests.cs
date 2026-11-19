@@ -100,6 +100,27 @@ public sealed class CliTests : IDisposable
         Assert.StartsWith("combat plan combat-tiny ", sl.Name);
     }
 
+    [Fact]
+    public void BrainPlaysSLHostsWithTheirOwnChampionFile()
+    {
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var slValue = Path.Combine(_dir, "v-sl.json");
+        File.Copy(value, slValue);
+        var slFile = Path.Combine(_dir, "sl.json");
+        File.Move(ChampionFile(new()
+        {
+            ["env"] = "SL", ["policy"] = "plan", ["macro"] = "l0", ["effort"] = "medium", ["value"] = slValue, ["combat-net"] = net, ["afterstates"] = "clone",
+        }), slFile);
+        var noSlFile = ChampionFile(new() { ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net });
+
+        var (noSl, sl) = BrainCommand.Champions(Cli.Parse(["brain", "--champion", noSlFile, "--sl-champion", slFile, "--workers", "3"]));
+
+        Assert.Equal(("pimc", value, false, 3), (noSl.Policy, noSl.ValueFile, noSl.OnClone, noSl.Workers));
+        Assert.Equal(("plan", slValue, true, 3), (sl.Policy, sl.ValueFile, sl.OnClone, sl.Workers));
+        Assert.Throws<CliException>(() => BrainCommand.Champions(Cli.Parse(["brain", "--champion", noSlFile, "--sl-champion", slFile, "--sl-policy", "plan"])));
+    }
+
     [Theory]
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]

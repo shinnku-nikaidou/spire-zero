@@ -6,7 +6,8 @@ namespace Sts2Ai.Mod;
 
 /// <summary>
 /// The brain that ships in the mod's folder, so a player needs nothing else: brain/RID/ holds a
-/// self-contained brain for each platform, brain/ its champion file and nets. It runs as a child process of the game,
+/// self-contained brain for each platform, brain/ the champion files and their nets: champion.json NoSL's,
+/// sl-champion.json SL's (each environment has its own nets). It runs as a child process of the game,
 /// talking on its stdin and stdout, with the running game's own assemblies (STS2_BIN_DIR, the folder the game loaded
 /// sts2.dll from) and version (STS2_GAME_VERSION, which the live combats it writes out carry for the engine) and its
 /// working directory brain/. It writes into the game session's folder of the mod's log (<see cref="ModLog"/>): its
@@ -52,7 +53,7 @@ internal sealed class BundledBrain
             var mode = File.GetUnixFileMode(Launcher);
             if ((mode & exec) != exec) File.SetUnixFileMode(Launcher, mode | exec);
         }
-        var start = new ProcessStartInfo(Launcher, ["brain", "--champion", "champion.json", "--workers", Workers.ToString(),
+        var start = new ProcessStartInfo(Launcher, ["brain", "--champion", "champion.json", "--sl-champion", "sl-champion.json", "--workers", Workers.ToString(),
             "--wire", Path.Combine(_logs, "wire.jsonl"), "--log", Path.Combine(_logs, "decisions.jsonl")])
         {
             WorkingDirectory = _dir,

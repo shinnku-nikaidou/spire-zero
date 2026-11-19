@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using Sts2Ai.Brain;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
@@ -9,7 +10,8 @@ namespace Sts2Ai.SimWorker.Commands;
 /// brain: the brain alone, which serves the host that started it, the mod, on its stdin and stdout,
 /// with the champion its options name, and ends when stdin closes. Each host names its environment: NoSL hosts get --policy's combat brain, SL hosts
 /// --sl-policy's (the SL planner by default), with the same macro brain, whose afterstates
-/// the environment sets (<see cref="Champions"/>), so one champion file serves both. The SL planner searches in the
+/// the environment sets (<see cref="Champions"/>), so one champion file serves both; or SL hosts get their own file's
+/// champion (--sl-champion), as the mod ships them: each environment has its own nets. The SL planner searches in the
 /// engine, on the live combat an SL host sends with each combat decision
 /// (<see cref="DecisionRequest.Export"/>), and crosses a card prompt on the node's clone in the search workers. A host may ask for
 /// another effort of the SL planner for its run (<see cref="Hello.Effort"/>), which then plays with that preset's
@@ -21,11 +23,14 @@ internal static class BrainCommand
     private static readonly Option<string?> Wire = Opt.Maybe<string?>("--wire", "writes every message the hosts send, one JSON line each (what clones replays)");
     private static readonly Option<string> SlPolicy = Opt.Of("--sl-policy", "plan", "the combat brain of SL hosts; --policy is NoSL hosts'")
         .AcceptOnlyFromAmong(["pimc", "plan", .. Policies.CombatNames]);
+    private static readonly Option<string?> SlChampion = Opt.Maybe<string?>("--sl-champion",
+        "SL hosts' own champion file, played as run --champion FILE plays it, with this command's --workers (not with --sl-policy); " +
+        "without it SL hosts play --champion's with --sl-policy's combat brain");
     private static readonly ChampionArgs Champion = new(file: true);
 
     public static Command Command()
     {
-        var command = Opt.Command("brain", "the brain alone: serves the host that starts it on stdin and stdout, until stdin closes", [Log, Wire, SlPolicy],
+        var command = Opt.Command("brain", "the brain alone: serves the host that starts it on stdin and stdout, until stdin closes", [Log, Wire, SlPolicy, SlChampion],
             Champion.Options);
         command.SetAction(Run);
         return command;
@@ -87,14 +92,18 @@ internal static class BrainCommand
     }
 
     /// <summary>
-    /// The champion of NoSL hosts and of SL hosts. L0 values its options on the afterstates the screen predicts in NoSL and
-    /// on the node's clone in SL, the only pairing Harness takes, whatever --afterstates says.
+    /// The champion of NoSL hosts and of SL hosts: --champion's, and SL's own file (--sl-champion) when given, since
+    /// each environment has its own nets (2026-11-18). L0 values its options on the afterstates the screen predicts in
+    /// NoSL and on the node's clone in SL, the only pairing Harness takes, whatever --afterstates says.
     /// </summary>
     internal static (ChampionOptions NoSL, ChampionOptions SL) Champions(ParseResult r)
     {
         var slPolicy = r.GetValue(SlPolicy)!;
-        var noSl = Champion.Read(r, planElsewhere: slPolicy == "plan") with { OnClone = false };
-        var sl = Champion.Read(r, slPolicy);
+        var slFile = r.GetValue(SlChampion);
+        if (slFile != null && r.GetResult(SlPolicy) is { Implicit: false }) throw new CliException("--sl-champion names SL's champion whole: not with --sl-policy");
+        var noSl = Champion.Read(r, planElsewhere: slFile == null && slPolicy == "plan") with { OnClone = false };
+        var sl = slFile == null ? Champion.Read(r, slPolicy)
+            : ChampionArgs.Of(slFile, r.GetValue<int?>("--workers") is { } workers ? ["--workers", workers.ToString(CultureInfo.InvariantCulture)] : []);
         // The clone values a fight an option starts with the combat net; without one, Harness refuses SL hosts.
         return (noSl, sl.Macro == "l0" && sl.Leaf.Net != null ? sl with { OnClone = true } : sl);
     }
