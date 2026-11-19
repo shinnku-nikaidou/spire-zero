@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Sts2Ai.Protocol;
 
@@ -88,24 +87,12 @@ internal sealed record Settings(
         }
     }
 
-    /// <summary>
-    /// Settings from their JSON. An effort the mod no longer offers (an older mod's "Brain") is left out, so the effort
-    /// takes its default and the player's other settings stay.
-    /// </summary>
-    private static Settings Parse(string json)
-    {
-        if (JsonNode.Parse(json) is not JsonObject node) return new();
-        if (node["Effort"] is JsonValue effort && effort.TryGetValue(out string? name) && !Enum.TryParse<SearchEffort>(name, ignoreCase: true, out _))
-            node.Remove("Effort");
-        return node.Deserialize<Settings>(Json) ?? new();
-    }
-
     /// <summary>The kept settings; the defaults until the player changes one.</summary>
     private static Settings Read()
     {
         try
         {
-            return File.Exists(Kept) ? Parse(File.ReadAllText(Kept)) : new();
+            return File.Exists(Kept) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(Kept), Json) ?? new() : new();
         }
         catch (Exception e) when (e is IOException or JsonException)
         {
