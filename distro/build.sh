@@ -54,10 +54,11 @@ for rid in $rids; do
   "$dotnet" publish "$B/src/src/Sts2Ai.SimWorker" "$@" -p:PublishProfile=brain -r "$rid" -o "$B/brain/$rid"
 done
 
-# The engine beside each brain, where Native looks for it.
+# The engine beside each brain, where Native looks for it. linux-x64's is linked by zig against glibc 2.17
+# (cargo zigbuild), not this machine's glibc, so it loads on any player's Linux (2026-11-19).
 STS2_DECOMPILED="$R/tmp/decompiled/sts2-$game" STS2_BIN_DIR="$R/tmp/gamebin/$game" "$B/src/engine/gen.sh" --check >&2
-(cd "$B/src/engine" && cargo build --release -q)
-cp "$B/src/engine/target/release/libsts2ai_engine.so" "$B/brain/linux-x64/"
+(cd "$B/src/engine" && cargo zigbuild --release -q --target x86_64-unknown-linux-gnu.2.17)
+cp "$B/src/engine/target/x86_64-unknown-linux-gnu/release/libsts2ai_engine.so" "$B/brain/linux-x64/"
 if [ -z "$LINUX_ONLY" ]; then
 tar -C "$B/src" --exclude=engine/target -cf - engine | ssh "$STS2_MAC" \
   'set -e; d=$(mktemp -d); trap "rm -rf $d" EXIT; tar -xf - -C "$d"; cd "$d/engine"; PATH="$HOME/.cargo/bin:$PATH" cargo build --release -q >&2

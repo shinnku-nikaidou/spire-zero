@@ -1,6 +1,0 @@
-# The C inside the engine (mimalloc's, built by libmimalloc-sys's cc) takes this machine's compiler. GCC 15 and later
-# default to C23, where glibc's headers turn strtol into __isoc23_strtol of GLIBC_2.38, and a library built so does
-# not load on a host with an older glibc (the fleet's, 2026-11-19: every NoSL run at 7a6eec09 failed there). C17 keeps
-# strtol. Linux x86-64 only: the other targets are built with their own compilers.
-[env]
-CFLAGS_x86_64_unknown_linux_gnu = "-std=gnu17"
