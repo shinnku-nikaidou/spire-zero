@@ -38,12 +38,12 @@
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::bound::{self, Bounds};
 use super::state::{Action, History, State, Status};
 use super::threads::Worlds;
-use super::turn::{TurnEnd, TurnSearch};
+use super::turn::{Turn, TurnEnd, TurnSearch};
 
 /// C#: SlPlanner.MaxTurns.
 pub const MAX_TURNS: i32 = 40;
@@ -61,6 +61,10 @@ pub struct Job {
     pub from: Option<(usize, State)>,
     /// The job's state is a prompt between its turn's end and the next turn's start (`turn::search`'s `crossing`).
     pub crossing: bool,
+    /// The most nodes the job's search spends in this call before it pauses (`TurnSearch::paused`); None, to its end.
+    pub most: Option<i32>,
+    /// The search an earlier job of the same state paused, to go on with instead of beginning one (`turn::job`).
+    pub resume: Mutex<Option<Box<Turn>>>,
 }
 
 /// C#: TurnSearcher. Searches one turn from each job's state, in job order, each with `nodes` nodes, keeping `keep`.
@@ -183,6 +187,7 @@ pub fn narrow(full: &TurnSearch, keep: usize) -> TurnSearch {
         cut: full.cut || going.len() > keep,
         pruned: full.pruned,
         start: None,
+        paused: None,
     }
 }
 
@@ -344,6 +349,8 @@ impl Beam<'_> {
                     bounds: self.bounds.clone(),
                     from: self.worlds.nearest(&states[i].actions),
                     crossing: false,
+                    most: None,
+                    resume: Mutex::new(None),
                 })
                 .collect();
             let replies = self.searcher.search(&jobs, self.nodes_per_state, if dive { usize::MAX } else { keep })?;

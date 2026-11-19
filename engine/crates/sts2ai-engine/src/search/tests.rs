@@ -397,6 +397,7 @@ fn a_sooner_win_is_the_pick_on_an_exact_tie_or_within_the_turn_decay() {
             cut: false,
             pruned: 0,
             start: None,
+            paused: None,
         };
         let turns: HashMap<&str, TurnSearch> = HashMap::from([
             (
@@ -577,6 +578,67 @@ fn the_solvers_root_moves_with_the_combat() {
     assert!(there.proved);
     assert_near(best(&off, 24, false), there.value, 9);
     assert_replays(&there, 24, &off, false);
+}
+
+#[test]
+fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
+    // Paused after each node and gone on with in the next call: the same states in the same order, the same ends
+    // asked of the leaf, the same cycles cashed out.
+    let worlds = [
+        toy(24),
+        Toy::new(24, Some("P"), true).mittens().state(),
+        Loop::new(Rules::new(15)).state(),
+        Loop::new(Rules { prompted: Prompted::GivesR, ..Rules::new(50) }).state(),
+        Loop::new(Rules { junk_every: 6, ..Rules::new(50) }).state(),
+    ];
+    for root in worlds {
+        let whole = turn::search(&mut root.copy(), &none(), UNLIMITED, usize::MAX, &Bounds::new(), false, &ToyLeaf, None).expect("a search");
+        let job = Job {
+            path: Vec::new(),
+            history: none(),
+            bounds: Bounds::new(),
+            from: None,
+            crossing: false,
+            most: Some(1),
+            resume: std::sync::Mutex::new(None),
+        };
+        let (mut calls, mut nodes) = (0, 0);
+        let pieces = loop {
+            let mut found = turn::job(&job, || Ok(root.copy()), UNLIMITED, usize::MAX, &Bounds::new(), &ToyLeaf, None).expect("a piece");
+            calls += 1;
+            nodes += found.nodes;
+            match found.paused.take() {
+                Some(turn) => *job.resume.lock().expect("the job") = Some(turn),
+                None => break found,
+            }
+        };
+        assert!(calls > 1, "the search paused");
+        assert_eq!((whole.nodes, whole.cut, whole.pruned), (nodes, pieces.cut, pieces.pruned));
+        let ends = |found: &TurnSearch| -> Vec<(String, u64, u64, u64)> {
+            found.ends.iter().map(|e| (text(&e.actions), e.key, e.value.to_bits(), e.exact)).collect()
+        };
+        assert_eq!(ends(&whole), ends(&pieces));
+    }
+}
+
+#[test]
+fn the_solver_with_its_turns_in_pieces_proves_the_same_line() {
+    // Each state's turn searched a node at a time, its search paused and gone on with in the next batch, a run of one
+    // node after another: the same proved value as turns searched whole.
+    let mut whole = solver(16);
+    whole.run(&toy_searcher(&[], 24, false), i64::MAX).expect("a search");
+    let mut pieces = solver(16).with_piece(1);
+    let mut runs = 0;
+    while !pieces.proved() {
+        pieces.run(&toy_searcher(&[], 24, false), 1).expect("a search");
+        runs += 1;
+        assert!(runs < 100_000, "the solver ends");
+    }
+    let plan = result(&pieces);
+    assert_near(result(&whole).value, plan.value, 9);
+    assert_near(best(&[], 24, false), plan.value, 9);
+    assert_replays(&plan, 24, &[], false);
+    assert!(runs > pieces.searched() as usize, "turns paused");
 }
 
 #[test]

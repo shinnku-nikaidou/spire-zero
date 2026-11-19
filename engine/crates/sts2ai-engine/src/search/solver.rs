@@ -29,20 +29,23 @@
 //! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
 //! of a win found with the same potions is dropped, in a turn's search as soon as a line reaches it, and among the states
 //! waiting when a win raises its potions' bound. The states searched at a time (`batch`) are a turn's search each, run
-//! apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs.
+//! apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs. A run shares the nodes
+//! it is asked for over each batch's states (`PIECE` at the least): a turn with more pauses there (`turn::Turn`) and
+//! goes on in the next batch before any state waiting starts, so a run ends near its nodes however big a turn is (one
+//! batch of whole turns ran 30 to 100 thousand nodes on a run of 16,384 in big Regent turns).
 //!
 //! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::beam::{self, ByFirst, Found, Job, Rank, Searcher, UNLIMITED};
 use super::bound::{self, Bounds};
 use super::state::{self, Action, History, Status};
 use super::threads::Worlds;
-use super::turn::{self, TurnEnd, TurnSearch};
+use super::turn::{self, Turn, TurnEnd, TurnSearch};
 
 /// C#: SlSolver.Edge. The actions from a state to where its turn ends, the hash of each one's observation, the key of the
 /// state there and the world there exactly (`State::exact`). Told apart by identity, as C# tells its records with their
@@ -72,6 +75,8 @@ struct Node {
     over: Option<TurnEnd>,
     cut: bool,
     dropped: bool,
+    /// Its turn's search, paused where its piece of a run ended (`Solver::run`).
+    turn: Option<Box<Turn>>,
 }
 
 impl Node {
@@ -94,6 +99,7 @@ impl Node {
             over: None,
             cut: false,
             dropped: false,
+            turn: None,
         }
     }
 }
@@ -160,12 +166,21 @@ pub struct Solver {
     /// The worlds of the states expanded last, by their paths from the root: a state's turn starts from the nearest one
     /// on its path instead of replaying the path from the root.
     worlds: Worlds,
+    /// The states whose turn's search is paused, in the order paused: they go on before any state waiting starts.
+    going: Vec<usize>,
+    /// The fewest nodes a turn spends in a batch (`PIECE`).
+    piece: i64,
 }
 
 /// How many expanded states' worlds the solver keeps, the latest. On max's route over 45 fights of whole runs (8
 /// threads) it took the CPU from 724 s, every path replayed from the root, to 354 s, for 153 MB more at the peak;
 /// keeping 4,096 saved a tenth more for 568 MB.
 const WORLDS: usize = 1024;
+
+/// The fewest nodes a state's turn spends in one batch of a run before it pauses. A run of N nodes shares N over a
+/// batch's states, so that it ends near N however big a turn is (a turn has had 1.9 million nodes); a batch of states
+/// is one call of the searcher, whose cost is its threads', so a piece is not made smaller than this.
+const PIECE: i64 = 256;
 
 fn end_turns(actions: &[Action]) -> i32 {
     actions.iter().filter(|a| a.is_end_turn()).count() as i32
@@ -193,7 +208,15 @@ impl Solver {
             raised: 0,
             purged: 0,
             worlds: Worlds::new(WORLDS),
+            going: Vec::new(),
+            piece: PIECE,
         }
+    }
+
+    /// The solver with turns paused after `piece` nodes at the least, instead of `PIECE`; `i64::MAX`, never.
+    pub fn with_piece(mut self, piece: i64) -> Solver {
+        self.piece = piece;
+        self
     }
 
     pub fn nodes(&self) -> i64 {
@@ -209,7 +232,7 @@ impl Solver {
     }
 
     pub fn left(&self) -> usize {
-        if self.started { self.queue.len() } else { 1 }
+        if self.started { self.queue.len() + self.going.len() } else { 1 }
     }
 
     /// C#: Bounds. By the potions held at a win's end, the most HP plus max HP a win found ends the combat with.
@@ -218,7 +241,7 @@ impl Solver {
     }
 
     pub fn proved(&self) -> bool {
-        self.started && self.queue.is_empty() && self.cuts == 0 && self.best.is_some()
+        self.started && self.queue.is_empty() && self.going.is_empty() && self.cuts == 0 && self.best.is_some()
     }
 
     /// C#: Seed. A line another search found from the root: a candidate for the pick, if it ends the combat.
@@ -230,14 +253,16 @@ impl Solver {
         self.consider(line, from);
     }
 
-    /// C#: Run. Searches on for at least `nodes` more actions, or until nothing is left.
+    /// C#: Run. Searches on for at least `nodes` more actions, or until nothing is left. The nodes left are shared over
+    /// each batch's states, at least `PIECE` each: a state's turn that has more pauses there, and goes on in the next
+    /// batch, in this run or the next, before any state waiting starts.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         if !self.started {
             self.start(search, Reached::Turn)?;
         }
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
-        while !self.queue.is_empty() && self.nodes < until {
-            let mut states = Vec::new();
+        while !(self.queue.is_empty() && self.going.is_empty()) && self.nodes < until {
+            let mut states = std::mem::take(&mut self.going);
             while states.len() < self.batch {
                 let Some(waiting) = self.queue.pop() else {
                     break;
@@ -252,16 +277,20 @@ impl Solver {
             if states.is_empty() {
                 continue;
             }
+            let piece = ((until - self.nodes) / states.len() as i64).max(self.piece).min(i32::MAX as i64) as i32;
             let jobs: Vec<Job> = states
                 .iter()
                 .map(|&n| {
-                    let path = self.path(n).0;
+                    let turn = self.nodes_of[n].turn.take();
+                    let path = if turn.is_some() { Vec::new() } else { self.path(n).0 };
                     Job {
-                        from: self.worlds.nearest(&path),
+                        from: if turn.is_some() { None } else { self.worlds.nearest(&path) },
                         path,
                         history: self.nodes_of[n].history.clone(),
                         bounds: self.bounds.clone(),
                         crossing: false,
+                        most: Some(piece),
+                        resume: Mutex::new(turn),
                     }
                 })
                 .collect();
@@ -270,7 +299,14 @@ impl Solver {
                 if let Some(world) = found.start.take() {
                     self.worlds.keep(job.path, world);
                 }
-                self.expand(n, found);
+                match found.paused.take() {
+                    Some(turn) => {
+                        self.nodes += found.nodes as i64;
+                        self.nodes_of[n].turn = Some(turn);
+                        self.going.push(n);
+                    }
+                    None => self.expand(n, found),
+                }
             }
             if self.raised > self.purged {
                 self.purge();
@@ -279,7 +315,7 @@ impl Solver {
         Ok(())
     }
 
-    /// C#: Purge. The waiting states below their potions' bound go.
+    /// C#: Purge. The waiting states below their potions' bound go, and the paused ones.
     fn purge(&mut self) {
         self.purged = self.raised;
         let left = std::mem::take(&mut self.queue).into_vec();
@@ -288,6 +324,15 @@ impl Solver {
             if !bound::below(&self.bounds, &node.potions, node.reach) {
                 self.queue.push(waiting);
             } else {
+                self.table.remove(&node.key);
+            }
+        }
+        for n in std::mem::take(&mut self.going) {
+            let node = &mut self.nodes_of[n];
+            if !bound::below(&self.bounds, &node.potions, node.reach) {
+                self.going.push(n);
+            } else {
+                node.turn = None;
                 self.table.remove(&node.key);
             }
         }
@@ -424,6 +469,8 @@ impl Solver {
                 bounds: self.bounds.clone(),
                 from: None,
                 crossing: matches!(reached, Reached::Crossing),
+                most: None,
+                resume: Mutex::new(None),
             };
             let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
             self.expand(root, found);
@@ -487,6 +534,8 @@ impl Solver {
         drop(arena);
         self.root = 0;
         self.table = kept.iter().map(|(&key, n)| (key, moved[n])).collect();
+        // The paused turns the root still reaches go on, in the same order.
+        self.going = std::mem::take(&mut self.going).into_iter().filter_map(|n| moved.get(&n).copied()).collect();
         let count = self.nodes_of.len();
         self.moves = HashMap::new();
         for n in 1..count {
@@ -508,7 +557,8 @@ impl Solver {
                 self.consider(line, from);
             }
         }
-        // Where a bound fell or went, a turn the pruning took lines or ends from is searched again.
+        // Where a bound fell or went, a turn the pruning took lines or ends from is searched again, a paused one from
+        // its start.
         if before.iter().any(|(potions, &was)| self.bounds.get(potions).is_none_or(|&now| now < was)) {
             for n in 1..count {
                 let node = &self.nodes_of[n];
@@ -521,12 +571,20 @@ impl Solver {
                     node.dropped = false;
                 }
             }
+            let nodes = &mut self.nodes_of;
+            self.going.retain(|&n| {
+                let pruned = nodes[n].turn.as_ref().is_some_and(|turn| turn.pruned() > 0);
+                if pruned {
+                    nodes[n].turn = None;
+                }
+                !pruned
+            });
         }
         for n in 0..count {
             if self.nodes_of[n].cut {
                 self.cuts += 1;
             }
-            if self.nodes_of[n].edges.is_none() {
+            if self.nodes_of[n].edges.is_none() && self.nodes_of[n].turn.is_none() {
                 let waiting = Waiting {
                     worth: self.worth(n),
                     order: self.nodes_of[n].order,

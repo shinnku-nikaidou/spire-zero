@@ -11,6 +11,10 @@
 //! ends. A move back to a state on the path with something gained is a cycle, which would spend every node on its own
 //! repeats: it goes to `Loops` instead of down.
 //!
+//! The search keeps its path of states itself, each with the actions it has left (`Frame`), so it can stop after a
+//! number of nodes and go on later from there (`Turn`, `job`): it then visits, finds and asks the leaf about the same
+//! states in the same order and batches as a search that never stopped.
+//!
 //! The search needs no end's value to go on, so the leaf is asked about a turn's ends together, `CHUNK` at a time; a
 //! state another line already ended at is not asked about again. A turn has had 169 thousand ends (a Regent's second
 //! turn of 9 cards and 4 energy, with Toasty Mittens' exhaust after it), each held with its observation and its run
@@ -29,7 +33,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::bound::{self, Bounds};
-use super::helpers::{Ahead, Helpers};
+use super::beam::Job;
+use super::helpers::{Ahead, Helpers, Slot};
 use super::leaf::{Leaf, LeafOutcome, LeafState};
 use super::loops::{LoopPoint, Loops};
 use super::order;
@@ -75,6 +80,9 @@ pub struct TurnSearch {
     /// The world the turn was searched from, where the searcher gives it back (`threads.rs`): the beam and the solver
     /// keep it, so that a later turn below it starts there instead of replaying its path from the root (`Worlds`).
     pub start: Option<State>,
+    /// A search that stopped where its job said (`Job::most`), to go on with in a later job (`Job::resume`): nothing
+    /// of the turn is in `ends` yet.
+    pub paused: Option<Box<Turn>>,
 }
 
 /// C#: SlPlanner.Mix.
@@ -99,67 +107,178 @@ pub fn search(
     root: &mut State, history: &Arc<History>, nodes: i32, keep: usize, bounds: &Bounds, crossing: bool, leaf: &dyn Leaf,
     helpers: Option<&Helpers>,
 ) -> Result<TurnSearch, String> {
-    let round = root.round();
-    let mut dfs = Dfs {
-        leaf,
-        history: history.clone(),
-        bounds,
-        seen: HashSet::new(),
-        keys: HashSet::new(),
-        ends: Vec::new(),
-        ended: Vec::new(),
-        priced: Vec::new(),
-        outcomes: Vec::new(),
-        going: 0,
-        actions: Vec::new(),
-        hashes: Vec::new(),
-        path: Vec::new(),
-        nodes: 0,
-        round,
-        limit: 0,
-        pruned: 0,
-        cut: false,
-        loops: Loops::new(round),
-        records: Vec::new(),
-        crossing,
-        helpers,
+    let mut turn = Turn::new(root, history, nodes, bounds.clone(), crossing);
+    turn.go(leaf, helpers, None)?;
+    turn.end(leaf, keep)
+}
+
+/// A job's turn (`Job`): the search it paused gone on with (`Job::resume`), else one from `state()`, each spending
+/// at most the job's `most` nodes before it pauses again (`TurnSearch::paused`). The nodes are the ones spent in this
+/// call; a search begun here gives back the world it began at (`TurnSearch::start`).
+#[allow(clippy::too_many_arguments)]
+pub fn job(
+    job: &Job, state: impl FnOnce() -> Result<State, String>, nodes: i32, keep: usize, bounds: &Bounds, leaf: &dyn Leaf,
+    helpers: Option<&Helpers>,
+) -> Result<TurnSearch, String> {
+    let paused = job.resume.lock().expect("a job's paused search").take();
+    let (mut turn, start) = match paused {
+        Some(turn) => (turn, None),
+        None => {
+            let state = state()?;
+            (Box::new(Turn::new(&state, &job.history, nodes, bounds.clone(), job.crossing)), Some(state))
+        }
     };
-    dfs.visit(root, Some(nodes), None)?;
-    dfs.value();
-    let found = {
-        let leaf = dfs.leaf;
-        let history = dfs.history.clone();
-        dfs.loops.run_found(&|state: &mut State, actions: &[Action], hashes: &[u64]| end_of(leaf, &history, state, actions, hashes))?
+    let before = turn.dfs.nodes;
+    let done = turn.go(leaf, helpers, job.most.map(|most| before.saturating_add(most)))?;
+    let spent = turn.dfs.nodes - before;
+    let mut found = if done {
+        (*turn).end(leaf, keep)?
+    } else {
+        TurnSearch {
+            ends: Vec::new(),
+            nodes: 0,
+            cut: false,
+            pruned: 0,
+            start: None,
+            paused: Some(turn),
+        }
     };
-    for end in found {
-        dfs.add(end);
-    }
-    dfs.cut |= dfs.loops.any;
-    let mut over: Option<TurnEnd> = None;
-    let mut going: Vec<TurnEnd> = Vec::new();
-    for end in std::mem::take(&mut dfs.ends) {
-        if end.status == Status::InProgress {
-            going.push(end);
-        } else if over.as_ref().is_none_or(|o| end.value > o.value) {
-            // C#: MaxBy, the first of the best.
-            over = Some(end);
+    found.nodes = spent;
+    found.start = start;
+    Ok(found)
+}
+
+/// A turn's search, depth first from its root (`Dfs`), which can stop after a number of nodes and go on later from
+/// where it stopped: the states on its path are kept, each with the actions it has left, and all it found so far.
+/// Going on, it visits the same states in the same order, and asks the leaf about the same ends in the same batches, as
+/// a search that never stopped.
+pub struct Turn {
+    dfs: Dfs,
+    /// The state the search begins at, until it does.
+    root: Option<State>,
+    /// The nodes the search may spend in all (`search`).
+    nodes: i32,
+}
+
+impl Turn {
+    pub fn new(root: &State, history: &Arc<History>, nodes: i32, bounds: Bounds, crossing: bool) -> Turn {
+        let round = root.round();
+        Turn {
+            dfs: Dfs {
+                history: history.clone(),
+                bounds,
+                seen: HashSet::new(),
+                keys: HashSet::new(),
+                ends: Vec::new(),
+                ended: Vec::new(),
+                priced: Vec::new(),
+                outcomes: Vec::new(),
+                going: 0,
+                actions: Vec::new(),
+                hashes: Vec::new(),
+                path: Vec::new(),
+                stack: Vec::new(),
+                nodes: 0,
+                round,
+                limit: 0,
+                pruned: 0,
+                cut: false,
+                loops: Loops::new(round),
+                records: Vec::new(),
+                crossing,
+            },
+            root: Some(root.copy()),
+            nodes,
         }
     }
-    // C#: OrderByDescending(Value), a stable sort.
-    going.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap_or(std::cmp::Ordering::Equal));
-    if going.len() > keep {
-        dfs.cut = true;
-        going.truncate(keep);
+
+    /// The lines it stopped at a state below its potions' bound so far.
+    pub fn pruned(&self) -> i32 {
+        self.dfs.pruned
     }
-    let mut ends: Vec<TurnEnd> = over.into_iter().collect();
-    ends.extend(going);
-    Ok(TurnSearch {
-        ends,
-        nodes: dfs.nodes,
-        cut: dfs.cut,
-        pruned: dfs.pruned,
-        start: None,
-    })
+
+    /// Searches on, until the search is done (true) or has spent `until` nodes in all (false: it goes on from there
+    /// at the next call). The steps queued for `helpers` and not taken go when it stops: helpers live for one call.
+    pub fn go(&mut self, leaf: &dyn Leaf, helpers: Option<&Helpers>, until: Option<i32>) -> Result<bool, String> {
+        let cx = Cx { leaf, helpers };
+        if let Some(root) = self.root.take() {
+            self.dfs.enter(&cx, root, Some(self.nodes), None);
+        }
+        let went = self.dfs.walk(&cx, until);
+        if !matches!(went, Ok(true)) {
+            self.dfs.unslot();
+        }
+        went
+    }
+
+    /// The turn's search once it is done (`go`): its ends valued, the cycles found cashed out, and the ends sorted.
+    pub fn end(mut self, leaf: &dyn Leaf, keep: usize) -> Result<TurnSearch, String> {
+        let dfs = &mut self.dfs;
+        dfs.value(leaf);
+        let found = {
+            let history = dfs.history.clone();
+            dfs.loops.run_found(&|state: &mut State, actions: &[Action], hashes: &[u64]| end_of(leaf, &history, state, actions, hashes))?
+        };
+        for end in found {
+            dfs.add(end);
+        }
+        dfs.cut |= dfs.loops.any;
+        let mut over: Option<TurnEnd> = None;
+        let mut going: Vec<TurnEnd> = Vec::new();
+        for end in std::mem::take(&mut dfs.ends) {
+            if end.status == Status::InProgress {
+                going.push(end);
+            } else if over.as_ref().is_none_or(|o| end.value > o.value) {
+                // C#: MaxBy, the first of the best.
+                over = Some(end);
+            }
+        }
+        // C#: OrderByDescending(Value), a stable sort.
+        going.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap_or(std::cmp::Ordering::Equal));
+        if going.len() > keep {
+            dfs.cut = true;
+            going.truncate(keep);
+        }
+        let mut ends: Vec<TurnEnd> = over.into_iter().collect();
+        ends.extend(going);
+        Ok(TurnSearch {
+            ends,
+            nodes: dfs.nodes,
+            cut: dfs.cut,
+            pruned: dfs.pruned,
+            start: None,
+            paused: None,
+        })
+    }
+}
+
+/// What a search asks things of while it goes: the leaf, and the call's spare threads (helpers.rs).
+struct Cx<'a> {
+    leaf: &'a dyn Leaf,
+    helpers: Option<&'a Helpers>,
+}
+
+/// A state on the search's path (C#: a call of Visit): its actions, the next one to try, and its share of the nodes.
+struct Frame {
+    state: State,
+    /// Where the nodes up to it are shared over its actions (`Dfs::walk`).
+    share_to: Option<i32>,
+    todo: Vec<Action>,
+    /// The steps queued for helpers: of action i, `slots[i - first]`.
+    slots: Vec<Arc<Slot>>,
+    first: usize,
+    /// The nodes spent when the search came here.
+    from: i32,
+    /// Whether an action of it was tried.
+    moved: bool,
+    /// The slots taken so far; the rest are dropped when the search leaves the state.
+    taken: usize,
+    /// The action tried next.
+    next: usize,
+    /// Its budget ran out: no more of its actions are tried.
+    done: bool,
+    /// The player can play here, so it is a point of the path cycles are looked for from (`Loops`).
+    plays: bool,
 }
 
 /// A line that ended the turn or the combat, as the world stood there, before the leaf has valued it (C#: Ended).
@@ -228,10 +347,9 @@ impl Priced {
     }
 }
 
-struct Dfs<'a> {
-    leaf: &'a dyn Leaf,
+struct Dfs {
     history: Arc<History>,
-    bounds: &'a Bounds,
+    bounds: Bounds,
     seen: HashSet<(u64, u64)>,
     keys: HashSet<u64>,
     ends: Vec<TurnEnd>,
@@ -245,6 +363,8 @@ struct Dfs<'a> {
     actions: Vec<Action>,
     hashes: Vec<u64>,
     path: Vec<LoopPoint>,
+    /// The states the search stands on, the root first.
+    stack: Vec<Frame>,
     nodes: i32,
     round: i32,
     limit: i32,
@@ -256,8 +376,6 @@ struct Dfs<'a> {
     records: Vec<Arc<History>>,
     /// The root is a prompt between its turn's end and the next turn's start (`search`).
     crossing: bool,
-    /// The call's spare threads, which step states ahead of the search (helpers.rs).
-    helpers: Option<&'a Helpers>,
 }
 
 /// The state reached here, for the leaf (C#: Reached's LeafState): its record of enemy moves goes on from the
@@ -296,16 +414,16 @@ fn end_of(leaf: &dyn Leaf, history: &Arc<History>, state: &mut State, actions: &
     Ok(ended.light().valued(outcome))
 }
 
-impl Dfs<'_> {
-    /// C#: Visit. Tries every action from the state, once per state; at a state given `share_to`, the nodes up to it
-    /// are shared over its actions evenly (and what the ones before left), below, a subtree spends its share depth first.
-    /// `ahead`: the state's actions with their steps, queued by a helper before the search came here.
-    fn visit(&mut self, state: &mut State, share_to: Option<i32>, ahead: Option<Ahead>) -> Result<(), String> {
+impl Dfs {
+    /// C#: Visit, where the search comes to a state: the first time, the state goes on the path with its actions
+    /// (true), `share_to` as for `walk`, `ahead` its actions with their steps where a helper queued them before the
+    /// search came here; a state met before is not searched again (false).
+    fn enter(&mut self, cx: &Cx, mut state: State, share_to: Option<i32>, ahead: Option<Ahead>) -> bool {
         if !self.seen.insert((state.state_key, state.hidden_key)) {
             if let Some(ahead) = ahead {
                 ahead.drop_steps();
             }
-            return Ok(());
+            return false;
         }
         // A prompt stands in the middle of an action: a cycle is a move between states where the player can play.
         let plays = state.obs.prompt.is_none();
@@ -322,85 +440,129 @@ impl Dfs<'_> {
         let (todo, left, slots, first) = match ahead {
             Some(ahead) => (ahead.actions, false, ahead.slots, 0),
             None => {
-                let (todo, left) = order::actions(state, most as i64);
-                let slots = match self.helpers {
-                    Some(helpers) if todo.len() > 1 => helpers.queue(state, &todo[1..], super::helpers::AHEAD),
+                let (todo, left) = order::actions(&mut state, most as i64);
+                let slots = match cx.helpers {
+                    Some(helpers) if todo.len() > 1 => helpers.queue(&state, &todo[1..], super::helpers::AHEAD),
                     _ => Vec::new(),
                 };
                 (todo, left, slots, 1)
             }
         };
         self.cut |= left;
-        let from = self.nodes;
-        let mut moved = false;
-        // The slots taken so far; the rest are dropped when the search leaves the state.
-        let mut taken = 0;
-        let result = self.actions_of(state, share_to, &todo, &slots, first, from, &mut moved, &mut taken);
-        for slot in &slots[taken..] {
-            slot.drop_step();
-        }
-        result?;
-        if plays {
-            self.path.pop();
-        }
-        Ok(())
+        self.stack.push(Frame {
+            state,
+            share_to,
+            todo,
+            slots,
+            first,
+            from: self.nodes,
+            moved: false,
+            taken: 0,
+            next: 0,
+            done: false,
+            plays,
+        });
+        true
     }
 
-    /// The search of each action of `state` in turn, `share_to` as for `visit`; the step of action i is `slots[i -
-    /// first]` where there is one.
-    #[allow(clippy::too_many_arguments)]
-    fn actions_of(
-        &mut self, state: &mut State, share_to: Option<i32>, todo: &[Action], slots: &[std::sync::Arc<super::helpers::Slot>], first: usize,
-        from: i32, moved: &mut bool, taken: &mut usize,
-    ) -> Result<(), String> {
-        let hash = state.hash;
-        for (i, action) in todo.iter().enumerate() {
+    /// C#: Visit. Tries every action of the state on top of the path in turn, each line down depth first, until the
+    /// path is empty (true), or until the search has spent `until` nodes (false; the search goes on from there). At a
+    /// state given `share_to`, the nodes up to it are shared over its actions evenly (and what the ones before left);
+    /// below, a subtree spends its share depth first.
+    fn walk(&mut self, cx: &Cx, until: Option<i32>) -> Result<bool, String> {
+        while let Some(top) = self.stack.len().checked_sub(1) {
+            let frame = &mut self.stack[top];
+            let i = frame.next;
+            if frame.done || i >= frame.todo.len() {
+                self.leave();
+                continue;
+            }
+            if until.is_some_and(|until| self.nodes >= until) {
+                return Ok(false);
+            }
             let mut to = None;
-            if let Some(end) = share_to {
-                let share = from as i64 + (end as i64 - from as i64) * (i as i64 + 1) / todo.len() as i64;
+            if let Some(end) = frame.share_to {
+                let share = frame.from as i64 + (end as i64 - frame.from as i64) * (i as i64 + 1) / frame.todo.len() as i64;
                 let at = (self.nodes + 1).max(share as i32);
                 self.limit = at;
                 to = Some(at);
-            } else if *moved && self.nodes >= self.limit {
+            } else if frame.moved && self.nodes >= self.limit {
                 self.cut = true;
-                break;
+                frame.done = true;
+                continue;
             }
-            *moved = true;
+            frame.moved = true;
+            frame.next = i + 1;
             self.nodes += 1;
-            let (mut after, mut ahead) = match i.checked_sub(first).and_then(|at| slots.get(at)) {
+            let action = frame.todo[i].clone();
+            let hash = frame.state.hash;
+            let (mut after, mut ahead) = match i.checked_sub(frame.first).and_then(|at| frame.slots.get(at)) {
                 Some(slot) => {
-                    *taken = i - first + 1;
-                    slot.take(self.helpers.expect("helpers where steps were queued"))?
+                    frame.taken = i - frame.first + 1;
+                    slot.take(cx.helpers.expect("helpers where steps were queued"))?
                 }
-                None => (state.step(action)?, None),
+                None => (frame.state.step(&action)?, None),
             };
             self.actions.push(action.clone());
             self.hashes.push(hash);
             let status = after.status;
             let below = !self.bounds.is_empty()
                 && self.bounds.get(&bound::potions(&after.obs.potions)).is_some_and(|&b| bound::reach(&after.obs) < b);
-            if below {
+            let entered = if below {
                 self.pruned += 1;
+                false
             } else if status != Status::InProgress {
-                self.ends(&mut after)?;
+                self.ends(cx, &mut after)?;
+                false
             } else if after.obs.prompt.is_some() {
-                self.visit(&mut after, to, None)?;
+                self.enter(cx, after, to, None)
             } else if action.is_end_turn() || after.round() != self.round || self.crossing {
-                self.ends(&mut after)?;
+                self.ends(cx, &mut after)?;
+                false
             } else if !self.loops.intercept(&self.path, &after, &self.actions, &self.hashes)? {
-                self.visit(&mut after, None, ahead.take())?;
-            }
+                self.enter(cx, after, None, ahead.take())
+            } else {
+                false
+            };
             if let Some(ahead) = ahead {
                 ahead.drop_steps();
             }
+            if !entered {
+                self.actions.pop();
+                self.hashes.pop();
+            }
+        }
+        Ok(true)
+    }
+
+    /// The state on top of the path has no actions left: off the path, and back to the action that came to it.
+    fn leave(&mut self) {
+        let frame = self.stack.pop().expect("a state on the path");
+        for slot in &frame.slots[frame.taken..] {
+            slot.drop_step();
+        }
+        if frame.plays {
+            self.path.pop();
+        }
+        if !self.stack.is_empty() {
             self.actions.pop();
             self.hashes.pop();
         }
-        Ok(())
+    }
+
+    /// The steps queued for helpers and not taken go, and the search makes them itself when it comes to them.
+    fn unslot(&mut self) {
+        for frame in &mut self.stack {
+            for slot in &frame.slots[frame.taken..] {
+                slot.drop_step();
+            }
+            frame.slots.clear();
+            frame.taken = 0;
+        }
     }
 
     /// C#: Ends. The search's line ended here. A state another line already ended at is not asked about again.
-    fn ends(&mut self, state: &mut State) -> Result<(), String> {
+    fn ends(&mut self, cx: &Cx, state: &mut State) -> Result<(), String> {
         if state.status != Status::InProgress {
             let ended = Ended {
                 state: self.leaf_state(state),
@@ -440,7 +602,7 @@ impl Dfs<'_> {
         self.ended.push(ended);
         self.going += 1;
         if self.going == CHUNK {
-            self.price()?;
+            self.price(cx.leaf)?;
         }
         Ok(())
     }
@@ -457,12 +619,12 @@ impl Dfs<'_> {
     }
 
     /// C#: Price. Asks the leaf about the ends found since it was last asked, in the order found.
-    fn price(&mut self) -> Result<(), String> {
+    fn price(&mut self, leaf: &dyn Leaf) -> Result<(), String> {
         if self.ended.is_empty() {
             return Ok(());
         }
         let states: Vec<&LeafState> = self.ended.iter().map(|e| &e.state).collect();
-        let outcomes = self.leaf.outcomes(&states)?;
+        let outcomes = leaf.outcomes(&states)?;
         self.outcomes.extend(outcomes);
         self.priced.extend(self.ended.drain(..).map(Ended::light));
         self.going = 0;
@@ -470,9 +632,9 @@ impl Dfs<'_> {
     }
 
     /// C#: Value. The turn's ends, from all the lines the search ended, valued in the order found.
-    fn value(&mut self) {
+    fn value(&mut self, leaf: &dyn Leaf) {
         // A failure of the leaf would have been met at a chunk already, or is met here.
-        if let Err(error) = self.price() {
+        if let Err(error) = self.price(leaf) {
             panic!("the leaf failed: {error}");
         }
         let mut outcomes = std::mem::take(&mut self.outcomes);
