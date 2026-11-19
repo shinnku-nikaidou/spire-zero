@@ -105,6 +105,8 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private (string Key, long Since)? _waiting;
     private string? _stopped;
     private string? _waived;
+    /// <summary>The run and act whose ancient auto-play stopped at: it stops there once.</summary>
+    private (string? Run, int Act)? _ancient;
     private long _idle;
     private string _surface = Surfaces.Combat;
     private readonly List<string> _recent = [];
@@ -423,6 +425,13 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             string? type = Describe.Point(answer.Answer.Action, asking.Obs.Run.Map);
             if (type == "Elite") return L10n.T("an elite is next");
             if (type == "Boss") return L10n.T("the boss is next");
+        }
+        // Once an act, at the ancient's first page with options: the player's own pick, then the rest is auto-play's.
+        if (settings.StopAtAncients && asking.Obs.Screen is EventScreen { Finished: false } ev && ev.Id == asking.Obs.Run.Map.Ancient
+            && _ancient != (_run, asking.Obs.Run.Act))
+        {
+            _ancient = (_run, asking.Obs.Run.Act);
+            return L10n.T("an ancient is here");
         }
         return null;
     }

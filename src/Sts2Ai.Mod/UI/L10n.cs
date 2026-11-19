@@ -66,6 +66,7 @@ internal static class L10n
         ["Acting"] = ["En action", "Actuando", "执行中", "執行中", "実行中"],
         ["Stopped"] = ["Arrêté", "Detenido", "已停下", "已停下", "停止"],
         ["an elite is next"] = ["un élite est le prochain", "lo siguiente es un élite", "下一个是精英", "下一個是菁英", "次はエリート"],
+        ["an ancient is here"] = ["un Ancien est là", "aquí hay un Antiguo", "这里是先古之民", "這裡是遠古之民", "エンシェントがいる"],
         ["the boss is next"] = ["le boss est le prochain", "lo siguiente es el jefe", "下一个是 Boss", "下一個是頭目", "次はボス"],
         ["the action did nothing"] = ["l'action n'a rien fait", "la acción no hizo nada", "动作没有生效", "動作沒有生效", "操作が反映されない"],
         ["the AI cannot press this: {0}"] = ["l'IA ne peut pas faire ceci : {0}", "la IA no puede hacer esto: {0}", "AI 按不了：{0}", "AI 按不了：{0}", "AIには押せない：{0}"],
@@ -95,6 +96,7 @@ internal static class L10n
         ["Max"] = ["Max", "Máx", "最高", "最高", "最大"],
         ["Stop at"] = ["Arrêt", "Parar", "停在", "停在", "停止"],
         ["elites, bosses"] = ["élites, boss", "élites, jefes", "精英、Boss 前", "菁英、頭目前", "エリート・ボス前"],
+        ["ancients"] = ["Anciens", "Antiguos", "先古之民", "遠古之民", "エンシェント"],
 
         // The answer.
         ["Win chance"] = ["Chance de victoire", "Prob. de ganar", "本局胜率", "本局勝率", "勝率"],
@@ -175,6 +177,10 @@ internal static class L10n
         ["Speed of auto-play"] = ["Vitesse du jeu automatique", "Velocidad del juego automático", "自动打的速度", "自動打的速度", "オートプレイの速度"],
         ["the pause before each of the AI's actions"] = ["la pause avant chaque action de l'IA", "la pausa antes de cada acción de la IA", "AI 每个动作前停多久", "AI 每個動作前停多久", "AIの各操作の前の間"],
         ["Stop before elites and bosses"] = ["S'arrêter avant les élites et les boss", "Parar antes de élites y jefes", "精英、Boss 前停下", "菁英、頭目前停下", "エリート・ボスの前で止まる"],
+        ["Stop at ancients"] = ["S'arrêter aux Anciens", "Parar en los Antiguos", "在先古之民处停下", "在遠古之民處停下", "エンシェントで止まる"],
+        ["you pick the ancient's offer, then press auto-play again"] = ["vous choisissez l'offre de l'Ancien, puis relancez le jeu automatique",
+            "eliges la oferta del Antiguo y vuelves a pulsar el juego automático", "你自己选先古之民的馈赠，再按一次自动打",
+            "你自己選遠古之民的饋贈，再按一次自動打", "エンシェントの贈り物は自分で選び、もう一度オートプレイを押す"],
         ["Advanced"] = ["Avancé", "Avanzado", "高级", "進階", "詳細設定"],
         ["Environment"] = ["Environnement", "Entorno", "环境", "環境", "環境"],
         ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",

@@ -30,6 +30,7 @@ internal enum SearchEffort { Low, Medium, High, Max }
 /// <param name="Opacity">The card's opacity, all of it: its box, text and buttons.</param>
 /// <param name="PanelX">Where the panel's orb is, its top-left corner in the game's 1080p canvas; the card opens under it. The player drags it.</param>
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
+/// <param name="StopAtAncients">Auto-play stops once at each act's ancient, for the player's own pick.</param>
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
 /// <param name="TurnDecay">The mod asks the SL planner to take a little off a line for each turn it ended
 /// (<see cref="Hello.TurnDecay"/>), so a fight is not drawn out for nothing; a change starts the run anew for the brain.</param>
@@ -46,6 +47,7 @@ internal sealed record Settings(
     float PanelY = 132f,
     AutoSpeed Speed = AutoSpeed.Medium,
     bool StopAtElites = true,
+    bool StopAtAncients = false,
     SearchEffort Effort = SearchEffort.Medium,
     bool TurnDecay = true)
 {

@@ -75,7 +75,7 @@ internal sealed class Panel
     private readonly Button _auto, _step, _finish;
     private readonly Control _options;
     private readonly List<(Button Button, AutoSpeed Speed)> _speeds = [];
-    private readonly Button _stopElites;
+    private readonly Button _stopElites, _stopAncients;
     private readonly Label _speedLabel, _stopLabel, _effortLabel;
     private readonly Control _effortRow;
     private readonly List<(Button Button, SearchEffort Effort)> _efforts = [];
@@ -97,7 +97,7 @@ internal sealed class Panel
     private object? _built;
     private Drive? _drive;
     private PlayEnvironment? _envStyled;
-    private (bool, AutoSpeed, bool, SearchEffort)? _toolStyled;
+    private (bool, AutoSpeed, bool, bool, SearchEffort)? _toolStyled;
 
     /// <param name="pressed">What the toolbar and its keys do; null leaves the toolbar out (the mod is off).</param>
     public Panel(SceneTree tree, Action<Command>? pressed)
@@ -211,6 +211,9 @@ internal sealed class Panel
         _stopElites = Toggle("");
         _stopElites.Pressed += () => Settings.Set(Settings.Current with { StopAtElites = !Settings.Current.StopAtElites });
         stops.AddChild(_stopElites);
+        _stopAncients = Toggle("");
+        _stopAncients.Pressed += () => Settings.Set(Settings.Current with { StopAtAncients = !Settings.Current.StopAtAncients });
+        stops.AddChild(_stopAncients);
         options.AddChild(stops);
         _options = options;
         _options.Visible = false;
@@ -321,17 +324,19 @@ internal sealed class Panel
         Label(_stopLabel, L10n.T("Stop at"));
         foreach (var (button, speed) in _speeds) Label(button, L10n.T(speed.ToString()));
         Label(_stopElites, L10n.T("elites, bosses"));
+        Label(_stopAncients, L10n.T("ancients"));
         Label(_effortLabel, L10n.T("Effort"));
         foreach (var (button, effort) in _efforts) Label(button, L10n.T(effort.ToString()));
         Set(_step, drive.Step ?? L10n.T("Step"), Icons.Step, !drive.Auto && drive.Step != null);
         Set(_finish, drive.Finish ?? L10n.T("Finish room"), Icons.Finish, !drive.Auto && drive.Finish != null);
         // New style boxes only when what they show changed, not every frame.
-        var styled = (drive.Auto, settings.Speed, settings.StopAtElites, settings.Effort);
+        var styled = (drive.Auto, settings.Speed, settings.StopAtElites, settings.StopAtAncients, settings.Effort);
         if (styled == _toolStyled) return;
         _toolStyled = styled;
         RestyleTool(_auto, drive.Auto);
         foreach (var (button, speed) in _speeds) Restyle(button, settings.Speed == speed);
         Restyle(_stopElites, settings.StopAtElites);
+        Restyle(_stopAncients, settings.StopAtAncients);
         foreach (var (button, effort) in _efforts) Restyle(button, settings.Effort == effort);
     }
 
@@ -420,6 +425,7 @@ internal sealed class Panel
         var key = (what, Settings.Current with
             {
                 Env = default, Assist = default, Panel = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
+                StopAtAncients = default,
                 Effort = default, TurnDecay = default,
             },
             L10n.T("Next"));
