@@ -398,6 +398,7 @@ fn a_sooner_win_is_the_pick_on_an_exact_tie_or_within_the_turn_decay() {
             pruned: 0,
             start: None,
             paused: None,
+            graph: None,
         };
         let turns: HashMap<&str, TurnSearch> = HashMap::from([
             (
@@ -601,6 +602,8 @@ fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
             crossing: false,
             most: Some(1),
             resume: std::sync::Mutex::new(None),
+            record: false,
+            memo: None,
         };
         let (mut calls, mut nodes) = (0, 0);
         let pieces = loop {
@@ -619,6 +622,108 @@ fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
         };
         assert_eq!(ends(&whole), ends(&pieces));
     }
+}
+
+#[test]
+fn a_turns_search_with_the_graph_of_an_earlier_one_finds_what_it_finds_alone() {
+    // From each state a line of the root's turn goes through, a search with no bounds taking the root's search's
+    // graph where it holds the same worlds finds what a search alone finds there, and steps fewer worlds.
+    // A Loop counts the actions its copies played: the steps the search made.
+    let counted = |world: Loop| {
+        let played = world.played();
+        (world.state(), Some(played))
+    };
+    let worlds = [
+        (toy(24), None),
+        (Toy::new(24, Some("P"), true).mittens().state(), None),
+        (Toy::new(40, Some("P"), false).state(), None),
+        counted(Loop::new(Rules { prompted: Prompted::GivesR, ..Rules::new(50) })),
+        counted(Loop::new(Rules { prompted: Prompted::AsksTwice, ..Rules::new(9) })),
+        counted(Loop::new(Rules { junk_every: 6, ..Rules::new(50) })),
+    ];
+    let job = |history: &Arc<History>, record: bool, memo: Option<Arc<turn::Graph>>| Job {
+        path: Vec::new(),
+        history: history.clone(),
+        bounds: Bounds::new(),
+        from: None,
+        crossing: false,
+        most: None,
+        resume: std::sync::Mutex::new(None),
+        record,
+        memo,
+    };
+    let (mut held, mut compared, mut saved) = (0, 0, 0);
+    for (root, played) in worlds {
+        let steps = || played.as_ref().map_or(0, |p| p.get());
+        let history = Arc::new(state::witness(&none(), &root.obs));
+        let whole = turn::job(&job(&history, true, None), || Ok(root.copy()), UNLIMITED, usize::MAX, &Bounds::new(), &ToyLeaf, None).expect("a search");
+        let Some(graph) = whole.graph.clone() else {
+            continue;
+        };
+        held += 1;
+        // The bounds of the wins the turn reaches, which prune a search that has them: a memo kept without them taken
+        // by a search with them, and one kept with them by a search without.
+        let mut won = Bounds::new();
+        for end in whole.ends.iter().filter(|e| e.status == Status::Won) {
+            bound::note(&mut won, true, &end.potions, end.life);
+        }
+        let pruned = turn::job(&job(&history, true, None), || Ok(root.copy()), UNLIMITED, usize::MAX, &won, &ToyLeaf, None)
+            .expect("a search")
+            .graph;
+        let mut prefixes: Vec<Vec<Action>> = Vec::new();
+        for end in &whole.ends {
+            let turn = end.actions.iter().position(|a| a.is_end_turn()).unwrap_or(end.actions.len());
+            for k in 1..turn {
+                if !prefixes.contains(&end.actions[..k].to_vec()) {
+                    prefixes.push(end.actions[..k].to_vec());
+                }
+            }
+        }
+        let cases: Vec<(Arc<turn::Graph>, Bounds)> = [(Some(graph.clone()), Bounds::new()), (Some(graph.clone()), won.clone()), (pruned, Bounds::new())]
+            .into_iter()
+            .filter_map(|(memo, bounds)| Some((memo?, bounds)))
+            .collect();
+        for (prefix, (memo, bounds)) in prefixes.iter().flat_map(|p| cases.iter().map(move |c| (p, c))) {
+            let prefix = prefix.clone();
+            let there = self::played(root.copy(), &prefix);
+            let before = steps();
+            let alone = turn::search(&mut there.copy(), &history, UNLIMITED, usize::MAX, bounds, false, &ToyLeaf, None).expect("a search");
+            let steps_alone = steps() - before;
+            let taken = turn::job(&job(&history, false, Some(memo.clone())), || Ok(there.copy()), UNLIMITED, usize::MAX, bounds, &ToyLeaf, None)
+                .expect("a search");
+            let steps_taken = steps() - before - steps_alone;
+            compared += 1;
+            saved += steps_alone.saturating_sub(steps_taken);
+            let ends = |found: &TurnSearch| -> Vec<String> {
+                found
+                    .ends
+                    .iter()
+                    .map(|e| {
+                        format!(
+                            "{} {:?} {} {} {} {} {} {} {} {} {} {} {:?}",
+                            text(&e.actions),
+                            e.status,
+                            e.key,
+                            e.exact,
+                            e.shown,
+                            e.value.to_bits(),
+                            e.win.to_bits(),
+                            e.hp.to_bits(),
+                            e.life,
+                            e.reach,
+                            e.potions,
+                            e.hashes.iter().map(|h| h.to_string()).collect::<Vec<_>>().join(","),
+                            e.history
+                        )
+                    })
+                    .collect()
+            };
+            assert_eq!(ends(&alone), ends(&taken), "after {}", text(&prefix));
+            assert_eq!((alone.nodes, alone.cut, alone.pruned), (taken.nodes, taken.cut, taken.pruned), "after {}", text(&prefix));
+        }
+    }
+    assert!(held >= 3 && compared >= 30, "{held} graphs held, {compared} searches compared");
+    assert!(saved > 0, "the memo saved no step");
 }
 
 #[test]

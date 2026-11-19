@@ -409,26 +409,25 @@ fn back_of<'a>(path: &[&'a LoopPoint], now: &CombatObservation) -> Option<&'a Lo
 /// every card of its hand back (a copy will do) and no dearer, no less energy or stars, every power of the player's
 /// still there and no lower, and no fewer copies of its hand's cards left to draw or play.
 pub fn recurs(from: &CombatObservation, now: &CombatObservation) -> bool {
-    if from.round != now.round || now.player.energy < from.player.energy || now.player.stars < from.player.stars {
+    recurs_of(from, now)
+}
+
+/// `recurs` of whatever holds what it reads: observations, or what a turn's graph keeps of its states (`Recur`).
+pub fn recurs_of(from: &impl Recurring, now: &impl Recurring) -> bool {
+    if from.round() != now.round() || now.energy() < from.energy() || now.stars() < from.stars() {
         return false;
     }
-    if !from
-        .player
-        .powers
-        .iter()
-        .all(|p| now.player.powers.iter().any(|q| q.id == p.id && q.amount >= p.amount))
-    {
+    if !from.powers().all(|(id, amount)| now.powers().any(|(q, at)| q == id && at >= amount)) {
         return false;
     }
-    if from.potions != now.potions {
+    if from.potions() != now.potions() {
         return false;
     }
-    let alive = |obs: &CombatObservation| -> Vec<Option<u32>> { obs.enemies.iter().filter(|e| e.hp > 0).map(|e| e.uid).collect() };
-    if alive(from) != alive(now) {
+    if !from.alive().eq(now.alive()) {
         return false;
     }
-    let mut hand: Vec<&CardView> = now.hand.iter().collect();
-    for card in &from.hand {
+    let mut hand: Vec<HandCard> = now.hand().collect();
+    for card in from.hand() {
         let found = hand.iter().position(|c| {
             c.id == card.id
                 && c.up == card.up
@@ -442,14 +441,152 @@ pub fn recurs(from: &CombatObservation, now: &CombatObservation) -> bool {
             None => return false,
         }
     }
-    let left = |obs: &CombatObservation, id: Str| obs.hand.iter().chain(&obs.draw).chain(&obs.discard).filter(|c| c.id == id).count();
     let mut ids: Vec<Str> = Vec::new();
-    for card in &from.hand {
+    for card in from.hand() {
         if !ids.contains(&card.id) {
             ids.push(card.id);
         }
     }
-    ids.into_iter().all(|id| left(now, id) >= left(from, id))
+    ids.into_iter().all(|id| now.left(id) >= from.left(id))
+}
+
+/// A card in hand as `recurs` reads it.
+#[derive(Clone, Copy, PartialEq)]
+pub struct HandCard {
+    id: Str,
+    up: Option<i32>,
+    cost: Option<i32>,
+    stars: Option<i32>,
+}
+
+impl HandCard {
+    fn of(card: &CardView) -> HandCard {
+        HandCard { id: card.id, up: card.up, cost: card.cost, stars: card.stars }
+    }
+}
+
+/// What `recurs` reads of a state.
+pub trait Recurring {
+    fn round(&self) -> i32;
+    fn energy(&self) -> i32;
+    fn stars(&self) -> i32;
+    /// The player's powers, each by its id and amount.
+    fn powers(&self) -> impl Iterator<Item = (Str, i32)>;
+    fn potions(&self) -> &[Option<Str>];
+    /// The living enemies' uids, in order.
+    fn alive(&self) -> impl Iterator<Item = Option<u32>>;
+    fn hand(&self) -> impl Iterator<Item = HandCard>;
+    /// The copies of a card left to draw or play: in the hand, the draw pile and the discard pile.
+    fn left(&self, id: Str) -> usize;
+}
+
+impl Recurring for CombatObservation {
+    fn round(&self) -> i32 {
+        self.round
+    }
+
+    fn energy(&self) -> i32 {
+        self.player.energy
+    }
+
+    fn stars(&self) -> i32 {
+        self.player.stars
+    }
+
+    fn powers(&self) -> impl Iterator<Item = (Str, i32)> {
+        self.player.powers.iter().map(|p| (p.id, p.amount))
+    }
+
+    fn potions(&self) -> &[Option<Str>] {
+        &self.potions
+    }
+
+    fn alive(&self) -> impl Iterator<Item = Option<u32>> {
+        self.enemies.iter().filter(|e| e.hp > 0).map(|e| e.uid)
+    }
+
+    fn hand(&self) -> impl Iterator<Item = HandCard> {
+        self.hand.iter().map(HandCard::of)
+    }
+
+    fn left(&self, id: Str) -> usize {
+        self.hand.iter().chain(&self.draw).chain(&self.discard).filter(|c| c.id == id).count()
+    }
+}
+
+/// What `recurs` reads of a state where the player can play, kept without its observation (a turn's graph keeps one
+/// for each such state it came to). What `recurs` reads as a set is kept in one order (the powers, the copies left),
+/// so that two states it tells the same are equal; the hand stays in its order, which its matching goes by.
+#[derive(PartialEq)]
+pub struct Recur {
+    round: i32,
+    energy: i32,
+    stars: i32,
+    powers: Vec<(Str, i32)>,
+    potions: Vec<Option<Str>>,
+    alive: Vec<Option<u32>>,
+    hand: Vec<HandCard>,
+    /// Each card left to draw or play, by its id, with how many copies.
+    left: Vec<(Str, usize)>,
+}
+
+impl Recur {
+    pub fn of(obs: &CombatObservation) -> Recur {
+        let mut left: Vec<(Str, usize)> = Vec::new();
+        for card in obs.hand.iter().chain(&obs.draw).chain(&obs.discard) {
+            match left.iter_mut().find(|(id, _)| *id == card.id) {
+                Some((_, count)) => *count += 1,
+                None => left.push((card.id, 1)),
+            }
+        }
+        left.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        let mut powers: Vec<(Str, i32)> = obs.powers().collect();
+        powers.sort_by(|a, b| (a.0.as_str(), a.1).cmp(&(b.0.as_str(), b.1)));
+        Recur {
+            round: obs.round(),
+            energy: obs.energy(),
+            stars: obs.stars(),
+            powers,
+            potions: obs.potions.clone(),
+            alive: obs.alive().collect(),
+            hand: obs.hand().collect(),
+            left,
+        }
+    }
+}
+
+impl Recurring for Recur {
+    fn round(&self) -> i32 {
+        self.round
+    }
+
+    fn energy(&self) -> i32 {
+        self.energy
+    }
+
+    fn stars(&self) -> i32 {
+        self.stars
+    }
+
+    fn powers(&self) -> impl Iterator<Item = (Str, i32)> {
+        self.powers.iter().copied()
+    }
+
+    fn potions(&self) -> &[Option<Str>] {
+        &self.potions
+    }
+
+    fn alive(&self) -> impl Iterator<Item = Option<u32>> {
+        self.alive.iter().copied()
+    }
+
+    fn hand(&self) -> impl Iterator<Item = HandCard> {
+        self.hand.iter().copied()
+    }
+
+    fn left(&self, id: Str) -> usize {
+        self.left.iter().find(|(card, _)| *card == id).map_or(0, |(_, count)| *count)
+    }
 }
 
 fn cycled(path: &[LoopPoint], back: &LoopPoint, actions: &[Action], hashes: &[u64]) -> Cycle {

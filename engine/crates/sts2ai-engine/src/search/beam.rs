@@ -43,7 +43,7 @@ use std::sync::{Arc, Mutex};
 use super::bound::{self, Bounds};
 use super::state::{Action, History, State, Status};
 use super::threads::Worlds;
-use super::turn::{Turn, TurnEnd, TurnSearch};
+use super::turn::{Graph, Turn, TurnEnd, TurnSearch};
 
 /// C#: SlPlanner.MaxTurns.
 pub const MAX_TURNS: i32 = 40;
@@ -65,6 +65,11 @@ pub struct Job {
     pub most: Option<i32>,
     /// The search an earlier job of the same state paused, to go on with instead of beginning one (`turn::job`).
     pub resume: Mutex<Option<Box<Turn>>>,
+    /// The search keeps what it goes through (`TurnSearch::graph`).
+    pub record: bool,
+    /// What an earlier search of the turn went through, which the search takes where it comes to the same worlds
+    /// (`turn::Turn::new`).
+    pub memo: Option<Arc<Graph>>,
 }
 
 /// C#: TurnSearcher. Searches one turn from each job's state, in job order, each with `nodes` nodes, keeping `keep`.
@@ -188,6 +193,7 @@ pub fn narrow(full: &TurnSearch, keep: usize) -> TurnSearch {
         pruned: full.pruned,
         start: None,
         paused: None,
+        graph: None,
     }
 }
 
@@ -351,6 +357,8 @@ impl Beam<'_> {
                     crossing: false,
                     most: None,
                     resume: Mutex::new(None),
+                    record: false,
+                    memo: None,
                 })
                 .collect();
             let replies = self.searcher.search(&jobs, self.nodes_per_state, if dive { usize::MAX } else { keep })?;

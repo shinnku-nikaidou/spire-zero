@@ -23,7 +23,8 @@
 //! The combat goes on under it (`advance`): the root moves to where it went, the states that can still be reached stay
 //! with all that was found of them, and the rest go. Where it went is a turn's start searched already, or a prompt
 //! between a turn's end and the next turn's start, whose answers reach turns' starts the solver holds; elsewhere, the
-//! root's turn is searched to its end again. The states live in an arena, by index; what the root no longer
+//! root's turn is searched to its end again, into a turn whose search's graph the solver holds (`turn::Graph`) with it
+//! as the search's memo. The states live in an arena, by index; what the root no longer
 //! reaches is let go when the root moves (`start`).
 //!
 //! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
@@ -45,7 +46,7 @@ use super::beam::{self, ByFirst, Found, Job, Rank, Searcher, UNLIMITED};
 use super::bound::{self, Bounds};
 use super::state::{self, Action, History, Status};
 use super::threads::Worlds;
-use super::turn::{self, Turn, TurnEnd, TurnSearch};
+use super::turn::{self, Graph, Turn, TurnEnd, TurnSearch};
 
 /// C#: SlSolver.Edge. The actions from a state to where its turn ends, the hash of each one's observation, the key of the
 /// state there and the world there exactly (`State::exact`). Told apart by identity, as C# tells its records with their
@@ -77,6 +78,8 @@ struct Node {
     dropped: bool,
     /// Its turn's search, paused where its piece of a run ended (`Solver::run`).
     turn: Option<Box<Turn>>,
+    /// What its turn's search went through, and the state of it this one is (`turn::replay`).
+    graph: Option<(Arc<Graph>, u32)>,
 }
 
 impl Node {
@@ -100,6 +103,7 @@ impl Node {
             cut: false,
             dropped: false,
             turn: None,
+            graph: None,
         }
     }
 }
@@ -110,6 +114,9 @@ enum Reached {
     Searched(usize),
     /// A prompt between a turn's end and the next turn's start: the root's turn ends where the player can play.
     Crossing,
+    /// Into the turn of state `.0`, `.1` actions into what was played: the root's turn is searched with that turn's
+    /// graph as its memo, where the solver holds one (`turn::Turn::new`).
+    Within(usize, usize),
     /// Anywhere else: the root's turn is searched to its end.
     Turn,
 }
@@ -181,6 +188,11 @@ const WORLDS: usize = 1024;
 /// batch's states, so that it ends near N however big a turn is (a turn has had 1.9 million nodes); a batch of states
 /// is one call of the searcher, whose cost is its threads', so a piece is not made smaller than this.
 const PIECE: i64 = 256;
+
+/// The fewest nodes a turn's search has for the solver to keep its graph (`turn::Graph`): a smaller turn is searched
+/// again in a few milliseconds, and its graph would only hold memory (on 45 early-act fights, 118 MB more at the peak
+/// with every turn's graph kept).
+const GRAPH_NODES: usize = 1024;
 
 fn end_turns(actions: &[Action]) -> i32 {
     actions.iter().filter(|a| a.is_end_turn()).count() as i32
@@ -258,7 +270,7 @@ impl Solver {
     /// batch, in this run or the next, before any state waiting starts.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         if !self.started {
-            self.start(search, Reached::Turn)?;
+            self.start(search, Reached::Turn, None)?;
         }
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
         while !(self.queue.is_empty() && self.going.is_empty()) && self.nodes < until {
@@ -291,6 +303,8 @@ impl Solver {
                         crossing: false,
                         most: Some(piece),
                         resume: Mutex::new(turn),
+                        record: true,
+                        memo: None,
                     }
                 })
                 .collect();
@@ -347,6 +361,12 @@ impl Solver {
         }
         let turns = self.nodes_of[self.root].turns + end_turns(played);
         let reached = self.reached(played);
+        // Into a turn whose search the solver holds the graph of, to a world it holds exactly, the root's turn is
+        // searched with it as its memo, and the root is the graph's state there.
+        let memo = match reached {
+            Reached::Within(at, done) => self.nodes_of[at].graph.as_ref().and_then(|(graph, from)| Some((graph.clone(), graph.along(*from, &played[done..])?))),
+            _ => None,
+        };
         self.order += 1;
         let root = Node::new(0, 0.0, turns, moves, 0, self.order, i32::MAX, String::new(), 0);
         match reached {
@@ -360,7 +380,7 @@ impl Solver {
                 };
                 self.root = at;
             }
-            Reached::Crossing | Reached::Turn => {
+            Reached::Crossing | Reached::Within(..) | Reached::Turn => {
                 self.nodes_of.push(root);
                 self.root = self.nodes_of.len() - 1;
             }
@@ -380,7 +400,7 @@ impl Solver {
                 None
             };
         }
-        self.start(search, reached)
+        self.start(search, reached, memo)
     }
 
     /// Where `played` leads from the root, along the root's edges, each to its state's own world (`exact`).
@@ -388,6 +408,8 @@ impl Solver {
     /// To a turn's start whose turn was searched in full and would be searched the same again (`Searched`): its turn
     /// not cut, no line or end of it pruned (so the bounds a search now has prune none either), and every state its
     /// turn reached still kept. Searched again, the root's turn would give these same edges, to these same states.
+    ///
+    /// Into an edge elsewhere (`Within`): at the state of node `at` the edge leaves from, `done` actions into `played`.
     ///
     /// Into an edge where only answers to prompts are left of it (`Crossing`): an edge ends where the player can play
     /// after the turn's end, so the combat stands at a prompt the turn's end or the next turn's start raised (Toasty
@@ -400,12 +422,14 @@ impl Solver {
                 return Reached::Turn;
             };
             let Some(edge) = edges.iter().find(|e| played[done..].starts_with(&e.actions)) else {
-                let into = edges.iter().any(|e| {
-                    e.actions.len() > played.len() - done
-                        && e.actions.starts_with(&played[done..])
-                        && e.actions[played.len() - done..].iter().all(|a| matches!(a, Action::Pick(_)))
-                });
-                return if into { Reached::Crossing } else { Reached::Turn };
+                let into: Vec<&Arc<Edge>> = edges.iter().filter(|e| e.actions.len() > played.len() - done && e.actions.starts_with(&played[done..])).collect();
+                return if into.iter().any(|e| e.actions[played.len() - done..].iter().all(|a| matches!(a, Action::Pick(_)))) {
+                    Reached::Crossing
+                } else if !into.is_empty() {
+                    Reached::Within(at, done)
+                } else {
+                    Reached::Turn
+                };
             };
             let Some(&next) = self.table.get(&edge.key) else {
                 return Reached::Turn;
@@ -453,7 +477,9 @@ impl Solver {
 
     /// C#: Start. Searches the root's turn (unless it was searched already, `advance`), then keeps the states it
     /// reaches, by the table, and lets the rest go.
-    fn start(&mut self, search: &dyn Searcher, reached: Reached) -> Result<(), String> {
+    /// `memo`: the graph of a search of the root's turn the root's search takes (`turn::Turn::new`), with the root's
+    /// state in it.
+    fn start(&mut self, search: &dyn Searcher, reached: Reached, memo: Option<(Arc<Graph>, u32)>) -> Result<(), String> {
         self.started = true;
         let before = std::mem::take(&mut self.bounds);
         self.best = None;
@@ -471,9 +497,15 @@ impl Solver {
                 crossing: matches!(reached, Reached::Crossing),
                 most: None,
                 resume: Mutex::new(None),
+                record: memo.is_none(),
+                memo: memo.as_ref().map(|(graph, _)| graph.clone()),
             };
             let found = search.search(&[job], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
             self.expand(root, found);
+            // Searched with a memo, it keeps none of its own: the memo holds its world, and it is the memo's there.
+            if let Some((graph, at)) = memo {
+                self.nodes_of[root].graph = Some((graph, at));
+            }
         }
         // What the root reaches, each state on its own line or one to the same world, in the order reached.
         let mut kept: HashMap<u64, usize> = HashMap::new();
@@ -606,6 +638,7 @@ impl Solver {
             node.edges = Some(Vec::new());
             node.cut = found.cut;
             node.dropped = found.pruned > 0;
+            node.graph = found.graph.filter(|graph| graph.nodes() >= GRAPH_NODES).map(|graph| (graph, 0));
         }
         if found.cut {
             self.cuts += 1;
