@@ -723,6 +723,22 @@ fn powers(creature: Creature, c: &mut Combat) -> Vec<PowerView> {
     views
 }
 
+/// The ids of each enemy's visible powers that the game declares debuffs (`PowerModel.Type`), enemy by enemy in the
+/// observation's order: what the dominance among a turn's ends compares by amount (search/dominance.rs).
+pub fn enemy_debuffs(st: CombatState, c: &mut Combat) -> Vec<Vec<Str>> {
+    let mut out = Vec::new();
+    for enemy in g::combat::combat_state::enemies(st, c) {
+        let mut ids = Vec::new();
+        for p in g::entities_creatures::creature::powers(enemy, c) {
+            if g::models::power_model::is_visible(p, c) && g::dispatch::power_model::type_(p, c) == PowerType::Debuff {
+                ids.push(entry(p, c));
+            }
+        }
+        out.push(ids);
+    }
+    out
+}
+
 /// C#: HeldCards.Get. A card that a power keeps in its own data, such as the card Nightmare adds copies of next turn.
 /// HeldCards.cs finds it by reflection (the first field of type CardModel of the power's `_internalData`); here it is
 /// that field of the generated state, by the data's class, and tests/reflection.rs holds this list against the

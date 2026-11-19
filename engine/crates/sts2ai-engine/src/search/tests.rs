@@ -198,14 +198,14 @@ fn turn_ends(state: &mut State, round: i32, seen: &mut HashSet<(u64, u64)>, next
 }
 
 #[test]
-fn an_unlimited_turn_search_ends_at_every_state_the_turn_can_reach() {
+fn an_unlimited_turn_search_ends_at_every_state_the_turn_can_reach_that_no_other_dominates() {
     let mut expected = HashSet::new();
     let mut over = HashSet::new();
     turn_ends(&mut toy(24), 1, &mut HashSet::new(), &mut expected, &mut over);
     let narrow = search(&mut toy(24), &ToyLeaf, 4, usize::MAX, &Bounds::new());
     let found = search(&mut toy(24), &ToyLeaf, UNLIMITED, usize::MAX, &Bounds::new());
 
-    // Every end, each once, and nothing cut: a budget of 4 nodes reaches fewer.
+    // Every end the rule keeps, each once, and nothing cut.
     assert!(!found.cut);
     assert!(narrow.cut);
     assert!(over.is_empty());
@@ -218,8 +218,45 @@ fn an_unlimited_turn_search_ends_at_every_state_the_turn_can_reach() {
         })
         .collect();
     assert_eq!(reached.len(), reached.iter().collect::<HashSet<_>>().len());
-    assert_eq!(expected, reached.into_iter().collect::<HashSet<_>>());
-    assert!(narrow.ends.len() < found.ends.len());
+    // The toy's next turn starts the same after any line but for the enemy's HP and the player's (dominance.rs): what
+    // stays is every end that no other leaves with the enemy's HP no higher and the player's no lower.
+    let numbers = |key: &(u64, u64)| -> (i32, i32) {
+        let mut world = toy(24);
+        let mut seen = HashSet::new();
+        fn find(state: &mut State, key: &(u64, u64), seen: &mut HashSet<(u64, u64)>) -> Option<(i32, i32)> {
+            for action in state.legal() {
+                let after = state.step(&action).expect("a legal action");
+                if (after.state_key, after.hidden_key) == *key && after.round() != 1 {
+                    return Some((after.obs.enemies[0].hp, after.obs.player.hp));
+                }
+                let mut after = after;
+                if after.round() == 1
+                    && seen.insert((after.state_key, after.hidden_key))
+                    && let Some(found) = find(&mut after, key, seen)
+                {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        find(&mut world, key, &mut seen).expect("an end the toy reaches")
+    };
+    let kept: HashSet<(u64, u64)> = expected
+        .iter()
+        .filter(|a| {
+            let (enemy, hp) = numbers(a);
+            !expected.iter().any(|b| {
+                let (e, h) = numbers(b);
+                b != *a && e <= enemy && h >= hp && (e < enemy || h > hp)
+            })
+        })
+        .copied()
+        .collect();
+    assert!(kept.len() < expected.len());
+    assert_eq!(kept, reached.into_iter().collect::<HashSet<_>>());
+    // A budget of 4 nodes ends elsewhere: one card a line, each end dominated by an end the whole search keeps.
+    let keys = |ends: &[TurnEnd]| ends.iter().map(|e| e.key).collect::<HashSet<u64>>();
+    assert_ne!(keys(&narrow.ends), keys(&found.ends));
 }
 
 #[test]
@@ -531,7 +568,8 @@ fn the_same_nodes_give_the_same_plan() {
     let plans: Vec<(Plan, i64, usize)> = (0..2)
         .map(|_| {
             let mut solver = solver(4);
-            solver.run(&toy_searcher(&[], 24, false), 100).expect("a search");
+            // 40 nodes stop short of the proof, which the dominance among the turns' ends brings at 82.
+            solver.run(&toy_searcher(&[], 24, false), 40).expect("a search");
             (result(&solver), solver.nodes(), solver.states())
         })
         .collect();
@@ -1081,6 +1119,156 @@ fn a_turns_search_stops_the_lines_below_the_bound_of_their_potions() {
     assert!(plan.proved);
     assert_eq!(Some(&plan.line.life), solver.bounds().get(&plan.line.potions));
     assert_near(best(&[], 24, false), plan.value, 9);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The dominance among a turn's ends (dominance.rs)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A toy for the dominance: one enemy at 40 HP and, each turn, two cards of no cost. Neutralize (`N`) takes 4 HP, gives
+/// `gives` of the power `power` and moves the relic's counter one on; Poke (`P`) takes 1 HP and gives `poke_gives`. The
+/// power wears off by one at the turn's end where it is positive; nothing else of the next turn depends on the line.
+#[derive(Clone)]
+struct Marks {
+    encounter: &'static str,
+    power: &'static str,
+    /// Whether the game declares the power a debuff (`State::enemy_debuffs`).
+    debuff: bool,
+    gives: i32,
+    poke_gives: i32,
+    enemy: i32,
+    amount: i32,
+    counter: i32,
+    round: i32,
+    hand: Vec<u32>,
+}
+
+const N: u32 = 1;
+const P: u32 = 2;
+
+impl Marks {
+    /// The search's state at the toy's start.
+    fn state(encounter: &'static str, power: &'static str, debuff: bool, gives: i32, poke_gives: i32) -> State {
+        let marks = Marks { encounter, power, debuff, gives, poke_gives, enemy: 40, amount: 0, counter: 0, round: 1, hand: vec![N, P] };
+        State::toy(Box::new(marks))
+    }
+}
+
+impl state::ToyWorld for Marks {
+    fn observe(&self) -> CombatObservation {
+        let mut obs = slugs();
+        obs.encounter = Some(Str::lit(self.encounter));
+        obs.round = self.round;
+        obs.player.hp = 20;
+        obs.player.max_hp = 20;
+        obs.player.block = 0;
+        obs.player.energy = 1;
+        let name = |uid: u32| Str::lit(if uid == N { "NEUTRALIZE" } else { "POKE" });
+        obs.hand = self.hand.iter().map(|&uid| CardView { id: name(uid), uid: Some(uid), ..CardView::default() }).collect();
+        obs.draw = Vec::new();
+        obs.discard = Vec::new();
+        obs.potions = vec![None, None, None];
+        obs.relics = vec![RelicView { id: Str::lit("PEN_NIB"), counter: Some(self.counter), ..RelicView::default() }];
+        let mut enemy = obs.enemies[0].clone();
+        enemy.uid = Some(1);
+        enemy.hp = self.enemy;
+        enemy.max_hp = 40;
+        enemy.powers = if self.amount == 0 { Vec::new() } else { vec![PowerView { id: Str::lit(self.power), amount: self.amount, ..PowerView::default() }] };
+        obs.enemies = vec![enemy];
+        obs
+    }
+
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+
+    fn hidden_key(&self) -> u64 {
+        self.round as u64
+    }
+
+    fn legal(&self) -> Vec<Action> {
+        let mut legal = vec![Action::EndTurn];
+        legal.extend(self.hand.iter().map(|&card| Action::Play { card, target: Some(1) }));
+        legal
+    }
+
+    fn execute(&mut self, action: &Action) -> Result<(), String> {
+        if !self.legal().contains(action) {
+            return Err(format!("{} is not legal", action.text()));
+        }
+        match action {
+            Action::Play { card, .. } => {
+                self.hand.retain(|c| c != card);
+                if *card == N {
+                    (self.enemy, self.amount, self.counter) = (self.enemy - 4, self.amount + self.gives, self.counter + 1);
+                } else {
+                    (self.enemy, self.amount) = (self.enemy - 1, self.amount + self.poke_gives);
+                }
+            }
+            _ => {
+                if self.amount > 0 {
+                    self.amount -= 1;
+                }
+                (self.round, self.hand) = (self.round + 1, vec![N, P]);
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self) -> crate::protocol::RunChange {
+        super::toy::around(&self.observe())
+    }
+
+    fn boxed(&self) -> Box<dyn state::ToyWorld> {
+        Box::new(self.clone())
+    }
+
+    fn debuffs(&self) -> Vec<Vec<Str>> {
+        vec![if self.debuff { vec![Str::lit(self.power)] } else { Vec::new() }]
+    }
+}
+
+/// The lines of a turn's search from `root`, searched whole, each as the cards it played, sorted.
+fn kept(mut root: State) -> Vec<Vec<u32>> {
+    let found = search(&mut root, &ToyLeaf, UNLIMITED, usize::MAX, &Bounds::new());
+    let mut lines: Vec<Vec<u32>> = found
+        .ends
+        .iter()
+        .map(|e| {
+            let mut cards: Vec<u32> = e.actions.iter().filter_map(|a| if let Action::Play { card, .. } = a { Some(*card) } else { None }).collect();
+            cards.sort_unstable();
+            cards
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
+#[test]
+fn an_end_with_less_damage_and_less_debuff_is_dropped_whatever_the_relics_counter() {
+    // Neutralize's line leaves the enemy 4 HP lower and 1 Weak, with Pen Nib's counter one further: it is still
+    // compared (the user: 「遺物計數 不算」), and only the line that played both cards is left.
+    assert_eq!(kept(Marks::state("CORPSE_SLUGS_WEAK", "WEAK_POWER", true, 2, 0)), vec![vec![N, P]]);
+}
+
+#[test]
+fn the_queens_fight_goes_without_the_rule() {
+    // The user: 「女王戰 不要这条规则」.
+    assert_eq!(kept(Marks::state("QUEEN_BOSS", "WEAK_POWER", true, 2, 0)), vec![vec![], vec![N], vec![N, P], vec![P]]);
+}
+
+#[test]
+fn a_power_the_game_does_not_call_a_debuff_must_be_the_same() {
+    // The same power, declared a buff: the lines with it and those without are not compared, each pair within.
+    assert_eq!(kept(Marks::state("CORPSE_SLUGS_WEAK", "STRENGTH_POWER", false, 2, 0)), vec![vec![N, P], vec![P]]);
+}
+
+#[test]
+fn a_debuffs_negative_amount_must_be_the_same() {
+    // Neutralize's Shrink of -1 is for good, Poke's 2 wears off: neither is more.
+    let lines = kept(Marks::state("CORPSE_SLUGS_WEAK", "SHRINK_POWER", true, -1, 2));
+    assert!(lines.contains(&vec![N]), "{lines:?}");
+    assert!(lines.contains(&vec![P]), "{lines:?}");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

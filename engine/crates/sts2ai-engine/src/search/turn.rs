@@ -38,6 +38,9 @@
 //! holding fewer of its potions, if the leaf values that one higher: where a potion drunk changed nothing else, the end
 //! that kept it is worth as much.
 //!
+//! Of the turn's ends at the next turn's start, one another dominates is dropped (`dominance.rs`, a rule written by hand
+//! at the user's word): the same in all but the enemies' HP, their debuffs and the player's HP, and worse in those.
+//!
 //! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
@@ -45,6 +48,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::bound::{self, Bounds};
+use super::dominance::{self, Shape};
 use super::beam::Job;
 use super::helpers::{Ahead, Helpers, Slot};
 use super::leaf::{Leaf, LeafOutcome, LeafState};
@@ -392,6 +396,7 @@ struct Valued {
     life: i32,
     reach: i32,
     outcome: LeafOutcome,
+    shape: Option<Shape>,
 }
 
 impl Valued {
@@ -406,6 +411,7 @@ impl Valued {
             life: priced.life,
             reach: priced.reach,
             outcome,
+            shape: priced.shape.clone(),
         }
     }
 }
@@ -561,6 +567,8 @@ struct Ended {
     exact: u64,
     /// At the next turn's start, the key of the state with every potion thrown away; 0 once the combat is over.
     bare: u64,
+    /// What the dominance among the turn's ends reads of it (`dominance::shape`).
+    shape: Option<Shape>,
 }
 
 /// An end found, until the leaf is asked about it.
@@ -583,6 +591,7 @@ struct Priced {
     reach: i32,
     shown: u64,
     exact: u64,
+    shape: Option<Shape>,
 }
 
 impl Ended {
@@ -600,6 +609,7 @@ impl Ended {
             bare: self.bare,
             shown: self.shown,
             exact: self.exact,
+            shape: self.shape,
         }
     }
 }
@@ -693,6 +703,7 @@ fn end_of(leaf: &dyn Leaf, history: &Arc<History>, state: &mut State, actions: &
         shown: state.hash,
         exact: state.exact(),
         bare: 0,
+        shape: None,
     };
     let outcome = leaf.outcome(&ended.state)?;
     Ok(ended.light().valued(outcome))
@@ -867,6 +878,7 @@ impl Dfs {
                             reach: valued.reach,
                             shown: arrival.shown,
                             exact: arrival.exact,
+                            shape: valued.shape.clone(),
                         };
                         self.ended.push(Pending::Known(priced, valued.outcome));
                         if let Some(recorder) = &mut self.graph
@@ -1056,6 +1068,7 @@ impl Dfs {
                 shown: state.hash,
                 exact: state.hash,
                 bare: 0,
+                shape: None,
             };
             self.ended.push(Pending::Ask(ended));
             return Ok(self.arrival(0, state.hash, state.hash, at));
@@ -1082,6 +1095,7 @@ impl Dfs {
             mix(protocol::state_key(&thrown), hidden)
         };
         let ended = Ended {
+            shape: dominance::shape(state),
             state: self.leaf_state(state),
             actions: self.actions.clone(),
             hashes: self.hashes.clone(),
@@ -1151,7 +1165,8 @@ impl Dfs {
         Ok(())
     }
 
-    /// C#: Value. The turn's ends, from all the lines the search ended, valued in the order found.
+    /// C#: Value. The turn's ends, from all the lines the search ended, valued in the order found; those another end
+    /// dominates go (`dominance.rs`).
     fn value(&mut self, leaf: &dyn Leaf) {
         // A failure of the leaf would have been met at a chunk already, or is met here.
         if let Err(error) = self.price(leaf) {
@@ -1160,8 +1175,12 @@ impl Dfs {
         self.keep_ends();
         let mut outcomes = std::mem::take(&mut self.outcomes);
         self.thrown(&mut outcomes);
-        for (priced, outcome) in std::mem::take(&mut self.priced).into_iter().zip(outcomes) {
-            self.ends.push(priced.valued(outcome));
+        let shapes: Vec<Option<&Shape>> = self.priced.iter().map(|p| p.shape.as_ref()).collect();
+        let dominated = dominance::dominated(&shapes);
+        for ((priced, outcome), dominated) in std::mem::take(&mut self.priced).into_iter().zip(outcomes).zip(dominated) {
+            if !dominated {
+                self.ends.push(priced.valued(outcome));
+            }
         }
     }
 

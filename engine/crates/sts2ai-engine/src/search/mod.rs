@@ -5,7 +5,7 @@
 //! - `state`: a state of the search, a world where the player is asked, with what the search reads of it; the actions;
 //!   the record of enemy moves (C#: MoveRecord).
 //! - `order`: the actions tried at a state, in their order (C#: PimcBrain.Ordered, PromptAnswers).
-//! - `bound`: the one rule written by hand, the pruning by HP (C#: LifeBound).
+//! - `bound`: a rule written by hand, the pruning by HP (C#: LifeBound); `dominance`: another, among a turn's ends.
 //! - `loops`: cycles inside a turn (C#: LoopSearch).
 //! - `turn`: one turn searched depth first to its ends (C#: SlPlanner's TurnDfs).
 //! - `pimc`: NoSL's search, PIMC over worlds drawn from the real combat (C#: PimcBrain).
@@ -19,6 +19,7 @@
 
 pub mod beam;
 pub mod bound;
+pub mod dominance;
 pub mod ffi;
 pub mod helpers;
 pub mod leaf;

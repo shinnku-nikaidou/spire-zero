@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::ffi::World as _;
 use crate::protocol::{self, CombatObservation, EnemyTurn, EnemyTurns, Fnv, RunChange};
+use crate::rt::Str;
 use crate::world::Live;
 use crate::{keys, legal, observe, prompt};
 
@@ -146,6 +147,10 @@ pub trait ToyWorld: Send + Sync {
     fn run(&self) -> RunChange;
     /// A copy that goes on apart from this one.
     fn boxed(&self) -> Box<dyn ToyWorld>;
+    /// The ids of each enemy's powers that are debuffs, as `State::enemy_debuffs` reads them of the engine's world.
+    fn debuffs(&self) -> Vec<Vec<Str>> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]
@@ -316,6 +321,21 @@ impl State {
             World::Crossed(crossed, _) => crossed.run.clone(),
             #[cfg(test)]
             World::Toy(world) => world.run(),
+        }
+    }
+
+    /// The ids of each enemy's visible powers the game declares debuffs, enemy by enemy as the observation lists them
+    /// (`observe::enemy_debuffs`); none where the search keeps no world (a prompt crossed on the clone).
+    pub fn enemy_debuffs(&mut self) -> Vec<Vec<Str>> {
+        match &mut self.world {
+            World::Engine(world) => {
+                let c = world.combat();
+                let (st, _) = crate::ffi::live(c);
+                observe::enemy_debuffs(st, c)
+            }
+            World::Crossed(..) => Vec::new(),
+            #[cfg(test)]
+            World::Toy(world) => world.debuffs(),
         }
     }
 

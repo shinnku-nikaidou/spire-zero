@@ -1,4 +1,4 @@
-//! The SL planner's one rule written by hand, for speed (the user, 2026-11-18: 「max下引入手寫剪枝規則，如果一個枝葉算下去
+//! A rule of the SL planner written by hand, for speed (the user, 2026-11-18: 「max下引入手寫剪枝規則，如果一個枝葉算下去
 //! hp+max hp已經低於目前最好的hp+max hp，就剪掉…這是必要的為了性能上的犧牲」; then 「適用於全部網絡，然後注意藥水，藥水作為
 //! hash的key的一部分，得相同的藥水討論才有意義」): a line stops at a state that cannot end the combat with as much HP plus
 //! max HP (`reach`) as a win found with the same potions at its end does (`note`). Every effort prunes so, the beam and
