@@ -500,7 +500,7 @@ PER_CHARACTER, SMOKE_AT = 100000, 99000  # a character's block of seeds; the las
 EFFORTS = ("low", "medium", "high", "max")
 ROOMS = {"monster": "effort", "elite": "elite-effort", "boss": "boss-effort"}  # a game's effort by room, as run's options
 DATASET_KEYS = {"rev", "name", "deadline", "priority", "seeds", "characters", "champion", "nosl_champion", "workers", "explore", "games",
-                "runs"}  # fmt: skip
+                "runs", "families"}  # fmt: skip
 ENVS = {"sl": "SL", "nosl": "NoSL"}  # a game's env, as a job's folder and as run's --env
 
 
@@ -514,16 +514,36 @@ def git_text(rev: str | None, path: str) -> str:
         raise Refused(f"{path} is not in git at {rev}") from None
 
 
-def tier(t: dict, where: str) -> tuple[float, float]:
-    """An exploration tier, (epsilon, tau), each a whole number of hundredths, as job names show them."""
-    if not isinstance(t, dict) or set(t) - {"epsilon", "tau"} or "epsilon" not in t:
-        raise Refused(f"{where}: a tier is {{ epsilon = E }} or {{ epsilon = E, tau = T }}")
+def tier(t: dict, where: str, families: dict[str, list[str]]) -> tuple[float, float, tuple[str, ...], tuple[str, ...]]:
+    """An exploration tier, (epsilon, tau, take, refuse): epsilon and tau each a whole number of hundredths, as job names
+    show them; take and refuse the card families (the file's [families]) l0 takes from card rewards and refuses
+    (run's --take and --refuse; plans/2026-11-20-1231-silent-shiv-poison.md), as the job's name ends -kA.B-rC."""
+    if not isinstance(t, dict) or set(t) - {"epsilon", "tau", "take", "refuse"} or "epsilon" not in t:
+        raise Refused(f"{where}: a tier is {{ epsilon = E }} or {{ epsilon = E, tau = T }}, and may have take = [families] and refuse = [families]")
     eps, tau = float(t["epsilon"]), float(t.get("tau", 0))
     if not 0 <= eps <= 1 or tau < 0:
         raise Refused(f"{where}: epsilon is from 0 to 1, tau from 0")
     if any(abs(x * 100 - round(x * 100)) > 1e-9 for x in (eps, tau)):
         raise Refused(f"{where}: epsilon and tau are whole hundredths (job names show them as eEEE and tTTT)")
-    return eps, tau
+    take, refuse = (tuple(t.get(key, [])) for key in ("take", "refuse"))
+    if unknown := [f for f in take + refuse if f not in families]:
+        raise Refused(f"{where}: no family {unknown[0]} in [families]")
+    if set(take) & set(refuse) or len(set(take)) != len(take) or len(set(refuse)) != len(refuse):
+        raise Refused(f"{where}: a family is taken or refused once, not both")
+    return eps, tau, take, refuse
+
+
+def families_of(spec: dict, path: str) -> dict[str, list[str]]:
+    """The file's [families]: each a name (lower-case letters) and its card ids, in no other family."""
+    families = spec.get("families", {})
+    seen = Counter()
+    for name, ids in families.items():
+        if not re.fullmatch(r"[a-z]+", name) or not isinstance(ids, list) or not ids or any(not re.fullmatch(r"[A-Z0-9_]+", i) for i in ids):
+            raise Refused(f"{path}: family {name} is lower-case letters, its cards a list of card ids")
+        seen.update(set(ids))
+    if twice := [i for i, n in seen.items() if n > 1]:
+        raise Refused(f"{path}: {twice[0]} is in two families")
+    return families
 
 
 def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | None = None) -> list[dict]:
@@ -561,7 +581,8 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
         if g.get("mode", "dread") != "dread":
             raise Refused(f"{path}: game {game}: mode is dread (the Dread mode) or left out (the standard game)")
         games[game] = g
-    tiers = [tier(t, f"{path}: explore") for t in spec.get("explore", [])]
+    families = families_of(spec, path)
+    tiers = [tier(t, f"{path}: explore", families) for t in spec.get("explore", [])]
     workers = spec.get("workers")
     base = dict(champion["options"])
     if base.get("env") != "SL" or base.get("policy") != "plan" or base.get("macro") != "l0":
@@ -589,7 +610,7 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
         mine = row.get("characters", characters)
         if set(mine) - set(characters):
             raise Refused(f"{where}: characters {', '.join(sorted(set(mine) - set(characters)))} are not the file's")
-        row_tiers = [tier(t, f"{where}: explore") for t in row["explore"]] if "explore" in row else tiers
+        row_tiers = [tier(t, f"{where}: explore", families) for t in row["explore"]] if "explore" in row else tiers
         if not row_tiers:
             raise Refused(f"{where}: no exploration tier, in the row or the file")
         g = games[row["game"]]
@@ -598,16 +619,19 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
             raise Refused(f"{where}: game {row['game']} is the Dread mode, which the game plays at ascension 10 only")
         for character in mine:
             for asc, n in zip(ascs, ns):
-                for j, (eps, tau) in enumerate(row_tiers):
+                for j, (eps, tau, take, refuse) in enumerate(row_tiers):
                     count = n // len(row_tiers) + (j < n % len(row_tiers))
                     if count == 0:
                         continue
-                    job = f"{character.lower()}/{env}/selfplay/{name}/a{asc:02d}-{row['game']}-e{round(eps * 100):03d}" + (f"-t{round(tau * 100):03d}" if tau else "")
+                    job = f"{character.lower()}/{env}/selfplay/{name}/a{asc:02d}-{row['game']}-e{round(eps * 100):03d}" + (f"-t{round(tau * 100):03d}" if tau else "") \
+                        + (f"-k{'.'.join(take)}" if take else "") + (f"-r{'.'.join(refuse)}" if refuse else "")
                     effort = {ROOMS[room]: e for room, e in g.get("effort", {}).items()}
                     options = bases[env] | effort | {"character": character, "asc": str(asc)}
                     options |= {"workers": str(workers)} if workers else {}
                     options |= {"explore": f"{eps:g}"} if eps else {}
                     options |= {"macro-explore": f"{tau:g}"} if tau else {}
+                    options |= {"take": ",".join(i for f in take for i in families[f])} if take else {}
+                    options |= {"refuse": ",".join(i for f in refuse for i in families[f])} if refuse else {}
                     options |= {"auto-win": ",".join(map(str, sorted(g["auto_win"])))} if g["auto_win"] else {}
                     options |= {"mode": g["mode"]} if g.get("mode") else {}
                     # NoSL self-play plays every event option out on the node's clone for V's training (run --event-lines)
@@ -615,7 +639,7 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
                     start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + used[character]
                     used[character] += count
                     jobs.append({"job": job, "env": env, "character": character, "asc": asc, "game": row["game"], "eps": eps, "tau": tau,
-                                 "start": start, "n": count, "options": [x for kv in options.items() for x in ("--" + kv[0], kv[1])] + ["--seed", "1"]})
+                                 "take": take, "refuse": refuse, "start": start, "n": count, "options": [x for kv in options.items() for x in ("--" + kv[0], kv[1])] + ["--seed", "1"]})
     if over := [c for c, n in used.items() if n > SMOKE_AT]:
         raise Refused(f"{path}: {', '.join(over)} need more than {SMOKE_AT:,} seeds ({', '.join(f'{used[c]:,}' for c in over)})")
     if twice := [j for j, n in Counter(j["job"] for j in jobs).items() if n > 1]:
@@ -635,6 +659,11 @@ def read_dataset(path: str, rev: str | None) -> tuple[dict, str, list[dict]]:
     return spec, text, dataset_jobs(spec, path, champion, nosl)
 
 
+def lock_text(j: dict) -> str:
+    """A job's card lock as the plan shows it: " take A.B refuse C", or nothing."""
+    return (f" take {'.'.join(j['take'])}" if j["take"] else "") + (f" refuse {'.'.join(j['refuse'])}" if j["refuse"] else "")
+
+
 def show_dataset(spec: dict, jobs: list[dict]) -> None:
     for j in jobs:
         print(f"{j['job']}  {j['start']}:{j['n']}  {' '.join(j['options'])}")
@@ -642,7 +671,7 @@ def show_dataset(spec: dict, jobs: list[dict]) -> None:
     print(f"\n{spec['name']}: {len(jobs)} jobs, {total:,} runs; step {spec['name']}, deadline {spec['deadline']}, priority {spec.get('priority', 0)}")
     for title, key in (("environment", lambda j: ENVS[j["env"]]), ("character", lambda j: j["character"]),
                        ("ascension", lambda j: f"A{j['asc']}"), ("game", lambda j: j["game"]),
-                       ("tier", lambda j: f"eps {j['eps']:g}" + (f" tau {j['tau']:g}" if j["tau"] else ""))):
+                       ("tier", lambda j: f"eps {j['eps']:g}" + (f" tau {j['tau']:g}" if j["tau"] else "") + lock_text(j))):
         counts = Counter()
         for j in jobs:
             counts[key(j)] += j["n"]
@@ -672,15 +701,17 @@ def launch_dataset(argv: list[str]) -> None:
     spec, text, jobs = read_dataset(path, full)
     name = spec["name"]
     if smoke:
-        # one run per character, row and ascension, the first tier's, from the smoke's seeds
+        # one run per character, row and ascension, the first tier's, and one more for each other card lock its tiers
+        # have, from the smoke's seeds
         firsts, at = {}, Counter()
         for j in jobs:
-            firsts.setdefault((j["character"], j["asc"], j["game"]), j)
+            firsts.setdefault((j["character"], j["asc"], j["game"], j["take"], j["refuse"]), j)
         jobs = []
-        for (character, asc, game), j in firsts.items():
+        for (character, asc, game, take, refuse), j in firsts.items():
             start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + SMOKE_AT + at[character]
             at[character] += 1
-            jobs.append(j | {"job": f"{character.lower()}/{j['env']}/forks/{name}-smoke/a{asc:02d}-{game}", "start": start, "n": 1})
+            locked = (f"-k{'.'.join(take)}" if take else "") + (f"-r{'.'.join(refuse)}" if refuse else "")
+            jobs.append(j | {"job": f"{character.lower()}/{j['env']}/forks/{name}-smoke/a{asc:02d}-{game}{locked}", "start": start, "n": 1})
         step, until, priority = f"{name}-smoke", until_epoch("+1h"), None
     else:
         step, until, priority = name, until_epoch(spec["deadline"]), spec.get("priority", 0)
@@ -689,7 +720,7 @@ def launch_dataset(argv: list[str]) -> None:
     show_dataset(spec, jobs)
     for j in jobs:
         purpose = (f"{name}{' smoke' if smoke else ''}: {ENVS[j['env']]} self-play, {j['character']} A{j['asc']}, game {j['game']}, "
-                   f"explore eps {j['eps']:g} tau {j['tau']:g}, from {path}")
+                   f"explore eps {j['eps']:g} tau {j['tau']:g}{lock_text(j)}, from {path}")
         open_job(j["job"], full, f"@{until}", purpose, f"{j['start']}:{j['n']}", j["options"], step, priority)
     if smoke:
         return

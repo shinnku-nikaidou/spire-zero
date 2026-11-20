@@ -125,6 +125,10 @@ public sealed class CliTests : IDisposable
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]
     [InlineData("--macro-explore", "0.05", "--macro", "random")]
+    [InlineData("--take", "A", "--macro", "random")]
+    [InlineData("--refuse", "A", "--macro", "random")]
+    [InlineData("--take", "A,B", "--refuse", "B", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
+    [InlineData("--take", ",", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
     [InlineData("--boss-effort", "high", "--policy", "play")]
     [InlineData("--value", "Fixtures/pure-v-tiny-win.json", "--macro", "random")]
     [InlineData("--policy", "pimc")]
@@ -174,6 +178,20 @@ public sealed class CliTests : IDisposable
         // As promote reads a champion file with new nets: the file's champion, the options given over its own.
         Assert.Equal(played.Name, ChampionArgs.Of(file, []).Name);
         Assert.Equal(played.Name.Replace("4x100", "4x50"), ChampionArgs.Of(file, ["--nodes", "50"]).Name);
+    }
+
+    [Fact]
+    public void LocksL0sCardsForSelfPlayAndSaysSoInItsName()
+    {
+        var champion = new ChampionArgs(file: false);
+        var command = Opt.Command("test", "", champion.Options);
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var played = champion.Read(command.Parse(["--macro", "l0", "--value", value, "--take", "BLADE_DANCE, LEADING_STRIKE", "--refuse", "SNAKEBITE"]));
+        Assert.Equal(new HashSet<string> { "BLADE_DANCE", "LEADING_STRIKE" }, played.Cards!.Take);
+        Assert.Equal(new HashSet<string> { "SNAKEBITE" }, played.Cards.Refuse);
+        Assert.EndsWith("macro l0 pure-v-tiny-win take 2 refuse 1, macro prompts l0 pure-v-tiny-win take 2 refuse 1", played.Name);
+        Assert.True(played.Explores);
+        Assert.Null(champion.Read(command.Parse(["--macro", "l0", "--value", value])).Cards);
     }
 
     [Fact]

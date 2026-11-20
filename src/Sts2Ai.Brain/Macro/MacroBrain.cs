@@ -27,8 +27,11 @@ namespace Sts2Ai.Brain.Macro;
 /// result its button does not show is played out on the clone a decision brings for it (<see cref="MacroDecision.Lines"/>,
 /// <see cref="EventLines"/>, <see cref="MacroAnswer.Event"/>); null for none. The lines are logged, never valued for the
 /// answer.</param>
+/// <param name="cards">Self-play only: a run locked to card families (<see cref="CardLock"/>), before the draws: a card
+/// reward offering a card to take is taken from, and an answer whose afterstate breaks the lock gives way to the best that
+/// does not, at every decision, card prompt and state the clone's search reaches. Null for none.</param>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
-    bool hostSaysPlayed = false, IRunValue? eventLines = null)
+    bool hostSaysPlayed = false, IRunValue? eventLines = null, CardLock? cards = null)
     : IMacroPolicy, IChoicePolicy
 {
     private readonly ScreenAfterstates _screen = new(new FreeDisposal(value));
@@ -61,7 +64,12 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var values = options.Select(o => o.Value).ToList();
         bool explored = false;
         int pick;
-        if (_draws.CardReward(obs, [.. options.Select(o => o.Action)], values) is { } drawn)
+        if (cards?.Forced(obs, [.. options.Select(o => o.Action)], values) is { } forced)
+        {
+            pick = MacroDraws.Best(forced);
+            explored = true;
+        }
+        else if (_draws.CardReward(obs, [.. options.Select(o => o.Action)], values) is { } drawn)
         {
             pick = MacroDraws.Best(drawn);
             explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[MacroDraws.Best(values)];
@@ -72,6 +80,12 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             explored = true;
         }
         else pick = _draws.Pick(values, ref explored);
+        if (cards != null)
+        {
+            int kept = cards.Keep(pick, obs.Run.Deck, [.. options.Select(o => o.After.Deck)], values);
+            explored |= kept != pick;
+            pick = kept;
+        }
         var option = options[pick];
         _opened = option.Opens;
         // The answer is taken: the lines, played out on the clone for the log only, cannot change it. They see the
@@ -119,7 +133,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         {
             // A move leaves the node, which the clone cannot play past: its afterstate is predicted, the point entered.
             var played = legal.Where(a => !moves.Contains(a)).ToList();
-            var found = new CloneSearch(_leaf, clone, _decided).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<MacroAction>)[a])]);
+            var found = new CloneSearch(_leaf, clone, _decided, cards).Search(Root(decision), [.. played.Select(a => (IReadOnlyList<MacroAction>)[a])]);
             options = [];
             int k = 0;
             foreach (var a in legal)
@@ -234,19 +248,23 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         // Greedy: add the best pick while it helps, or while the prompt wants more.
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
-        if (_draws.Even(choice, min) is { } even) return new(even, Explored: true);
+        // A prompt asked in a fight the run's rule wins picks among the fight's cards: nothing of the run changes by it.
+        RunView Picked(RunView from, int i) => choice.Context.InCombat ? from : ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose);
+        if (_draws.Even(choice, min) is { } even && !Breaks(run, even, Picked)) return new(even, Explored: true);
         bool explored = false;
         var picks = new List<int>();
         var state = run;
         double current = _leaf.Value(state);
-        // A prompt asked in a fight the run's rule wins picks among the fight's cards: nothing of the run changes by it.
-        RunView Picked(RunView from, int i) => choice.Context.InCombat ? from : ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose);
         // The first step's answers, one pick or none, to show beside the answer.
         var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
             var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
-                .Select(i => { var next = Picked(state, i); return (Index: i, Value: _leaf.Value(next), State: next); })
+                .Select(i =>
+                {
+                    var next = Picked(state, i);
+                    return (Index: i, Value: cards?.Breaks(run.Deck, next.Deck) == true ? double.NegativeInfinity : _leaf.Value(next), State: next);
+                })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
             if (picks.Count >= min) options.Insert(0, (-1, current, state));
@@ -279,7 +297,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-        if (_draws.Even(choice, min) is { } even) return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
+        if (_draws.Even(choice, min) is { } even
+            && !Breaks(obs.Run, even, (from, i) => ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose)))
+            return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
         bool explored = false;
         var groups = choice.Groups();
         // An answer is how many of each group it picks.
@@ -300,7 +320,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
-                var found = new CloneSearch(_leaf, clone, _decided).Search(root, [.. fresh.Select(a => (IReadOnlyList<MacroAction>)[a])]);
+                var found = new CloneSearch(_leaf, clone, _decided, cards).Search(root, [.. fresh.Select(a => (IReadOnlyList<MacroAction>)[a])]);
                 for (int i = 0; i < fresh.Count; i++) worth[fresh[i]] = found[i].Value;
             }
             var taken = near[_draws.Pick([.. near.Select(c => worth[Answer(c)])], ref explored)];
@@ -310,6 +330,10 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
             explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)), Answered(CloneSearch.Key(root)));
     }
+
+    /// <summary>Whether <paramref name="picks"/> break the lock, by the deck <paramref name="picked"/> predicts after them.</summary>
+    private bool Breaks(RunView run, IReadOnlyList<int> picks, Func<RunView, int, RunView> picked) =>
+        cards != null && cards.Breaks(run.Deck, picks.Aggregate(run, picked).Deck);
 
     /// <summary>The answers one pick away from <paramref name="counts"/> that the prompt accepts.</summary>
     private static IEnumerable<int[]> Near(int[] counts, IReadOnlyList<IReadOnlyList<int>> groups, int min, int max)

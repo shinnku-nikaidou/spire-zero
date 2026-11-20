@@ -1,6 +1,7 @@
 using System.CommandLine;
 using MegaCrit.Sts2.Core.Models;
 using Sts2Ai.Brain;
+using Sts2Ai.Brain.Macro;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
@@ -223,6 +224,10 @@ internal sealed class ChampionArgs(bool file)
         "a card prompt's picks outside combat, every other screen's options but a potion's discard where it only loses the potion");
     private readonly Option<double> _macroExplore = Opt.Of("--macro-explore", 0.0,
         "self-play only: the softmax temperature τ over the log of V's values by which l0 draws every answer --explore leaves to V (0: V's best)");
+    private readonly Option<string?> _take = Opt.Maybe<string?>("--take",
+        "self-play only: card ids, comma-separated, that l0 takes from a card reward whenever one is offered and never lets leave the deck by an answer");
+    private readonly Option<string?> _refuse = Opt.Maybe<string?>("--refuse",
+        "self-play only: card ids, comma-separated, that l0 never lets into the deck by an answer");
 
     /// <summary>The champion a champion file names, with <paramref name="given"/> options over the file's (as <c>run
     /// --champion FILE OPTION...</c> would play it).</summary>
@@ -239,7 +244,7 @@ internal sealed class ChampionArgs(bool file)
     }
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore, _take, _refuse];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -258,10 +263,23 @@ internal sealed class ChampionArgs(bool file)
         double macroExplore = r.GetValue(_macroExplore);
         if (macroExplore is not >= 0) throw new CliException("--macro-explore is a temperature, from 0");
         if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
+        var cards = Lock(r.GetValue(_take), r.GetValue(_refuse));
+        if (cards != null && macro != "l0") throw new CliException("--take and --refuse are l0's; they need --macro l0");
         var leaf = _leaf.Read(r);
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
         if (clone && leaf.Net == null) throw new CliException("--afterstates clone needs --combat-net: a fight an option starts is valued by the combat net");
-        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore);
+        return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore, cards);
+    }
+
+    /// <summary>The card lock --take and --refuse give, or null with neither.</summary>
+    private static CardLock? Lock(string? take, string? refuse)
+    {
+        if (take == null && refuse == null) return null;
+        static HashSet<string> Ids(string? list) => [.. (list ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        var (taken, refused) = (Ids(take), Ids(refuse));
+        if (taken.Count + refused.Count == 0) throw new CliException("--take and --refuse name card ids, comma-separated");
+        if (taken.Intersect(refused).FirstOrDefault() is { } both) throw new CliException($"{both} is both taken and refused");
+        return new(taken, refused);
     }
 }

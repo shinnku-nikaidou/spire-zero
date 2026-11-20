@@ -17,7 +17,9 @@ namespace Sts2Ai.Brain.Macro;
 /// </summary>
 /// <param name="leaf">What a state is worth where the search stops.</param>
 /// <param name="decided">The keys (<see cref="Key"/>) of the states decided before this decision.</param>
-public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<ulong>? decided = null)
+/// <param name="cards">A run's card lock (<see cref="CardLock"/>): a state whose deck breaks it against the decision's
+/// is worth −∞ and not searched on. Null for none.</param>
+public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<ulong>? decided = null, CardLock? cards = null)
 {
     public const int Beam = 16;
     public const int MaxProbes = 1024;
@@ -36,6 +38,8 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
         var frontier = new List<Node>();
         var afters = clone.After(options);
         Probes = options.Count;
+        bool Broken(Afterstate after) => cards?.Breaks(root.Run.Deck, after.Run.Deck) == true;
+        double Value(Afterstate after) => Broken(after) ? double.NegativeInfinity : leaf.Value(after);
         for (int i = 0; i < options.Count; i++)
         {
             ulong key = Key(afters[i]);
@@ -44,10 +48,10 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
                 firsts.Add(same ?? new Node(options[i], afters[i], double.NegativeInfinity, 1));
                 continue;
             }
-            var node = new Node(options[i], afters[i], leaf.Value(afters[i]), 1);
+            var node = new Node(options[i], afters[i], Value(afters[i]), 1);
             firsts.Add(node);
             seen[key] = node;
-            frontier.Add(node);
+            if (!Broken(afters[i])) frontier.Add(node);
         }
         for (int level = 2; frontier.Count > 0 && Probes < MaxProbes; level++)
         {
@@ -70,10 +74,10 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
                     if (same?.Level == level) jobs[i].Parent.Children.Add((jobs[i].Path[^1], same));
                     continue;
                 }
-                var node = new Node(jobs[i].Path, next[i], leaf.Value(next[i]), level);
+                var node = new Node(jobs[i].Path, next[i], Value(next[i]), level);
                 seen[key] = node;
                 jobs[i].Parent.Children.Add((jobs[i].Path[^1], node));
-                frontier.Add(node);
+                if (!Broken(next[i])) frontier.Add(node);
             }
         }
         return firsts.Select(n => (n.After, n.Worth(), n.Line())).ToList();

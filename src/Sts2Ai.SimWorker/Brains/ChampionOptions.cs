@@ -1,5 +1,6 @@
 using System.Globalization;
 using Sts2Ai.Brain;
+using Sts2Ai.Brain.Macro;
 using Sts2Ai.Harness;
 using Sts2Ai.Protocol;
 
@@ -14,11 +15,12 @@ namespace Sts2Ai.SimWorker.Brains;
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
+/// <param name="Cards">For self-play only: l0's card lock (--take, --refuse, <see cref="CardLock"/>); null for none.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
-    LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0)
+    LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, CardLock? Cards = null)
 {
-    /// <summary>Whether it explores, which only self-play does.</summary>
-    public bool Explores => Explore > 0 || MacroExplore > 0;
+    /// <summary>Whether it explores or locks its cards, which only self-play does.</summary>
+    public bool Explores => Explore > 0 || MacroExplore > 0 || Cards != null;
 
     /// <summary>The node's clone's workers: plan's, which cross a card prompt a plan is rooted at, and l0's on the clone.
     /// A run holds its process's one live game, so the clone plays in other processes; the searches run in this one's
@@ -76,7 +78,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
             // (EventLines), on the clone the dispatcher gives for them alone.
             var l0 = new MacroBrain(Value!.In(env), Explore > 0 ? new Uniform(Explore, Rng(":explore uniform")) : null, OnClone ? InEnv() : null,
                 MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null, hostSaysPlayed: explain,
-                eventLines: eventLines ? Value.In(env) : null);
+                eventLines: eventLines ? Value.In(env) : null, cards: Cards);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new(L0, l0), new(L0, l0), log,
                 OnClone || eventLines ? node => new PooledClone(pool!, node) : null, explain);
         }
@@ -88,9 +90,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     /// <summary>The combat brain, pimc or plan by its combat net's name.</summary>
     private string Combat => Policy + Leaf.Suffix;
 
-    /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then "explore τ" and "eps ε" if it explores.</summary>
+    /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then "explore τ" and "eps ε" if it explores,
+    /// then "take N refuse M" if it locks its cards.</summary>
     private string L0 => $"l0 {Value?.Name}" + (OnClone ? " clone" : "") + (MacroExplore > 0 ? FormattableString.Invariant($" explore {MacroExplore}") : "")
-        + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "");
+        + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "") + (Cards != null ? $" {Cards.Name}" : "");
 
     /// <summary>The champion as Harness names it (<see cref="Dispatcher.Champion"/>), which runs check.</summary>
     public string Name
