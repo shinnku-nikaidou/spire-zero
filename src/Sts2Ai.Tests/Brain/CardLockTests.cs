@@ -113,6 +113,26 @@ public class CardLockTests
     }
 
     [Fact]
+    public void APromptsDrawnAnswerIsCheckedWhereTheClonePlaysIt()
+    {
+        // A transformation: the screen predicts the card gone, the game turns A into B (refused) and BAD into C.
+        var deck = Cards("A", "BAD");
+        var toy = new Toy(path => new Afterstate(Fixtures.Floor1() with
+        {
+            Deck = path switch { ["pick:0"] => Cards("B", "BAD"), ["pick:1"] => Cards("A", "C"), _ => deck },
+        }, Surfaces.Map, null, []));
+        var prompt = new ChoiceDecision(new CardChoice
+        {
+            Options = Cards("A", "BAD"),
+            Min = 1,
+            Max = 1,
+            Context = new ChoiceContext { Purpose = "deck_for_transformation", Cancelable = false, InCombat = false },
+        }, () => new Observation { Run = Fixtures.Floor1() with { Deck = deck }, Screen = new TreasureScreen { Relics = [] } }, toy);
+        Assert.All(Enumerable.Range(0, 100), seed => Assert.Equal([1],
+            new MacroBrain(V, uniform: new Uniform(1, new Random(seed)), cards: Lock(0.2)).Choose(prompt).Picks));
+    }
+
+    [Fact]
     public void OnTheClonesSearchEachStateIsWeighedByTheLockAndOneThatBreaksItIsNotSearchedOn()
     {
         var toy = new Toy(CardShop);

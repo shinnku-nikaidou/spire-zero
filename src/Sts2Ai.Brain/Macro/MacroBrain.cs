@@ -293,8 +293,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         int min = _opened ? Math.Max(choice.Min, 1) : choice.Min;
         _opened = false;
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
-        if (_draws.Even(choice, min) is { } even
-            && !Breaks(obs.Run, even, (from, i) => ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose)))
+        // A draw is checked against the lock where the clone plays it: what a transformation or a grant brings is the
+        // game's, which the screen cannot predict.
+        if (_draws.Even(choice, min) is { } even && (cards == null || !cards.Breaks(obs.Run.Deck, clone.After([(IReadOnlyList<MacroAction>)[MacroAction.Pick(even.Order())]])[0].Run.Deck)))
             return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
         bool explored = false;
         var groups = choice.Groups();
