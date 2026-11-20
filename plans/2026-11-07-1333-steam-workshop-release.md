@@ -440,3 +440,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   changelog page); the texts were not sent again (none changed). This machine's subscribed copy equals out/Sts2Ai;
   installed in `mods/` over 0.3.28 (moved to `tmp/modeng/old-installs/`). The Mac has no local copy and takes the
   subscription.
+- 2026-11-20 14:04: the listing's SL numbers are the champion d2's with the turn-dominance rule (the user: 換，Dread 補測, then
+  現在上傳): A0 / A10 from test-turn-dominance's rule-on side at c65af642, Dread from test-turn-dominance-dread at
+  9b4b4b74; Ironclad 199 / 181 / 103, Silent 199 / 166 / 50, Defect 200 / 169 / 64 of 198, Regent 198 / 150 / 40,
+  Necrobinder 198 / 138 / 40, the Fool 192 / 88 / 17 (of 200 but where named). Texts sent without `--content`, no
+  note, the 17 languages, all OK; the game closed here and on the Mac, Steam logged on as the owner. The public web API
+  (GetPublishedFileDetails) gives the new English table, visibility public; the item stays 0.3.29.
