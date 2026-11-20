@@ -65,6 +65,11 @@ public sealed record PlanFound(TurnEnd Pick, double From, IReadOnlyList<TurnEnd>
 /// moves along as the combat goes on. It owns a world where its root stands, its turns searched from there in
 /// <paramref name="threads"/> of the engine's threads, which ask V (<paramref name="value"/>) any number at once. One
 /// thread uses it at a time.
+///
+/// A solver can begin at a card prompt the node's clone stands at, where the engine cannot take the combat in
+/// (<see cref="EngineSolver(EngineNet, Func{RunView, double}, RunView, Func{IReadOnlyList{CombatAction}, CrossedPlace}, IReadOnlyList{EnemyTurns}, double, int, int)"/>):
+/// its root stands on the clone, each path of answers asked of it (<see cref="EngineCrossing"/>), until the combat goes on
+/// to where the player can play again, and is the engine's world from there.
 /// </summary>
 public sealed unsafe class EngineSolver : IDisposable
 {
@@ -72,19 +77,58 @@ public sealed unsafe class EngineSolver : IDisposable
     private readonly EngineNet _net;
     private readonly Func<RunView, double> _value;
     private readonly int _threads;
-    private readonly EngineWorld _root;
+    /// <summary>The world where the root stands; none while it stands at the prompt on the clone (<see cref="_prompt"/>).</summary>
+    private EngineWorld? _root;
+    private readonly Prompt? _prompt;
+
+    /// <summary>The prompt the solver began at on the node's clone: the answers from it to where the root stands while
+    /// that is a prompt still, and the run there, which what the combat changes is priced over.</summary>
+    private sealed class Prompt : IDisposable
+    {
+        public readonly EngineCrossing.Crosser Crosser;
+        /// <summary>The crossing's context, held as long as the solver: a state the engine keeps may hold it.</summary>
+        public readonly GCHandle Handle;
+        public readonly List<CombatAction> Path = [];
+        public readonly ulong Base;
+        private readonly RunView _run;
+        private readonly RunChanges _changes = new();
+
+        public Prompt(Func<IReadOnlyList<CombatAction>, CrossedPlace> cross, RunView run)
+        {
+            Crosser = new(cross);
+            Handle = GCHandle.Alloc(Crosser);
+            (_run, Base) = (run, ProtocolJson.Hash(run));
+        }
+
+        public RunView RunOf(ReadOnlySpan<byte> change) => _changes.Over(_run, change);
+
+        public byte[] PathJson() => JsonSerializer.SerializeToUtf8Bytes(Path.Select(a => a.ToString()));
+
+        public void Dispose() => Handle.Free();
+    }
+
+    private EngineSolver(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch)
+    {
+        var text = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(history));
+        fixed (byte* bytes = text) _solver = Native.sz_solver_new(bytes, (nuint)text.Length, decay, batch);
+        if (_solver.IsInvalid) throw Native.Failed("sz_solver_new");
+        (_net, _value, _threads) = (net, value, threads);
+    }
 
     /// <param name="root">Where the solver begins; the solver searches from a copy of it.</param>
     /// <param name="history">The record of enemy moves there.</param>
     /// <param name="decay">The pick's turn decay.</param>
     public EngineSolver(EngineNet net, Func<RunView, double> value, EngineWorld root, IReadOnlyList<EnemyTurns> history, double decay, int threads,
-        int batch = 16)
-    {
-        var text = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(history));
-        fixed (byte* bytes = text) _solver = Native.sz_solver_new(bytes, (nuint)text.Length, decay, batch);
-        if (_solver.IsInvalid) throw Native.Failed("sz_solver_new");
-        (_net, _value, _threads, _root) = (net, value, threads, root.Clone());
-    }
+        int batch = 16) : this(net, value, history, decay, threads, batch) => _root = root.Clone();
+
+    /// <summary>A solver from the card prompt the node's clone stands at: it crosses the prompt first, every answer
+    /// valued, and searches on from where they lead (search/solver.rs, <c>Solver::run</c>).</summary>
+    /// <param name="run">The run at the prompt, which what the combat changes is priced over.</param>
+    /// <param name="cross">What stands after each path of answers from the prompt, asked from any of the engine's
+    /// threads while the solver searches.</param>
+    public EngineSolver(EngineNet net, Func<RunView, double> value, RunView run, Func<IReadOnlyList<CombatAction>, CrossedPlace> cross,
+        IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch = 16) : this(net, value, history, decay, threads, batch) =>
+        _prompt = new(cross, run);
 
     /// <summary>A line another search found from the root, with the value of the turn start a losing line died from.</summary>
     public void Seed(TurnEnd line, double from)
@@ -95,22 +139,66 @@ public sealed unsafe class EngineSolver : IDisposable
     }
 
     /// <summary>Searches on for at least <paramref name="nodes"/> more actions, or until nothing is left.</summary>
-    public void Run(long nodes, CancellationToken stop = default) =>
-        Searching(stop, "sz_solver_run", (ctx, halt) => Native.sz_solver_run(_solver, _net.Handle, _root.Handle, nodes, _root.Base, Pricer.Callback, ctx,
-            _threads, (int*)halt));
+    public void Run(long nodes, CancellationToken stop = default)
+    {
+        if (_root is { } root)
+        {
+            Searching(stop, "sz_solver_run", root.RunOf, (ctx, halt) => Native.sz_solver_run(_solver, _net.Handle, root.Handle, nodes, root.Base,
+                Pricer.Callback, ctx, _threads, (int*)halt));
+            return;
+        }
+        var prompt = _prompt!;
+        var path = prompt.PathJson();
+        Searching(stop, "sz_solver_run_crossed", prompt.RunOf, (ctx, halt) =>
+        {
+            fixed (byte* p = path)
+                return Native.sz_solver_run_crossed(_solver, _net.Handle, EngineCrossing.Callback, GCHandle.ToIntPtr(prompt.Handle), p,
+                    (nuint)path.Length, nodes, prompt.Base, Pricer.Callback, ctx, _threads, (int*)halt);
+        }, prompt.Crosser);
+    }
 
     /// <summary>The combat went on from the root by <paramref name="played"/>, to where its record of enemy moves is
-    /// <paramref name="moves"/>: the root moves there.</summary>
+    /// <paramref name="moves"/>: the root moves there. From the prompt on the clone, along its answers, to the engine's
+    /// world once the combat stands where the player can play again.</summary>
     public void Advance(IReadOnlyList<CombatAction> played, IReadOnlyList<EnemyTurns> moves, CancellationToken stop = default)
     {
         if (played.Count == 0) return;
-        foreach (var action in played) _root.Execute(action);
+        if (_root == null)
+        {
+            var prompt = _prompt!;
+            int answered = 0;
+            CrossedPlace place;
+            do place = prompt.Crosser.Cross([.. prompt.Path, .. played.Take(++answered)]);
+            while (place.Export == null && answered < played.Count);
+            if (place.Export == null)
+            {
+                prompt.Path.AddRange(played);
+                var path = prompt.PathJson();
+                Advanced(played, moves, stop, "sz_solver_advance_crossed", prompt.RunOf, (ctx, halt, asked, len) =>
+                {
+                    fixed (byte* p = path)
+                        return Native.sz_solver_advance_crossed(_solver, _net.Handle, EngineCrossing.Callback, GCHandle.ToIntPtr(prompt.Handle), p,
+                            (nuint)path.Length, (byte*)asked, len, prompt.Base, Pricer.Callback, ctx, _threads, (int*)halt);
+                }, prompt.Crosser);
+                return;
+            }
+            _root = EngineWorld.Import(place.Export, place.Run);
+            foreach (var action in played.Skip(answered)) _root.Execute(action);
+        }
+        else foreach (var action in played) _root.Execute(action);
+        var root = _root;
+        Advanced(played, moves, stop, "sz_solver_advance", root.RunOf, (ctx, halt, asked, len) =>
+            Native.sz_solver_advance(_solver, _net.Handle, root.Handle, (byte*)asked, len, root.Base, Pricer.Callback, ctx, _threads, (int*)halt));
+    }
+
+    private void Advanced(IReadOnlyList<CombatAction> played, IReadOnlyList<EnemyTurns> moves, CancellationToken stop, string call,
+        Pricer.RunOf runOf, Func<nint, nint, nint, nuint, int> advance, EngineCrossing.Crosser? crosser = null)
+    {
         var asked = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(new SolverMoved(played, moves)));
         fixed (byte* bytes = asked)
         {
             nint at = (nint)bytes;
-            Searching(stop, "sz_solver_advance", (ctx, halt) => Native.sz_solver_advance(_solver, _net.Handle, _root.Handle, (byte*)at,
-                (nuint)asked.Length, _root.Base, Pricer.Callback, ctx, _threads, (int*)halt));
+            Searching(stop, call, runOf, (ctx, halt) => advance(ctx, halt, at, (nuint)asked.Length), crosser);
         }
     }
 
@@ -134,14 +222,17 @@ public sealed unsafe class EngineSolver : IDisposable
         }
     }
 
-    private void Searching(CancellationToken stop, string call, Func<nint, nint, int> search)
+    /// <summary>Runs the engine's <paramref name="call"/>, V asked over <paramref name="runOf"/>; a failure crossing a
+    /// prompt (<paramref name="crosser"/>) is thrown as it was.</summary>
+    private void Searching(CancellationToken stop, string call, Pricer.RunOf runOf, Func<nint, nint, int> search, EngineCrossing.Crosser? crosser = null)
     {
         var flag = new int[1];
         using var told = stop.Register(() => Volatile.Write(ref flag[0], 1));
-        new Pricer(_root.RunOf, _value).With(ctx =>
+        new Pricer(runOf, _value).With(ctx =>
         {
             int said;
             fixed (int* halt = flag) said = search(ctx, (nint)halt);
+            crosser?.Failed?.Throw();
             if (said == 2) throw new OperationCanceledException(stop);
             return said == 0 ? 0 : throw Native.Failed(call);
         });
@@ -150,7 +241,8 @@ public sealed unsafe class EngineSolver : IDisposable
     public void Dispose()
     {
         _solver.Dispose();
-        _root.Dispose();
+        _root?.Dispose();
+        _prompt?.Dispose();
     }
 }
 
@@ -181,11 +273,14 @@ public static unsafe class EngineCrossing
     private sealed record Head(int Status, ulong HiddenKey, CombatObservation Observation, RunChange Run);
 
     /// <summary>The paths' crossing and the first failure in it, which is thrown once the engine's call is back.</summary>
-    private sealed class Crosser(Func<IReadOnlyList<CombatAction>, CrossedPlace> cross)
+    internal sealed class Crosser(Func<IReadOnlyList<CombatAction>, CrossedPlace> cross)
     {
         public readonly Func<IReadOnlyList<CombatAction>, CrossedPlace> Cross = cross;
         public ExceptionDispatchInfo? Failed;
     }
+
+    /// <summary>The engine's <c>sz_cross</c>: its context a <see cref="GCHandle"/> of a <see cref="Crosser"/>.</summary>
+    internal static delegate* unmanaged<nint, byte*, nuint, nint, int> Callback => &Crossing;
 
     /// <param name="run">The run at the plan's prompt, which what the combat changes is priced over.</param>
     public static PlanFound Plan(EngineNet net, Func<RunView, double> value, RunView run, Func<IReadOnlyList<CombatAction>, CrossedPlace> cross,

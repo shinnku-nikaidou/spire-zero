@@ -90,6 +90,12 @@ internal static unsafe partial class Native
         delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
     [LibraryImport(Library)] internal static partial int sz_solver_advance(SolverHandle solver, NetHandle net, WorldHandle world, byte* asked, nuint len,
         ulong @base, delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
+    [LibraryImport(Library)] internal static partial int sz_solver_run_crossed(SolverHandle solver, NetHandle net,
+        delegate* unmanaged<nint, byte*, nuint, nint, int> cross, nint crossCtx, byte* path, nuint pathLen, long nodes, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
+    [LibraryImport(Library)] internal static partial int sz_solver_advance_crossed(SolverHandle solver, NetHandle net,
+        delegate* unmanaged<nint, byte*, nuint, nint, int> cross, nint crossCtx, byte* path, nuint pathLen, byte* asked, nuint len, ulong @base,
+        delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
     [LibraryImport(Library)] internal static partial int sz_solver_result(SolverHandle solver, Buf* result);
     [LibraryImport(Library)] internal static partial int sz_solver_counts(SolverHandle solver, long* counts);
     [LibraryImport(Library)] internal static partial int sz_plan_crossed(NetHandle net, delegate* unmanaged<nint, byte*, nuint, nint, int> cross,

@@ -979,6 +979,48 @@ fn the_solvers_root_crosses_a_prompt_at_a_turns_start_to_the_states_it_holds() {
     assert_eq!(plan.end, world.status);
 }
 
+#[test]
+fn a_solver_that_begins_at_a_prompt_crosses_it_first_and_values_every_answer() {
+    // The combat stands at the second turn's exhaust (Toasty Mittens), as at a prompt the node's clone stands at (Gambling
+    // Chip's discard, which opens a combat): the root's turn is the prompt's answers alone, a node each, and the states
+    // they reach are searched as the solver's states are, to the best line over every answer.
+    const HP: i32 = 30;
+    let root = played(Toy::new(HP, None, false).mittens().state(), &[Action::EndTurn]);
+    let prompt = root.obs.prompt.clone().expect("the prompt");
+    let searcher = Replay {
+        root: root.copy(),
+        leaf: &ToyLeaf,
+        bounds: true,
+    };
+    let mut solver = Solver::new(Arc::new(state::witness(&Vec::new(), &root.obs)), 1.0, 16);
+    solver.run(&searcher, 1).expect("the root's turn");
+    assert_eq!(order::answers(&prompt, i64::MAX).0.len() as i64, solver.nodes(), "a node for each answer");
+    assert_eq!(1, solver.searched());
+
+    solver.run(&searcher, i64::MAX).expect("a search");
+    let plan = result(&solver);
+    assert!(plan.proved);
+    let mut world = root.copy();
+    let mut known = HashMap::new();
+    assert_near(answers_too(&mut world, &mut known), plan.value, 9);
+    for step in plan.steps() {
+        world = world.step(&step).expect("a step of the plan");
+    }
+    assert_eq!(plan.end, world.status);
+}
+
+#[test]
+fn a_beam_at_a_prompt_crosses_it_first() {
+    // The second turn's exhaust (Toasty Mittens) as the decision's own prompt, as Gambling Chip's discard that opens a
+    // combat: the beam's first turn is the answers alone, each valued at the round's start it leads to, and a beam of 2
+    // from there wins with 10 nodes a state; a turn's search of every answer and of the turn after each, in those 10
+    // nodes, found no win.
+    let root = played(Toy::new(30, None, false).mittens().state(), &[Action::EndTurn]);
+    assert!(root.obs.prompt.is_some());
+    let plan = planned(&root, &ToyLeaf, &budget(10, 2));
+    assert_eq!(Status::Won, plan.end);
+}
+
 /// `brute_force` with every answer tried where a prompt waits.
 fn answers_too(state: &mut State, known: &mut HashMap<(u64, u64), f64>) -> f64 {
     if state.status != Status::InProgress {

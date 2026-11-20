@@ -344,16 +344,36 @@ unsafe fn threads<'a>(
     net: &'a Net, world: u64, base: u64, price: &'a super::leaf::Price<'a>, threads: i32, stop: *const AtomicI32,
 ) -> Result<(State, impl Fn(&'a State) -> Threads<'a>), String> {
     let (world, sample) = unsafe { engine_world(world) }?;
-    let root = State::new(world.clone(), sample);
+    Ok((State::new(world.clone(), sample), searcher(net, base, price, threads, stop)))
+}
+
+/// The searches of a call from a card prompt the node's clone stands at, after `path` (JSON: the answers from the
+/// prompt the solver began at), each path from there crossed by `cross` (with `cross_ctx`), in `threads` threads.
+unsafe fn crossed<'a>(
+    net: &'a Net, cross: SzCross, cross_ctx: *mut c_void, path: *const u8, len: usize, base: u64, price: &'a super::leaf::Price<'a>,
+    threads: i32, stop: *const AtomicI32,
+) -> Result<(State, impl Fn(&'a State) -> Threads<'a>), String> {
+    let texts: Vec<String> =
+        serde_json::from_str(unsafe { text(path, len, "the path of answers") }?).map_err(|e| format!("the path of answers: {e}"))?;
+    let path = texts.iter().map(|t| Action::parse(t)).collect::<Result<Vec<Action>, String>>()?;
+    let crossing: Arc<dyn Crossing> = Arc::new(Callback {
+        cross,
+        ctx: cross_ctx as usize,
+        places: Mutex::new(HashMap::new()),
+    });
+    Ok((State::at(crossing.at(&path)?, &crossing), searcher(net, base, price, threads, stop)))
+}
+
+fn searcher<'a>(net: &'a Net, base: u64, price: &'a super::leaf::Price<'a>, threads: i32, stop: *const AtomicI32) -> impl Fn(&'a State) -> Threads<'a> {
     let count = threads.max(1) as usize;
-    Ok((root, move |root: &'a State| Threads {
+    move |root: &'a State| Threads {
         root,
         net,
         base,
         price,
         threads: count,
         stop: Stop(stop),
-    }))
+    }
 }
 
 /// The solver of a handle.
@@ -416,6 +436,51 @@ pub unsafe extern "C" fn sz_solver_run(
         let price = pricer(price, ctx);
         let (root, searcher) = unsafe { self::threads(net, world, base, &price, threads, stop) }?;
         solver.run(&searcher(&root), nodes)?;
+        Ok(0)
+    }));
+    if result != 0 && stopped_by(stop) { 2 } else { result }
+}
+
+/// `sz_solver_run` with the root at a card prompt the node's clone stands at (C#: EngineSolver.Crossed): the prompt
+/// after `path` (JSON, the answers from the prompt the solver began at), each path from there crossed by `cross` as for
+/// `sz_plan_crossed`. A solver that begins there crosses the prompt first (`Solver::run`).
+///
+/// # Safety
+/// As for `sz_solver_run`; `path` points at `path_len` readable bytes; `cross` with `cross_ctx` is callable from any
+/// thread during the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_solver_run_crossed(
+    solver: u64, net: u64, cross: SzCross, cross_ctx: *mut c_void, path: *const u8, path_len: usize, nodes: i64, base: u64, price: SzPrice,
+    ctx: *mut c_void, threads: i32, stop: *const AtomicI32,
+) -> i32 {
+    let result = with_stop(stop, || call(1, || {
+        let solver = unsafe { self::solver(solver) }?;
+        let net = unsafe { self::net(net) }?;
+        let price = pricer(price, ctx);
+        let (root, searcher) = unsafe { self::crossed(net, cross, cross_ctx, path, path_len, base, &price, threads, stop) }?;
+        solver.run(&searcher(&root), nodes)?;
+        Ok(0)
+    }));
+    if result != 0 && stopped_by(stop) { 2 } else { result }
+}
+
+/// `sz_solver_advance` to a card prompt the node's clone stands at: the root moved by the actions played (answers),
+/// to the prompt after `path` as for `sz_solver_run_crossed`.
+///
+/// # Safety
+/// As for `sz_solver_run_crossed`; `asked` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_solver_advance_crossed(
+    solver: u64, net: u64, cross: SzCross, cross_ctx: *mut c_void, path: *const u8, path_len: usize, asked: *const u8, len: usize, base: u64,
+    price: SzPrice, ctx: *mut c_void, threads: i32, stop: *const AtomicI32,
+) -> i32 {
+    let result = with_stop(stop, || call(1, || {
+        let solver = unsafe { self::solver(solver) }?;
+        let net = unsafe { self::net(net) }?;
+        let asked = read::advanced(unsafe { text(asked, len, "the solver's move") }?.as_bytes())?;
+        let price = pricer(price, ctx);
+        let (root, searcher) = unsafe { self::crossed(net, cross, cross_ctx, path, path_len, base, &price, threads, stop) }?;
+        solver.advance(&asked.played, Arc::new(asked.moves), &searcher(&root))?;
         Ok(0)
     }));
     if result != 0 && stopped_by(stop) { 2 } else { result }

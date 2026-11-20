@@ -46,6 +46,22 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         return PlanOf.Found(found.Pick, found.From, found.ByFirst, found.Proved, budget.Replan, found.Nodes, found.Turns);
     }
 
+    /// <summary>The card prompt the node's clone stands at, each path of answers from it played by the pool's workers.</summary>
+    private static PromptRoot.Crossing Crossing(NodeClone? node, WorkerPool pool)
+    {
+        var clone = node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only");
+        return new(paths => [.. pool.Map([.. paths.Select((path, i) => (WorkerRequest)new SlPromptRequest(i, clone, path))])
+            .Select(r => r.Crossed ?? throw new InvalidDataException($"request {r.Id}: no crossing in the reply"))]);
+    }
+
+    /// <summary>The beam's plan from <paramref name="prompt"/>, the prompt itself and the first <paramref name="answers"/>
+    /// of its answers crossed first, side by side: the answers the first turn's search will try.</summary>
+    private SlPlan Plan(CardChoice prompt, PromptRoot.Crossing crossing, Budget budget, IReadOnlyList<EnemyTurns> history, int answers)
+    {
+        crossing.Ahead([[], .. PromptAnswers.Of(prompt, answers, out bool _).Select(answer => (IReadOnlyList<CombatAction>)[answer])]);
+        return Plan(crossing, budget, history);
+    }
+
     /// <summary>Plans the rest of the combat from the card prompt it waits on, which <paramref name="crossing"/>'s
     /// clone stands at.</summary>
     public SlPlan Plan(PromptRoot.Crossing crossing, Budget budget, IReadOnlyList<EnemyTurns> history)
@@ -74,16 +90,8 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         {
             if (decision.Observation.Prompt is { } prompt)
             {
-                var clone = node ?? throw new InvalidOperationException("the SL planner has no node clone: it plays in SL only");
-                var crossing = new PromptRoot.Crossing(paths =>
-                    [.. pool.Map([.. paths.Select((path, i) => (WorkerRequest)new SlPromptRequest(i, clone, path))])
-                        .Select(r => r.Crossed ?? throw new InvalidDataException($"request {r.Id}: no crossing in the reply"))]);
-                var plan = meter.Count(() =>
-                {
-                    // The prompt itself and each answer the first turn's search will try, crossed side by side.
-                    crossing.Ahead([[], .. PromptAnswers.Of(prompt, b.NodesPerWorld, out bool _).Select(answer => (IReadOnlyList<CombatAction>)[answer])]);
-                    return Plan(crossing, b, history);
-                });
+                var crossing = Crossing(node, pool);
+                var plan = meter.Count(() => Plan(prompt, crossing, b, history, b.NodesPerWorld));
                 meter.Crossed(crossing.Crossed);
                 return plan;
             }
@@ -96,8 +104,9 @@ public sealed class EnginePlanner(CombatNet net, int threads)
 
     /// <summary>
     /// max's route (<see cref="SolverRoute"/>): the combat taken in once where a solver begins, each turn's search a copy
-    /// of that world with the actions played since and the state's path applied. Where the solver cannot begin (a card
-    /// prompt off its line), the beam's route decides.
+    /// of that world with the actions played since and the state's path applied. At a card prompt the engine cannot take
+    /// in (one that opens its combat, as Gambling Chip's discard, or one off the solver's line) the solver begins on the
+    /// node's clone, every answer crossed there, and is the engine's from where the player can play again.
     /// </summary>
     private CombatRoute Solver(Budget budget, string name, WorkerPool pool, bool background)
     {
@@ -118,7 +127,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             CombatDecisionResult Decide()
             {
                 bool byBeam = false;
-                var made = route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision.Export), () =>
+                var made = route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision, node, pool), () =>
                 {
                     byBeam = true;
                     return (beam ??= Route(budget with { Solve = 0 }, name, pool)).Decide(decision, seed, node, history);
@@ -137,10 +146,40 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         }, budget, () => meter.Tally, route.Rest);
     }
 
-    /// <summary>The combat as <paramref name="live"/> is, for a solver; null with no live combat.</summary>
-    private TakenCombat? Taken(CombatExport? live)
+    /// <summary>The combat where <paramref name="decision"/> stands, for a solver: the live combat, or at a card prompt
+    /// with none (the engine takes a combat in between actions only) the node's clone there; null with neither.</summary>
+    private TakenCombat? Taken(CombatDecision decision, NodeClone? node, WorkerPool pool)
     {
-        if (live == null) return null;
+        if (decision.Export is { } live) return Taken(live);
+        if (decision.Observation.Prompt is not { } prompt || node == null) return null;
+        var crossing = Crossing(node, pool);
+        return new(played => Observe(crossing, played),
+            // Every answer crossed side by side first: the solver crosses the prompt before it searches on.
+            (budget, history) => Plan(prompt, crossing, budget, history, int.MaxValue),
+            (history, decay) => new Solving(new EngineSolver(_net.Value, net.RunValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed,
+                history, decay, threads)));
+    }
+
+    /// <summary>The combat's observation after <paramref name="played"/> from the prompt the clone stands at: along its
+    /// answers on the clone, and in the engine from where the player can play again.</summary>
+    private static CombatObservation Observe(PromptRoot.Crossing crossing, IReadOnlyList<CombatAction> played)
+    {
+        for (int answered = 0; ; answered++)
+        {
+            var place = crossing.At([.. played.Take(answered)]).Crossed;
+            if (place.Export != null)
+            {
+                using var at = EngineWorld.Import(place.Export, place.Run);
+                foreach (var action in played.Skip(answered)) at.Execute(action);
+                return at.Observe();
+            }
+            if (answered == played.Count) return place.Observation;
+        }
+    }
+
+    /// <summary>The combat as <paramref name="live"/> is, for a solver.</summary>
+    private TakenCombat Taken(CombatExport live)
+    {
         var root = EngineWorld.Import(live.Bytes, live.Run);
         return new(played =>
         {

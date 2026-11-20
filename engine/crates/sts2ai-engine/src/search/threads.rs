@@ -192,4 +192,8 @@ impl Searcher for Threads<'_> {
         }
         Ok(found)
     }
+
+    fn root_waits(&self) -> bool {
+        self.root.obs.prompt.is_some()
+    }
 }

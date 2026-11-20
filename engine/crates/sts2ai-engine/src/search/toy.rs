@@ -657,6 +657,10 @@ impl Searcher for Replay<'_> {
             })
             .collect()
     }
+
+    fn root_waits(&self) -> bool {
+        self.root.obs.prompt.is_some()
+    }
 }
 
 /// C#: a TurnSearcher written as a lambda.

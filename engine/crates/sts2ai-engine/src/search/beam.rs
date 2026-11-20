@@ -30,7 +30,8 @@
 //!
 //! Only one turn's transpositions are merged, so each state kept is the end of a concrete line of actions, and the plan
 //! replays exactly in the world it was searched in. A card prompt is a state like any other, and its answers are its
-//! actions: every prompt of a line is a branch, and a line ends only where the player can play again. A cycle goes to
+//! actions: every prompt of a line is a branch, and a line ends only where the player can play again. A decision at a
+//! prompt crosses it first (`crosses`): its answers end the first turn, every one kept. A cycle goes to
 //! `loops.rs`. The turns' searches are independent, so a turn is one `Searcher` call that can run them apart
 //! (`threads.rs`). The plan made of the pick, with the candidates, is the C# side's (PlanOf).
 //!
@@ -59,7 +60,8 @@ pub struct Job {
     pub history: Arc<History>,
     pub bounds: Bounds,
     pub from: Option<(usize, State)>,
-    /// The job's state is a prompt between its turn's end and the next turn's start (`turn::search`'s `crossing`).
+    /// The job's state is a prompt between its turn's end and the next turn's start, or the decision's own prompt
+    /// (`turn::search`'s `crossing`).
     pub crossing: bool,
     /// The most nodes the job's search spends in this call before it pauses (`TurnSearch::paused`); None, to its end.
     pub most: Option<i32>,
@@ -75,6 +77,12 @@ pub struct Job {
 /// C#: TurnSearcher. Searches one turn from each job's state, in job order, each with `nodes` nodes, keeping `keep`.
 pub trait Searcher {
     fn search(&self, jobs: &[Job], nodes: i32, keep: usize) -> Result<Vec<TurnSearch>, String>;
+
+    /// Whether the root waits on a card prompt: the beam and a solver that begin there cross it first
+    /// (`Beam::crosses`, `Solver::run`).
+    fn root_waits(&self) -> bool {
+        false
+    }
 }
 
 /// What of C#'s Budget the beam reads.
@@ -290,6 +298,7 @@ impl Beam<'_> {
         self.complete = true;
         let mut turn = 0;
         while !states.is_empty() && turn < MAX_TURNS {
+            let crossed = self.crosses(&states);
             let found = self.search(&states, width)?;
             self.turns += 1;
             let mut next = Vec::new();
@@ -318,7 +327,7 @@ impl Beam<'_> {
                 if !seen.insert(line.key) || bound::below(&self.bounds, &line.potions, line.reach) {
                     continue;
                 }
-                if states.len() as i32 == width {
+                if states.len() as i32 == width && !crossed {
                     self.complete = false;
                     break;
                 }
@@ -331,10 +340,21 @@ impl Beam<'_> {
         Ok(())
     }
 
+    /// Whether these states are the decision's, at a card prompt: the beam crosses it first, every answer kept to the
+    /// state where the player can play, whatever the width, and each of those has its turn searched as any state of the
+    /// beam has (Gambling Chip's discard that opens a combat, the user, 2026-11-20: 「ai完全不會用賭博籌碼」). A turn's
+    /// search of every answer and the rest of the turn split its nodes over the answers, and reached the turn's end
+    /// under a few: on a Silent's Dread run's six Gambling Chips, 0 to 3 answers of 96 to 512 were valued, and two had no
+    /// win.
+    fn crosses(&self, states: &[TurnEnd]) -> bool {
+        matches!(states, [only] if only.actions.is_empty()) && self.searcher.root_waits()
+    }
+
     /// C#: Beam.Search. The turn's search from each state, as a search with this width finds it.
     fn search(&mut self, states: &[TurnEnd], width: i32) -> Result<Vec<TurnSearch>, String> {
         let dive = width == 1;
-        let keep = width.max(0) as usize;
+        let crossing = self.crosses(states);
+        let keep = if crossing { usize::MAX } else { width.max(0) as usize };
         let mut found: Vec<Option<TurnSearch>> = Vec::with_capacity(states.len());
         let mut asked = Vec::new();
         for (i, state) in states.iter().enumerate() {
@@ -354,7 +374,7 @@ impl Beam<'_> {
                     history: states[i].history.clone(),
                     bounds: self.bounds.clone(),
                     from: self.worlds.nearest(&states[i].actions),
-                    crossing: false,
+                    crossing,
                     most: None,
                     resume: Mutex::new(None),
                     record: false,

@@ -123,7 +123,8 @@ impl Node {
 enum Reached {
     /// A turn's start whose turn was searched in full already: the state, which becomes the root as it is.
     Searched(usize),
-    /// A prompt between a turn's end and the next turn's start: the root's turn ends where the player can play.
+    /// A prompt between a turn's end and the next turn's start, or the prompt the solver began at: the root's turn ends
+    /// where the player can play.
     Crossing,
     /// Into the turn of state `.0`: the root's turn is searched with that turn's graph as its memo, where the solver
     /// holds one (`turn::Turn::new`).
@@ -333,7 +334,12 @@ impl Solver {
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
         if !self.started {
             self.playing = self.seed.clone();
-            self.begin(search, Reached::Turn, None, None)?;
+            // A solver that begins at a card prompt (one crossed on the node's clone, as Gambling Chip's discard that
+            // opens the combat; the user, 2026-11-20: 「ai完全不會用賭博籌碼」) crosses it first: its root's turn is the
+            // prompt's answers, to where the player can play again, and each state there waits to be searched as the
+            // solver's states do. Every answer is valued, not only the few a turn's search of all of them reaches.
+            let reached = if search.root_waits() { Reached::Crossing } else { Reached::Turn };
+            self.begin(search, reached, None, None)?;
             self.look();
         }
         while (self.rooting.is_some() || !(self.queue.is_empty() && self.going.is_empty())) && self.nodes < until {

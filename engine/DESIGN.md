@@ -644,6 +644,9 @@ A state of the search is a world standing where the player is asked, with what i
 the two keys, the observation's hash). A plan rooted at a card prompt stands on the node's clone until the player can
 play again: each path of answers is asked of the C# side (`sz_cross`), which says what the clone shows there
 (decimals as strings, so their scale is kept) or, where the player can play, writes the combat out for the engine.
+A solver can begin there too (max at Gambling Chip's discard, which opens a combat): its root stands on the clone until
+the combat goes on to where the player can play, and is the engine's world from there. A beam or a solver that begins
+at a prompt crosses it first: the answers end the first turn, each at the state where the player can play.
 
 The combat net runs in ONNX Runtime through the crate `ort` (`load-dynamic`): the same library the C# side ships and has
 loaded, given by its path, so nothing is downloaded at build time and the graph's numbers are the C# side's. A session
@@ -682,6 +685,11 @@ int32_t  sz_solver_run(uint64_t solver, uint64_t net, uint64_t world, int64_t no
                        int32_t threads, const int32_t *stop);
 int32_t  sz_solver_advance(uint64_t solver, uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
                            void *ctx, int32_t threads, const int32_t *stop);
+int32_t  sz_solver_run_crossed(uint64_t solver, uint64_t net, sz_cross cross, void *cross_ctx, const uint8_t *path, size_t path_len,
+                               int64_t nodes, uint64_t base, sz_price price, void *ctx, int32_t threads, const int32_t *stop);
+int32_t  sz_solver_advance_crossed(uint64_t solver, uint64_t net, sz_cross cross, void *cross_ctx, const uint8_t *path, size_t path_len,
+                                   const uint8_t *asked, size_t len, uint64_t base, sz_price price, void *ctx, int32_t threads,
+                                   const int32_t *stop);   // the solver's root at the clone's prompt after `path` (answers, JSON)
 int32_t  sz_solver_result(uint64_t solver, sz_buf *out);
 int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved, settled
 ```

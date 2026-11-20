@@ -24,7 +24,7 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CombatObserva
 /// solver's root moves along it (<see cref="ICombatSolver.Advance"/>) and keeps what it found below. Otherwise (the player
 /// moved elsewhere, a new combat began, the engine played a step otherwise) a new solver begins. A decision with one
 /// thing to do is answered without search, and the root moves at the next one. Where the combat cannot be taken in
-/// (a card prompt off the line) the beam decides.
+/// (no live combat, and no clone of the node at a card prompt) the beam decides.
 ///
 /// In the background (<paramref name="background"/>: the mod's brain, whose game takes its time between decisions) the
 /// solver searches on a thread of its own the combat long. The root moves along each step the combat is expected to
