@@ -1,16 +1,23 @@
 //! A rule written by hand, among a turn's ends (the user, 2026-11-19: 「肯定得回合內對單角色輸出最多+debuff最多並且自己扣血最少，
 //! （假設結算完畢是擁有相同卡組和順序包括狀態卡，相同的敵方buff）」, then 「這個優化得作用在全部的effort裡面」;
 //! plans/2026-11-19-2103-turn-dominance.md): of the ends of one turn's search at the next turn's start, after the enemies'
-//! turn and the draw, two that are the same in all but each enemy's HP, the amounts of each enemy's debuffs and the
-//! player's HP are compared. One with no enemy's HP higher, no debuff's amount lower and the player's HP no lower than
-//! the other's, and one of them better, dominates it, and the turn's search drops the other (`turn.rs`, `Dfs::value`):
-//! no line goes on from it and the pick never takes it. The beam's turns and the solver's go through it, at every effort.
+//! turn and the draw, two that are the same in all but each enemy's HP, the amounts of each enemy's debuffs, the
+//! player's HP and each ally's HP are compared. One with no enemy's HP higher, no debuff's amount lower and neither the
+//! player's HP nor an ally's lower than the other's, and one of them better, dominates it, and the turn's search drops
+//! the other (`turn.rs`, `Dfs::value`): no line goes on from it and the pick never takes it. The beam's turns and the
+//! solver's go through it, at every effort.
+//!
+//! An ally's HP is compared as the player's is (the user, 2026-11-20: 「加進規則」): Wuppy takes the enemies' hits in
+//! the player's place and keeps what is left of its HP from fight to fight, in its relic's counter. With its HP part of
+//! what must be the same, a turn that left out Neutralize was never compared with the one that played it, Wuppy having
+//! taken 9 where it would have taken 6.
 //!
 //! What must be the same (`Shape::rest`) is the state key's observation with the numbers compared taken out, and the
 //! intents' damage too (the enemy's move, its Strength, its Weak and the player's powers make it), with the full hidden
 //! key: every pile, the draw pile in its order, status cards and curses with the rest; every power of the player and
-//! every buff of the enemies with its amount; the potions; the allies; the enemies themselves, so a line that killed one
-//! is not compared with one that did not; the random streams; each enemy's move to come and its moves so far.
+//! every buff of the enemies with its amount; the potions; the allies but their HP; the enemies themselves, so a line
+//! that killed one is not compared with one that did not; the random streams; each enemy's move to come and its moves
+//! so far.
 //!
 //! Not strict, by the user's word (「遺物計數 不算，不然數不來了，代碼的時候寫個註釋，註明其實不是特別嚴格」): the relics'
 //! counters are left out of what must be the same, so that two lines that played another number of attacks are compared
@@ -49,6 +56,8 @@ pub struct Shape {
     /// The hash of everything that must be the same.
     rest: u64,
     hp: i32,
+    /// Each ally's HP, in the allies' order.
+    allies: Vec<i32>,
     /// Each enemy's HP, and its debuffs compared by amount (id, amount), sorted by id.
     enemies: Vec<(i32, Vec<(Str, i32)>)>,
 }
@@ -61,6 +70,7 @@ pub fn shape(state: &mut State) -> Option<Shape> {
     let debuffs = state.enemy_debuffs();
     let mut obs = (*state.obs).clone();
     let hp = std::mem::take(&mut obs.player.hp);
+    let allies = obs.allies.iter_mut().map(|ally| std::mem::take(&mut ally.hp)).collect();
     // Not strict, by the user's word: see the module's comment.
     for relic in &mut obs.relics {
         relic.counter = None;
@@ -87,16 +97,22 @@ pub fn shape(state: &mut State) -> Option<Shape> {
         }
         enemies.push((std::mem::take(&mut enemy.hp), compared));
     }
-    Some(Shape { rest: mix(protocol::state_key(&obs), state.hidden_key), hp, enemies })
+    Some(Shape { rest: mix(protocol::state_key(&obs), state.hidden_key), hp, allies, enemies })
 }
 
 /// Whether `a` dominates `b`, two shapes with the same rest: no worse anywhere, and better somewhere.
 fn dominates(a: &Shape, b: &Shape) -> bool {
-    if a.enemies.len() != b.enemies.len() || a.hp < b.hp {
+    if a.enemies.len() != b.enemies.len() || a.allies.len() != b.allies.len() || a.hp < b.hp {
         return false;
     }
     let amount = |debuffs: &[(Str, i32)], id: &str| debuffs.iter().find(|(d, _)| d.as_str() == id).map_or(0, |(_, n)| *n);
     let mut better = a.hp > b.hp;
+    for (a_hp, b_hp) in a.allies.iter().zip(&b.allies) {
+        if a_hp < b_hp {
+            return false;
+        }
+        better |= a_hp > b_hp;
+    }
     for ((a_hp, a_debuffs), (b_hp, b_debuffs)) in a.enemies.iter().zip(&b.enemies) {
         if a_hp > b_hp {
             return false;

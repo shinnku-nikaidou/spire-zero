@@ -16,7 +16,7 @@ use super::solver::Solver;
 use super::state::{self, Action, History, State, Status};
 use super::toy::{Asked, Disliking, Loop, Plan, Prompted, Replay, Rules, Toy, ToyLeaf, jobs, picked, round, slugs, toy};
 use super::turn::{self, TurnEnd, TurnSearch};
-use crate::protocol::{CardView, CombatObservation, PowerView, RelicView};
+use crate::protocol::{CardView, CombatObservation, CreatureView, PowerView, RelicView};
 use crate::rt::Str;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1223,7 +1223,9 @@ fn a_turns_search_stops_the_lines_below_the_bound_of_their_potions() {
 
 /// A toy for the dominance: one enemy at 40 HP and, each turn, two cards of no cost. Neutralize (`N`) takes 4 HP, gives
 /// `gives` of the power `power` and moves the relic's counter one on; Poke (`P`) takes 1 HP and gives `poke_gives`. The
-/// power wears off by one at the turn's end where it is positive; nothing else of the next turn depends on the line.
+/// power wears off by one at the turn's end where it is positive; nothing else of the next turn depends on the line. With
+/// an ally beside the player (Wuppy), the enemy hits it at the turn's end, for 2 less while it holds the power, and Poke
+/// costs it `poke_costs`.
 #[derive(Clone)]
 struct Marks {
     encounter: &'static str,
@@ -1237,6 +1239,12 @@ struct Marks {
     counter: i32,
     round: i32,
     hand: Vec<u32>,
+    /// The ally's HP, if there is one.
+    ally: Option<i32>,
+    /// The enemy's hit on the ally at the turn's end.
+    hit: i32,
+    /// What Poke costs the ally.
+    poke_costs: i32,
 }
 
 const N: u32 = 1;
@@ -1245,7 +1253,18 @@ const P: u32 = 2;
 impl Marks {
     /// The search's state at the toy's start.
     fn state(encounter: &'static str, power: &'static str, debuff: bool, gives: i32, poke_gives: i32) -> State {
-        let marks = Marks { encounter, power, debuff, gives, poke_gives, enemy: 40, amount: 0, counter: 0, round: 1, hand: vec![N, P] };
+        State::toy(Box::new(Marks::start(encounter, power, debuff, gives, poke_gives)))
+    }
+
+    /// The toy at its start, with no ally.
+    fn start(encounter: &'static str, power: &'static str, debuff: bool, gives: i32, poke_gives: i32) -> Marks {
+        let hand = vec![N, P];
+        Marks { encounter, power, debuff, gives, poke_gives, enemy: 40, amount: 0, counter: 0, round: 1, hand, ally: None, hit: 0, poke_costs: 0 }
+    }
+
+    /// The search's state at the start with Wuppy at 30 HP beside the player, Neutralize giving 2 Weak.
+    fn with_ally(hit: i32, poke_costs: i32) -> State {
+        let marks = Marks { ally: Some(30), hit, poke_costs, ..Marks::start("CORPSE_SLUGS_WEAK", "WEAK_POWER", true, 2, 0) };
         State::toy(Box::new(marks))
     }
 }
@@ -1271,6 +1290,7 @@ impl state::ToyWorld for Marks {
         enemy.max_hp = 40;
         enemy.powers = if self.amount == 0 { Vec::new() } else { vec![PowerView { id: Str::lit(self.power), amount: self.amount, ..PowerView::default() }] };
         obs.enemies = vec![enemy];
+        obs.allies = self.ally.map(|hp| CreatureView { uid: Some(2), id: Some(Str::lit("WUPPY")), hp, max_hp: 30, ..CreatureView::default() }).into_iter().collect();
         obs
     }
 
@@ -1299,9 +1319,12 @@ impl state::ToyWorld for Marks {
                     (self.enemy, self.amount, self.counter) = (self.enemy - 4, self.amount + self.gives, self.counter + 1);
                 } else {
                     (self.enemy, self.amount) = (self.enemy - 1, self.amount + self.poke_gives);
+                    self.ally = self.ally.map(|hp| hp - self.poke_costs);
                 }
             }
             _ => {
+                let hit = if self.amount > 0 { self.hit - 2 } else { self.hit };
+                self.ally = self.ally.map(|hp| hp - hit);
                 if self.amount > 0 {
                     self.amount -= 1;
                 }
@@ -1345,6 +1368,20 @@ fn an_end_with_less_damage_and_less_debuff_is_dropped_whatever_the_relics_counte
     // Neutralize's line leaves the enemy 4 HP lower and 1 Weak, with Pen Nib's counter one further: it is still
     // compared (the user: 「遺物計數 不算」), and only the line that played both cards is left.
     assert_eq!(kept(Marks::state("CORPSE_SLUGS_WEAK", "WEAK_POWER", true, 2, 0)), vec![vec![N, P]]);
+}
+
+#[test]
+fn an_allys_hp_is_compared_as_the_players() {
+    // Neutralize's Weak spares Wuppy 2 of the enemy's hit (the user, of Wuppy: 「加進規則」): only the line that
+    // played both cards is left, as without an ally.
+    assert_eq!(kept(Marks::with_ally(6, 0)), vec![vec![N, P]]);
+}
+
+#[test]
+fn an_end_that_cost_an_ally_hp_is_not_dropped_for_one_that_hit_harder() {
+    // Poke costs Wuppy 3 HP for the enemy's 1: Neutralize alone and Neutralize with Poke are both kept, the enemy's HP
+    // lower in one and Wuppy's higher in the other; the lines without Neutralize go.
+    assert_eq!(kept(Marks::with_ally(6, 3)), vec![vec![N], vec![N, P]]);
 }
 
 #[test]

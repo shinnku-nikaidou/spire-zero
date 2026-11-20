@@ -39,7 +39,8 @@
 //! that kept it is worth as much.
 //!
 //! Of the turn's ends at the next turn's start, one another dominates is dropped (`dominance.rs`, a rule written by hand
-//! at the user's word): the same in all but the enemies' HP, their debuffs and the player's HP, and worse in those.
+//! at the user's word): the same in all but the enemies' HP, their debuffs, the player's HP and the allies', and worse in
+//! those.
 //!
 //! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
