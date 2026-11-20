@@ -71,6 +71,15 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// the answer it began with); null in the background, whose solver its own thread owns.</summary>
     private long? _settled;
 
+    /// <summary>The last decision's search: the pick it began with (where a solver begins, the beam's plan it begins from;
+    /// else the pick once the root moved there), as a candidate; null in the background. Beside the answer and
+    /// <see cref="_settled"/>, what an answer that changed late gained (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4).
+    /// A record, which nothing the search does reads.</summary>
+    private Candidate? _opened;
+
+    /// <summary>A solver begun here that has not searched yet: the beam's plan it begins from.</summary>
+    private SlPlan? _unsearched;
+
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     /// <param name="start">Takes the combat in where the decision stands; null where it cannot.</param>
     /// <param name="beam">The beam's decision, where no solver can begin.</param>
@@ -120,6 +129,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         var answer = plan.Result with
         {
             Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved, Settled = _settled is { } s ? (int)Math.Min(s, int.MaxValue) : null,
+            Opened = _opened,
         };
         if (after != null && _background != null) Watch(answer, after);
         return answer;
@@ -151,7 +161,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         var rest = pick.Line!;
         var whole = rest with { Actions = [line.Actions[0], .. rest.Actions], Hashes = [line.Hashes[0], .. rest.Hashes] };
-        var top = new Candidate(answer.First.ToString(), rest.Value, 0, 1, [Math.Round(rest.Value, 4)], Math.Round(rest.Win, 4), Math.Round(rest.Hp, 1));
+        var top = Top(answer.First, rest);
         var told = answer with
         {
             Plan = [pick.Result.First, .. pick.Result.Plan],
@@ -194,9 +204,12 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         var line = _line!;
         var first = line.Actions[_taken];
-        var candidate = new Candidate(first.ToString(), line.Value, 0, 1, [Math.Round(line.Value, 4)], Math.Round(line.Win, 4), Math.Round(line.Hp, 1));
-        return new(first, [.. line.Actions.Take(_given).Skip(_taken + 1)], [candidate], [.. line.Hashes.Take(_given).Skip(_taken + 1)]);
+        return new(first, [.. line.Actions.Take(_given).Skip(_taken + 1)], [Top(first, line)], [.. line.Hashes.Take(_given).Skip(_taken + 1)]);
     }
+
+    /// <summary><paramref name="first"/> as a candidate with <paramref name="line"/>'s own value, chance to win and HP left.</summary>
+    private static Candidate Top(CombatAction first, TurnEnd line) =>
+        new(first.ToString(), line.Value, 0, 1, [Math.Round(line.Value, 4)], Math.Round(line.Win, 4), Math.Round(line.Hp, 1));
 
     /// <summary>No decision of this combat comes now: it ended, or the run did. The solver goes, and with it what it holds.</summary>
     public void Rest() => Drop();
@@ -228,7 +241,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             Tell(early, seed.Result);
             _background = new Background(solver, from, history, observation.Round, budget.Replan);
         }
-        else _solver = solver;
+        else (_solver, _unsearched) = (solver, seed);
         return true;
     }
 
@@ -241,7 +254,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             var (pick, searched) = _background.Await(budget.Solve, hurry, early == null ? null : (found, since) =>
                 Tell(early, found.Result with { Nodes = (int)Math.Min(begun + since, int.MaxValue), Proved = found.Proved }));
             nodes += searched;
-            _settled = null;
+            (_settled, _opened) = (null, null);
             return pick;
         }
         long before = _solver!.Nodes;
@@ -250,9 +263,12 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             _solver.Advance([.. _since], history);
             _since.Clear();
         }
+        var opening = (_unsearched ?? _solver.Result(budget.Replan)).Line!;
+        _unsearched = null;
         _solver.Run(budget.Solve);
         nodes += _solver.Nodes - before;
         _settled = Math.Max(0, _solver.Settled - before);
+        _opened = Top(opening.Actions[0], opening);
         return _solver.Result(budget.Replan);
     }
 
@@ -260,7 +276,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         _background?.Dispose();
         _solver?.Dispose();
-        (_solver, _background, _line, _taken, _given) = (null, null, null, 0, 0);
+        (_solver, _background, _line, _taken, _given, _unsearched) = (null, null, null, 0, 0, null);
         _since.Clear();
         lock (_afterLock) (_afterFor, _afterShown, _afterLine) = (null, null, null);
     }

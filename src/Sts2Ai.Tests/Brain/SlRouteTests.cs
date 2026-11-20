@@ -470,11 +470,25 @@ public class SlRouteTests
         var answer = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue))
             .Decide(world.Observe(), world.Legal(), [], () => ToyTaken([]), () => throw new InvalidOperationException("the toy is always taken in"));
         Assert.Equal(answer.First != Greedy([])[0] ? (int)ToySolver.Work : 0, answer.Settled);
+        // It began with the beam's plan: that plan's first step, with its line's own chance to win and HP left.
+        var seed = Planned([], Greedy([]), 1).Line!;
+        Assert.Equal(Greedy([])[0].ToString(), answer.Opened!.Action);
+        Assert.Equal((Math.Round(seed.Win, 4), Math.Round(seed.Hp, 1)), (answer.Opened.Win, answer.Opened.Hp));
+
+        // At the next decision, the pick once the root moved along the answer: the best line's next step, which holds.
+        var route = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue));
+        var first = route.Decide(world.Observe(), world.Legal(), [], () => ToyTaken([]), () => throw new InvalidOperationException("the toy is always taken in")).First;
+        var on = new Toy();
+        on.Execute(first);
+        var next = route.Decide(on.Observe(), on.Legal(), Moves([first]), () => ToyTaken([first]),
+            () => throw new InvalidOperationException("the toy is always taken in"));
+        Assert.Equal((next.First.ToString(), 0), (next.Opened!.Action, next.Settled));
 
         // The beam's answer, where no solver begins, says nothing of it.
         var beam = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20))
             .Decide(world.Observe(), world.Legal(), [], () => null, () => PimcBrain.Only(CombatAction.EndTurn));
         Assert.Null(beam.Settled);
+        Assert.Null(beam.Opened);
     }
 
     [Fact]

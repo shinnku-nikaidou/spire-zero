@@ -84,9 +84,11 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
 /// <param name="Settled">max's solver: the nodes into the decision's search when its answer's first action last changed
 /// (0: the answer it began with); null for any other search. A record of how soon an answer settles.</param>
+/// <param name="Opened">With <paramref name="Settled"/>: the answer the search began with, its first action and its line's
+/// value, chance to win and HP left. A record of what an answer that changed late gained.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
     IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null, bool Proved = false,
-    int? Settled = null);
+    int? Settled = null, Candidate? Opened = null);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again. A step is
