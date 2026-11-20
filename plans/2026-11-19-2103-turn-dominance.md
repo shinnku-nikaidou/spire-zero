@@ -338,3 +338,11 @@
   模擬器，`tmp/turn-dominance/reports.sh`），24 份放在 `eval/CHAR/reports/2026-11-19-sl-a{0,10}-...-dominance-{off,on}`；
   `eval/champions/sl.json` 的 `reports` 換成規則開的六份 A10 報告，`gate` 那段（晉升時的數字）不動；六個排行榜重新產生；
   帳本加一段。Workshop 說明裡的 SL 勝率（`distro/workshop/make.py`）還是 11-17 規則前的，Dread 這次沒有測。
+- 2026-11-20 14:00 左右（台灣時間）Dread 補測、換 Workshop 說明的數字（用戶：「換，Dread 補測」）：
+  - 步驟 `test-turn-dominance-dread`：d2 開規則，A10 Dread，每個角色 200 場，medium，在 9b4b4b74（HEAD；c65af642 之後只動了
+    max 的求解器和自我對局的鎖牌，medium 的 SL 對局不受影響）。本機的 worker 也參加了（用戶：「以後本地也可以拿來跑」）。
+  - 1,200 場有 1,198 場跑完：DEFECT 的 BHAJ8M39JJ4V、2GWFH0YA474J 是引擎例外，和 test v12-1 失敗的是同兩個種子，丟掉。
+  - 贏的：IRONCLAD 103/200、SILENT 50/200、DEFECT 64/198、REGENT 40/200、NECROBINDER 40/200、FOOL 17/200
+    （test v12-1 不開規則時 92/199、50、61/198、43、40、15；這次沒打規則關的一邊，沒配對）。
+  - `distro/workshop/make.py` 的 SL 數字換成 A0、A10（c65af642，規則開）和 Dread（9b4b4b74）的，17 種語言的說明重新產生，
+    只有勝率表變了。還沒上傳到 Steam。

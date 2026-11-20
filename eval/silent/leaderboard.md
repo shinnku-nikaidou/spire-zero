@@ -124,6 +124,7 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-19 | `9b4b4b7` | 25.0 % (50/200, 19.5 %–31.4 %) | 37.63 | 181 | 108.5 |
 | combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 25.0 % (50/200, 19.5 %–31.4 %) | 36.43 | 180 | 157.2 |
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 14.0 % (28/200, 9.9 %–19.5 %) | 34.35 | 178 | 120.9 |
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 13.5 % (27/200, 9.4 %–18.9 %) | 34.13 | 179 | 130.7 |

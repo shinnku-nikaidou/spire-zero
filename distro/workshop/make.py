@@ -1,11 +1,12 @@
 # Writes the Workshop title and description in each of the game's 17 languages into distro/workshop/STEAMLANG.bbcode.
 # The characters', the ascension's and the Dread mode's names are the game's own (tmp/workshop/names.json, from the pck
 # by names.mjs);
-# the numbers are the champion v-sl-td4-12-1-d2 + c-sl-12-1-d2's SL runs on test seeds at the test's effort, beam 8x300
-# replan 1 (named high when they were played, medium since 2026-11-18; test v12-1's
-# reports at b34dd0a5 on promotion-1-200: A0, A10 and the Dread mode, which is played at A10), 200 runs of each but
-# the failed ones left out (the Ironclad's Dread 199, the Defect's 198: the game's own bugs); shown with the run
-# counts, as the user chose. NoSL's are its champion v0-nosl-1-2 + c0-nosl-1-2's (PIMC 8 worlds x 300 nodes, which no
+# the numbers are the champion v-sl-td4-12-1-d2 + c-sl-12-1-d2's SL runs on test seeds at the test's effort, medium
+# (beam 8x300 replan 1), with the search's turn-dominance rule (the user, 2026-11-20: 換，Dread 補測): A0 and A10 from
+# test-turn-dominance's rule-on side at c65af642, the Dread mode (played at A10) from test-turn-dominance-dread at
+# 9b4b4b74 (nothing between the two changes a medium SL run), all on promotion-1-200, 200 runs of each but the failed
+# ones left out (the Defect's Dread 198: the engine's exceptions on two seeds that failed in test v12-1 too); shown with
+# the run counts, as the user chose. NoSL's are its champion v0-nosl-1-2 + c0-nosl-1-2's (PIMC 8 worlds x 300 nodes, which no
 # effort changes; test test-v0-nosl-1-2 at 62f2befd on promotion-1-100: A0 and A10, 100 runs of each, none failed).
 import json
 import pathlib
@@ -14,12 +15,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 NAMES = json.loads((ROOT / "tmp/workshop/names.json").read_text())
 CHARS = ["IRONCLAD", "SILENT", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]
 WINS = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
-    "IRONCLAD": (199, 200, 175, 200, 92, 199),
-    "SILENT": (198, 200, 151, 200, 50, 200),
-    "DEFECT": (199, 200, 161, 200, 61, 198),
-    "REGENT": (196, 200, 144, 200, 43, 200),
-    "NECROBINDER": (193, 200, 127, 200, 40, 200),
-    "FOOL": (187, 200, 74, 200, 15, 200),
+    "IRONCLAD": (199, 200, 181, 200, 103, 200),
+    "SILENT": (199, 200, 166, 200, 50, 200),
+    "DEFECT": (200, 200, 169, 200, 64, 198),
+    "REGENT": (198, 200, 150, 200, 40, 200),
+    "NECROBINDER": (198, 200, 138, 200, 40, 200),
+    "FOOL": (192, 200, 88, 200, 17, 200),
 }
 WINS_NOSL = {  # (A0 won, A0 runs, A10 won, A10 runs)
     "IRONCLAD": (86, 100, 10, 100),
