@@ -19,6 +19,8 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-19 | `c65af64` | 96.0 % (192/200, 92.3 %–98.0 %) | 47.74 | 200 | 248.5 |
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-19 | `ca3c07f` | 96.0 % (192/200, 92.3 %–98.0 %) | 47.47 | 200 | 238.1 |
 | combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 93.5 % (187/200, 89.2 %–96.2 %) | 47.66 | 200 | 399.7 |
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 87.0 % (174/200, 81.6 %–91.0 %) | 46.83 | 199 | 259.0 |
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 86.5 % (173/200, 81.1 %–90.6 %) | 46.85 | 199 | 245.5 |
@@ -38,7 +40,9 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
-| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone **(champion)** | 2026-11-17 | `b34dd0a` | 37.0 % (74/200, 30.6 %–43.9 %) | 43.85 | 196 | 268.8 |
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone **(champion)** | 2026-11-19 | `c65af64` | 44.0 % (88/200, 37.3 %–50.9 %) | 44.27 | 194 | 185.9 |
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-19 | `ca3c07f` | 37.5 % (75/200, 31.1 %–44.4 %) | 43.32 | 196 | 210.4 |
+| combat plan c-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone | 2026-11-17 | `b34dd0a` | 37.0 % (74/200, 30.6 %–43.9 %) | 43.85 | 196 | 268.8 |
 | combat plan c11-0 beam 8x300, combat prompts first, macro l0 v11-0-td4 clone, macro prompts l0 v11-0-td4 clone | 2026-11-16 | `1324d2b` | 12.5 % (25/200, 8.6 %–17.8 %) | 28.79 | 152 | 116.3 |
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 12.0 % (24/200, 8.2 %–17.2 %) | 28.57 | 151 | 111.1 |
 | combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone | 2026-11-14 | `b7e8d79` | 1.5 % (3/200, 0.5 %–4.3 %) | 15.13 | 90 | 31.7 |

@@ -334,3 +334,7 @@
     規則省下的節點拿去搜別的線。
   - 規則關那邊有一場跑了 13.1 小時（NECROBINDER A10 第 19 個種子，cshinnku，第 30 層輸），整個步驟因此等到 03:42 UTC；
     其餘 4,799 場在 18:23 UTC 前都跑完了。同一個種子規則開那邊 1.6 分鐘贏。
+- 2026-11-20 13:00 左右（台灣時間）換成新成績（用戶：「換成新成績」）：在 pushqkzh 上每邊每個角色每個難度出報告（各用自己那個版本的
+  模擬器，`tmp/turn-dominance/reports.sh`），24 份放在 `eval/CHAR/reports/2026-11-19-sl-a{0,10}-...-dominance-{off,on}`；
+  `eval/champions/sl.json` 的 `reports` 換成規則開的六份 A10 報告，`gate` 那段（晉升時的數字）不動；六個排行榜重新產生；
+  帳本加一段。Workshop 說明裡的 SL 勝率（`distro/workshop/make.py`）還是 11-17 規則前的，Dread 這次沒有測。
