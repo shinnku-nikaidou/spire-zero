@@ -514,23 +514,27 @@ def git_text(rev: str | None, path: str) -> str:
         raise Refused(f"{path} is not in git at {rev}") from None
 
 
-def tier(t: dict, where: str, families: dict[str, list[str]]) -> tuple[float, float, tuple[str, ...], tuple[str, ...]]:
-    """An exploration tier, (epsilon, tau, take, refuse): epsilon and tau each a whole number of hundredths, as job names
-    show them; take and refuse the card families (the file's [families]) l0 takes from card rewards and refuses
-    (run's --take and --refuse; plans/2026-11-20-1231-silent-shiv-poison.md), as the job's name ends -kA.B-rC."""
-    if not isinstance(t, dict) or set(t) - {"epsilon", "tau", "take", "refuse"} or "epsilon" not in t:
-        raise Refused(f"{where}: a tier is {{ epsilon = E }} or {{ epsilon = E, tau = T }}, and may have take = [families] and refuse = [families]")
-    eps, tau = float(t["epsilon"]), float(t.get("tau", 0))
+def tier(t: dict, where: str, families: dict[str, list[str]]) -> tuple[float, float, tuple[str, ...], float, tuple[str, ...]]:
+    """An exploration tier, (epsilon, tau, favor, favor_by, refuse): epsilon and tau each a whole number of hundredths, as
+    job names show them; favor and refuse card families (the file's [families]): l0 weighs each afterstate with a bonus
+    of favor_by in log V for each favored card it adds, and never lets a refused one in (run's --favor, --favor-by and
+    --refuse; plans/2026-11-20-1231-silent-shiv-poison.md), as the job's name ends -fA.B-bBBB-rC."""
+    if not isinstance(t, dict) or set(t) - {"epsilon", "tau", "favor", "favor_by", "refuse"} or "epsilon" not in t:
+        raise Refused(f"{where}: a tier is {{ epsilon = E }} or {{ epsilon = E, tau = T }}, and may have favor = [families] with favor_by = B, "
+                      "and refuse = [families]")
+    eps, tau, by = float(t["epsilon"]), float(t.get("tau", 0)), float(t.get("favor_by", 0))
     if not 0 <= eps <= 1 or tau < 0:
         raise Refused(f"{where}: epsilon is from 0 to 1, tau from 0")
-    if any(abs(x * 100 - round(x * 100)) > 1e-9 for x in (eps, tau)):
-        raise Refused(f"{where}: epsilon and tau are whole hundredths (job names show them as eEEE and tTTT)")
-    take, refuse = (tuple(t.get(key, [])) for key in ("take", "refuse"))
-    if unknown := [f for f in take + refuse if f not in families]:
+    if any(abs(x * 100 - round(x * 100)) > 1e-9 for x in (eps, tau, by)):
+        raise Refused(f"{where}: epsilon, tau and favor_by are whole hundredths (job names show them as eEEE, tTTT and bBBB)")
+    favor, refuse = (tuple(t.get(key, [])) for key in ("favor", "refuse"))
+    if bool(favor) != (by > 0):
+        raise Refused(f"{where}: favor goes with favor_by, above 0")
+    if unknown := [f for f in favor + refuse if f not in families]:
         raise Refused(f"{where}: no family {unknown[0]} in [families]")
-    if set(take) & set(refuse) or len(set(take)) != len(take) or len(set(refuse)) != len(refuse):
-        raise Refused(f"{where}: a family is taken or refused once, not both")
-    return eps, tau, take, refuse
+    if set(favor) & set(refuse) or len(set(favor)) != len(favor) or len(set(refuse)) != len(refuse):
+        raise Refused(f"{where}: a family is favored or refused once, not both")
+    return eps, tau, favor, by, refuse
 
 
 def families_of(spec: dict, path: str) -> dict[str, list[str]]:
@@ -619,18 +623,18 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
             raise Refused(f"{where}: game {row['game']} is the Dread mode, which the game plays at ascension 10 only")
         for character in mine:
             for asc, n in zip(ascs, ns):
-                for j, (eps, tau, take, refuse) in enumerate(row_tiers):
+                for j, (eps, tau, favor, by, refuse) in enumerate(row_tiers):
                     count = n // len(row_tiers) + (j < n % len(row_tiers))
                     if count == 0:
                         continue
                     job = f"{character.lower()}/{env}/selfplay/{name}/a{asc:02d}-{row['game']}-e{round(eps * 100):03d}" + (f"-t{round(tau * 100):03d}" if tau else "") \
-                        + (f"-k{'.'.join(take)}" if take else "") + (f"-r{'.'.join(refuse)}" if refuse else "")
+                        + lock_suffix(favor, by, refuse)
                     effort = {ROOMS[room]: e for room, e in g.get("effort", {}).items()}
                     options = bases[env] | effort | {"character": character, "asc": str(asc)}
                     options |= {"workers": str(workers)} if workers else {}
                     options |= {"explore": f"{eps:g}"} if eps else {}
                     options |= {"macro-explore": f"{tau:g}"} if tau else {}
-                    options |= {"take": ",".join(i for f in take for i in families[f])} if take else {}
+                    options |= {"favor": ",".join(i for f in favor for i in families[f]), "favor-by": f"{by:g}"} if favor else {}
                     options |= {"refuse": ",".join(i for f in refuse for i in families[f])} if refuse else {}
                     options |= {"auto-win": ",".join(map(str, sorted(g["auto_win"])))} if g["auto_win"] else {}
                     options |= {"mode": g["mode"]} if g.get("mode") else {}
@@ -639,7 +643,7 @@ def dataset_jobs(spec: dict, path: str, champion: dict, nosl_champion: dict | No
                     start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + used[character]
                     used[character] += count
                     jobs.append({"job": job, "env": env, "character": character, "asc": asc, "game": row["game"], "eps": eps, "tau": tau,
-                                 "take": take, "refuse": refuse, "start": start, "n": count, "options": [x for kv in options.items() for x in ("--" + kv[0], kv[1])] + ["--seed", "1"]})
+                                 "favor": favor, "favor_by": by, "refuse": refuse, "start": start, "n": count, "options": [x for kv in options.items() for x in ("--" + kv[0], kv[1])] + ["--seed", "1"]})
     if over := [c for c, n in used.items() if n > SMOKE_AT]:
         raise Refused(f"{path}: {', '.join(over)} need more than {SMOKE_AT:,} seeds ({', '.join(f'{used[c]:,}' for c in over)})")
     if twice := [j for j, n in Counter(j["job"] for j in jobs).items() if n > 1]:
@@ -659,9 +663,14 @@ def read_dataset(path: str, rev: str | None) -> tuple[dict, str, list[dict]]:
     return spec, text, dataset_jobs(spec, path, champion, nosl)
 
 
+def lock_suffix(favor: tuple[str, ...], by: float, refuse: tuple[str, ...]) -> str:
+    """A card lock as a job's name ends: -fA.B-bBBB-rC (the bonus in hundredths), or nothing."""
+    return (f"-f{'.'.join(favor)}-b{round(by * 100):03d}" if favor else "") + (f"-r{'.'.join(refuse)}" if refuse else "")
+
+
 def lock_text(j: dict) -> str:
-    """A job's card lock as the plan shows it: " take A.B refuse C", or nothing."""
-    return (f" take {'.'.join(j['take'])}" if j["take"] else "") + (f" refuse {'.'.join(j['refuse'])}" if j["refuse"] else "")
+    """A job's card lock as the plan shows it: " favor A.B by 0.2 refuse C", or nothing."""
+    return (f" favor {'.'.join(j['favor'])} by {j['favor_by']:g}" if j["favor"] else "") + (f" refuse {'.'.join(j['refuse'])}" if j["refuse"] else "")
 
 
 def show_dataset(spec: dict, jobs: list[dict]) -> None:
@@ -705,13 +714,13 @@ def launch_dataset(argv: list[str]) -> None:
         # have, from the smoke's seeds
         firsts, at = {}, Counter()
         for j in jobs:
-            firsts.setdefault((j["character"], j["asc"], j["game"], j["take"], j["refuse"]), j)
+            firsts.setdefault((j["character"], j["asc"], j["game"], j["favor"], j["favor_by"], j["refuse"]), j)
         jobs = []
-        for (character, asc, game, take, refuse), j in firsts.items():
+        for (character, asc, game, favor, by, refuse), j in firsts.items():
             start = spec["seeds"] + PER_CHARACTER * CHARACTERS.index(character) + SMOKE_AT + at[character]
             at[character] += 1
-            locked = (f"-k{'.'.join(take)}" if take else "") + (f"-r{'.'.join(refuse)}" if refuse else "")
-            jobs.append(j | {"job": f"{character.lower()}/{j['env']}/forks/{name}-smoke/a{asc:02d}-{game}{locked}", "start": start, "n": 1})
+            jobs.append(j | {"job": f"{character.lower()}/{j['env']}/forks/{name}-smoke/a{asc:02d}-{game}{lock_suffix(favor, by, refuse)}",
+                             "start": start, "n": 1})
         step, until, priority = f"{name}-smoke", until_epoch("+1h"), None
     else:
         step, until, priority = name, until_epoch(spec["deadline"]), spec.get("priority", 0)

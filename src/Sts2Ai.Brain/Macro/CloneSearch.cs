@@ -17,8 +17,8 @@ namespace Sts2Ai.Brain.Macro;
 /// </summary>
 /// <param name="leaf">What a state is worth where the search stops.</param>
 /// <param name="decided">The keys (<see cref="Key"/>) of the states decided before this decision.</param>
-/// <param name="cards">A run's card lock (<see cref="CardLock"/>): a state whose deck breaks it against the decision's
-/// is worth −∞ and not searched on. Null for none.</param>
+/// <param name="cards">A run's card lock (<see cref="CardLock"/>): each state weighed as it weighs the state's deck against
+/// the decision's; one that breaks it is worth −∞ and not searched on. Null for none.</param>
 public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<ulong>? decided = null, CardLock? cards = null)
 {
     public const int Beam = 16;
@@ -39,7 +39,7 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
         var afters = clone.After(options);
         Probes = options.Count;
         bool Broken(Afterstate after) => cards?.Breaks(root.Run.Deck, after.Run.Deck) == true;
-        double Value(Afterstate after) => Broken(after) ? double.NegativeInfinity : leaf.Value(after);
+        double Value(Afterstate after) => cards?.Worth(root.Run.Deck, after.Run.Deck, leaf.Value(after)) ?? leaf.Value(after);
         for (int i = 0; i < options.Count; i++)
         {
             ulong key = Key(afters[i]);

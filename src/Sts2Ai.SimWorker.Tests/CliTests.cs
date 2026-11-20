@@ -125,10 +125,12 @@ public sealed class CliTests : IDisposable
     [InlineData("--macro", "l0")]
     [InlineData("--explore", "0.1", "--macro", "random")]
     [InlineData("--macro-explore", "0.05", "--macro", "random")]
-    [InlineData("--take", "A", "--macro", "random")]
+    [InlineData("--favor", "A", "--favor-by", "0.2", "--macro", "random")]
     [InlineData("--refuse", "A", "--macro", "random")]
-    [InlineData("--take", "A,B", "--refuse", "B", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
-    [InlineData("--take", ",", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
+    [InlineData("--favor", "A,B", "--favor-by", "0.2", "--refuse", "B", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
+    [InlineData("--favor", ",", "--favor-by", "0.2", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
+    [InlineData("--favor", "A", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
+    [InlineData("--favor", "A", "--favor-by", "0", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
     [InlineData("--boss-effort", "high", "--policy", "play")]
     [InlineData("--value", "Fixtures/pure-v-tiny-win.json", "--macro", "random")]
     [InlineData("--policy", "pimc")]
@@ -186,10 +188,12 @@ public sealed class CliTests : IDisposable
         var champion = new ChampionArgs(file: false);
         var command = Opt.Command("test", "", champion.Options);
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
-        var played = champion.Read(command.Parse(["--macro", "l0", "--value", value, "--take", "BLADE_DANCE, LEADING_STRIKE", "--refuse", "SNAKEBITE"]));
-        Assert.Equal(new HashSet<string> { "BLADE_DANCE", "LEADING_STRIKE" }, played.Cards!.Take);
+        var played = champion.Read(command.Parse(["--macro", "l0", "--value", value, "--favor", "BLADE_DANCE, LEADING_STRIKE", "--favor-by", "0.2",
+            "--refuse", "SNAKEBITE"]));
+        Assert.Equal(new HashSet<string> { "BLADE_DANCE", "LEADING_STRIKE" }, played.Cards!.Favor);
+        Assert.Equal(0.2, played.Cards.Bonus);
         Assert.Equal(new HashSet<string> { "SNAKEBITE" }, played.Cards.Refuse);
-        Assert.EndsWith("macro l0 pure-v-tiny-win take 2 refuse 1, macro prompts l0 pure-v-tiny-win take 2 refuse 1", played.Name);
+        Assert.EndsWith("macro l0 pure-v-tiny-win favor 2 by 0.2 refuse 1, macro prompts l0 pure-v-tiny-win favor 2 by 0.2 refuse 1", played.Name);
         Assert.True(played.Explores);
         Assert.Null(champion.Read(command.Parse(["--macro", "l0", "--value", value])).Cards);
     }

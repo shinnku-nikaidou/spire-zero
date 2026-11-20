@@ -27,9 +27,10 @@ namespace Sts2Ai.Brain.Macro;
 /// result its button does not show is played out on the clone a decision brings for it (<see cref="MacroDecision.Lines"/>,
 /// <see cref="EventLines"/>, <see cref="MacroAnswer.Event"/>); null for none. The lines are logged, never valued for the
 /// answer.</param>
-/// <param name="cards">Self-play only: a run locked to card families (<see cref="CardLock"/>), before the draws: a card
-/// reward offering a card to take is taken from, and an answer whose afterstate breaks the lock gives way to the best that
-/// does not, at every decision, card prompt and state the clone's search reaches. Null for none.</param>
+/// <param name="cards">Self-play only: a run tilted toward card families (<see cref="CardLock"/>): every afterstate weighed
+/// as the lock weighs it (a bonus for the favored cards it adds, −∞ for a refused one), at every decision, card prompt
+/// and state the clone's search reaches, and an answer the draws took that brings a refused card in gives way to the best
+/// that does not. Null for none.</param>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
     bool hostSaysPlayed = false, IRunValue? eventLines = null, CardLock? cards = null)
     : IMacroPolicy, IChoicePolicy
@@ -64,12 +65,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var values = options.Select(o => o.Value).ToList();
         bool explored = false;
         int pick;
-        if (cards?.Forced(obs, [.. options.Select(o => o.Action)], values) is { } forced)
-        {
-            pick = MacroDraws.Best(forced);
-            explored = true;
-        }
-        else if (_draws.CardReward(obs, [.. options.Select(o => o.Action)], values) is { } drawn)
+        if (_draws.CardReward(obs, [.. options.Select(o => o.Action)], values) is { } drawn)
         {
             pick = MacroDraws.Best(drawn);
             explored = double.IsPositiveInfinity(drawn[pick]) || values[pick] < values[MacroDraws.Best(values)];
@@ -126,7 +122,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             options = [.. legal.Select(a =>
             {
                 var after = _screen.After(obs, a);
-                return new Option(a, after, ScreenAfterstates.Kills(obs, a) ? MacroLeaf.Lost : _leaf.Value(after), ScreenAfterstates.OpensPrompt(obs, a));
+                return new Option(a, after, ScreenAfterstates.Kills(obs, a) ? MacroLeaf.Lost : Worth(obs.Run, after), ScreenAfterstates.OpensPrompt(obs, a));
             })];
         }
         else
@@ -141,7 +137,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
                 if (moves.Contains(a))
                 {
                     var after = _screen.After(obs, a);
-                    options.Add(new(a, after, _leaf.Value(after), false));
+                    options.Add(new(a, after, Worth(obs.Run, after), false));
                     continue;
                 }
                 var (state, worth, line) = found[k++];
@@ -263,7 +259,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
                 .Select(i =>
                 {
                     var next = Picked(state, i);
-                    return (Index: i, Value: cards?.Breaks(run.Deck, next.Deck) == true ? double.NegativeInfinity : _leaf.Value(next), State: next);
+                    return (Index: i, Value: Worth(run, next), State: next);
                 })
                 .ToList();
             // Stopping is an option once the prompt has its minimum, listed first so that it wins a tie.
@@ -330,6 +326,9 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
             explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)), Answered(CloneSearch.Key(root)));
     }
+
+    /// <summary>What <paramref name="after"/> is worth from <paramref name="from"/>: V, as the card lock weighs it if there is one.</summary>
+    private double Worth(RunView from, RunView after) => cards?.Worth(from.Deck, after.Deck, _leaf.Value(after)) ?? _leaf.Value(after);
 
     /// <summary>Whether <paramref name="picks"/> break the lock, by the deck <paramref name="picked"/> predicts after them.</summary>
     private bool Breaks(RunView run, IReadOnlyList<int> picks, Func<RunView, int, RunView> picked) =>
