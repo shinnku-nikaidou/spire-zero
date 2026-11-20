@@ -122,15 +122,15 @@ public sealed unsafe class EngineSolver : IDisposable
         return ProtocolJson.Deserialize<PlanFound>(Native.Take(buf));
     }
 
-    /// <summary>The actions simulated so far, the turns searched, the states held, the states left, and whether the pick
-    /// is proved.</summary>
-    public (long Nodes, int Searched, int States, int Left, bool Proved) Counts
+    /// <summary>The actions simulated so far, the turns searched, the states held, the states left, whether the pick is
+    /// proved, and the actions simulated when the pick's first action last changed.</summary>
+    public (long Nodes, int Searched, int States, int Left, bool Proved, long Settled) Counts
     {
         get
         {
-            var counts = stackalloc long[5];
+            var counts = stackalloc long[6];
             if (Native.sz_solver_counts(_solver, counts) != 0) throw Native.Failed("sz_solver_counts");
-            return (counts[0], (int)counts[1], (int)counts[2], (int)counts[3], counts[4] != 0);
+            return (counts[0], (int)counts[1], (int)counts[2], (int)counts[3], counts[4] != 0, counts[5]);
         }
     }
 

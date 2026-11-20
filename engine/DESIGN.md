@@ -683,7 +683,7 @@ int32_t  sz_solver_run(uint64_t solver, uint64_t net, uint64_t world, int64_t no
 int32_t  sz_solver_advance(uint64_t solver, uint64_t net, uint64_t world, const uint8_t *asked, size_t len, uint64_t base, sz_price price,
                            void *ctx, int32_t threads, const int32_t *stop);
 int32_t  sz_solver_result(uint64_t solver, sz_buf *out);
-int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved
+int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved, settled
 ```
 
 What goes across is JSON in `ProtocolJson`'s form (`search/read.rs`): what is asked, and what was found (the pick, its

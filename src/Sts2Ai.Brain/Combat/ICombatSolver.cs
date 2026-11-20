@@ -15,6 +15,10 @@ public interface ICombatSolver : IDisposable
     /// <summary>The states reached and not searched yet.</summary>
     int Left { get; }
 
+    /// <summary>The actions simulated when the pick's first action last changed: a record of how soon an answer
+    /// settles (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4), which nothing the search does reads.</summary>
+    long Settled { get; }
+
     /// <summary>A line another search found from the root: the beam's plan.</summary>
     void Seed(SlPlan plan);
 

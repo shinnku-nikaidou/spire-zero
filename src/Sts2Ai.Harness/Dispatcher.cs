@@ -54,7 +54,7 @@ public sealed record DecisionEntry(
     IReadOnlyList<string>? Plan, IReadOnlyList<Candidate>? Candidates, Budget? Budget, ulong? Seed, double ElapsedMs,
     CombatObservation? Obs = null, RunView? RunView = null,
     IReadOnlyList<EnemyTurns>? History = null, bool? Explored = null, bool? Replanned = null, int? Nodes = null, int? Turns = null,
-    IReadOnlyList<EventLine>? Event = null, bool? Proved = null);
+    IReadOnlyList<EventLine>? Event = null, bool? Proved = null, int? Settled = null);
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, long? Nodes = null,
@@ -163,7 +163,7 @@ public sealed class Dispatcher(
         if (log)
             _log.Add(new(runId, id, env.ToString(), Surfaces.Combat, combat.Brain, Hex(ProtocolJson.Hash(decision.Observation)), decision.Legal.Count,
                 result.First.ToString(), note.Plan, note.Candidates, combat.Budget?.For(decision.Observation.Room), seed, ms, Obs: decision.Observation, History: history,
-                Replanned: Mark(result.Replanned), Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved)));
+                Replanned: Mark(result.Replanned), Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved), Settled: result.Settled));
         return (result.First, note);
     }
 
@@ -205,7 +205,7 @@ public sealed class Dispatcher(
             if (log)
                 _log.Add(new(runId, at, env.ToString(), Surfaces.CardChoice, combat.Brain, Hex(ProtocolJson.Hash(choice)), choice.Options.Count,
                     result.First.Answer!, note.Plan, note.Candidates, combat.Budget?.For(around.Room), drawn, took, Replanned: Mark(result.Replanned),
-                    Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved)));
+                    Nodes: result.Nodes, Turns: result.Turns, Proved: Mark(result.Proved), Settled: result.Settled));
             // The plan goes on with plays of the combat, which a host showing the prompt's screen has no cards to name.
             return (new([.. result.First.Picks]), note with { Plan = null });
         }

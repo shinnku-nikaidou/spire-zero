@@ -352,12 +352,20 @@ public class SlRouteTests
     /// </summary>
     private sealed class ToySolver(IReadOnlyList<CombatAction> begun, int slow) : ICombatSolver
     {
-        private const long Work = 60;
+        public const long Work = 60;
         private readonly List<CombatAction> _root = [.. begun];
         private List<CombatAction> _line = [];
 
         public long Nodes { get; private set; }
         public int Left => Nodes < Work ? 1 : 0;
+        public long Settled { get; private set; }
+
+        private CombatAction? First => _line.Count > 0 ? _line[0] : null;
+
+        private void Look(CombatAction? before)
+        {
+            if (First != before) Settled = Nodes;
+        }
 
         public void Seed(SlPlan plan) => _line = [.. plan.Line!.Actions];
 
@@ -366,15 +374,19 @@ public class SlRouteTests
             Thread.Sleep(slow);
             stop.ThrowIfCancellationRequested();
             if (Left == 0) return;
+            var before = First;
             Nodes += Math.Min(nodes, Work - Nodes);
             if (Left == 0) _line = BestLine(_root);
+            Look(before);
         }
 
         public void Advance(IReadOnlyList<CombatAction> played, IReadOnlyList<EnemyTurns> moves, CancellationToken stop = default)
         {
             stop.ThrowIfCancellationRequested();
             _root.AddRange(played);
+            var before = First;
             _line = _line.Take(played.Count).SequenceEqual(played) ? [.. _line.Skip(played.Count)] : BestLine(_root);
+            Look(before);
         }
 
         public SlPlan Result(int replan) => Planned(_root, _line, replan, Left == 0, (int)Nodes);
@@ -447,6 +459,22 @@ public class SlRouteTests
         Assert.Equal(few.Played, PlayBySolver(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20)).Played);
         Assert.Equal(1, few.Route.Begun);
         Assert.True(Best(few.Played) >= BeamValue - 1e-9);
+    }
+
+    [Fact]
+    public void TheSolversAnswerSaysWhenItSettled()
+    {
+        // Searched to the end at the first decision: the answer settled where the best line replaced the beam's, if its
+        // first action is another; a decision the beam's answer holds through settled at 0.
+        var world = new Toy();
+        var answer = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: long.MaxValue))
+            .Decide(world.Observe(), world.Legal(), [], () => ToyTaken([]), () => throw new InvalidOperationException("the toy is always taken in"));
+        Assert.Equal(answer.First != Greedy([])[0] ? (int)ToySolver.Work : 0, answer.Settled);
+
+        // The beam's answer, where no solver begins, says nothing of it.
+        var beam = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20))
+            .Decide(world.Observe(), world.Legal(), [], () => null, () => PimcBrain.Only(CombatAction.EndTurn));
+        Assert.Null(beam.Settled);
     }
 
     [Fact]

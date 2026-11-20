@@ -202,6 +202,11 @@ pub struct Solver {
     /// The line played while the root's turn is searched, from the root: the pick when the combat went on into it,
     /// along what was played, or at the start the seed's.
     playing: Option<(TurnEnd, f64)>,
+    /// The pick's first action when last looked at (`look`), and the nodes when it last changed: how soon an answer
+    /// settles, for choosing an early answer at max (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4). A record only:
+    /// nothing the search does reads it.
+    first: Option<Action>,
+    settled: i64,
 }
 
 /// How many expanded states' worlds the solver keeps, the latest. On max's route over 45 fights of whole runs (8
@@ -249,6 +254,8 @@ impl Solver {
             piece: PIECE,
             rooting: None,
             playing: None,
+            first: None,
+            settled: 0,
         }
     }
 
@@ -264,6 +271,20 @@ impl Solver {
 
     pub fn searched(&self) -> i32 {
         self.searched
+    }
+
+    /// The nodes when the pick's first action last changed, looked at after each batch of a run and after each move of
+    /// the root.
+    pub fn settled(&self) -> i64 {
+        self.settled
+    }
+
+    fn look(&mut self) {
+        let first = self.pick().and_then(|(line, _)| line.actions.first().cloned());
+        if first != self.first {
+            self.first = first;
+            self.settled = self.nodes;
+        }
     }
 
     pub fn states(&self) -> usize {
@@ -313,10 +334,12 @@ impl Solver {
         if !self.started {
             self.playing = self.seed.clone();
             self.begin(search, Reached::Turn, None, None)?;
+            self.look();
         }
         while (self.rooting.is_some() || !(self.queue.is_empty() && self.going.is_empty())) && self.nodes < until {
             if self.rooting.is_some() {
                 self.root_turn(search, until)?;
+                self.look();
                 continue;
             }
             let mut states = std::mem::take(&mut self.going);
@@ -370,6 +393,7 @@ impl Solver {
             if self.raised > self.purged {
                 self.purge();
             }
+            self.look();
         }
         Ok(())
     }
@@ -440,7 +464,9 @@ impl Solver {
         self.worlds.advance(played);
         self.seed = self.seed.take().and_then(|(line, from)| Some((along(line, played)?, from)));
         self.playing = playing;
-        self.begin(search, reached, memo, before)
+        self.begin(search, reached, memo, before)?;
+        self.look();
+        Ok(())
     }
 
     /// Where `played` leads from the root, along the root's edges, each to its state's own world (`exact`).

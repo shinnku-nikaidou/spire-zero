@@ -462,16 +462,23 @@ pub unsafe extern "C" fn sz_solver_result(solver: u64, out: *mut SzBuf) -> i32 {
     })
 }
 
-/// The solver's counts: `out` gets its nodes, the turns searched, the states it holds, the states left, and 1 where its
-/// pick is proved. 0 when it worked.
+/// The solver's counts: `out` gets its nodes, the turns searched, the states it holds, the states left, 1 where its
+/// pick is proved, and the nodes when the pick's first action last changed. 0 when it worked.
 ///
 /// # Safety
-/// `solver` is live, used by no other thread during the call; `out` points at 5 longs.
+/// `solver` is live, used by no other thread during the call; `out` points at 6 longs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sz_solver_counts(solver: u64, out: *mut i64) -> i32 {
     call(1, || {
         let solver = unsafe { self::solver(solver) }?;
-        let counts = [solver.nodes(), solver.searched() as i64, solver.states() as i64, solver.left() as i64, solver.proved() as i64];
+        let counts = [
+            solver.nodes(),
+            solver.searched() as i64,
+            solver.states() as i64,
+            solver.left() as i64,
+            solver.proved() as i64,
+            solver.settled(),
+        ];
         for (i, count) in counts.iter().enumerate() {
             unsafe { *out.add(i) = *count };
         }

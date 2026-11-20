@@ -564,6 +564,30 @@ fn the_solver_stopped_anywhere_is_no_worse_than_the_beam_it_starts_from() {
 }
 
 #[test]
+fn the_solver_says_when_its_picks_first_action_last_changed() {
+    // No seed: no pick until the root's turn is searched, then the best found so far, run by run. The nodes before and
+    // after the last run whose pick had another first action than the run before.
+    let mut solver = solver(1);
+    let (mut first, mut changed, mut changes) = (None, (0, 0), 0);
+    while !solver.proved() {
+        let before = solver.nodes();
+        solver.run(&toy_searcher(&[], 24, false), 10).expect("a search");
+        let now = solver.result().ok().and_then(|found| found.pick.actions.first().cloned());
+        if now != first {
+            (first, changed) = (now, (before, solver.nodes()));
+            changes += 1;
+        }
+    }
+    let settled = solver.settled();
+    assert!(changes > 0);
+    assert!(changed.0 < settled && settled <= changed.1, "{settled} not in {changed:?}");
+
+    // Searched on once proved, nothing changes it.
+    solver.run(&toy_searcher(&[], 24, false), 10).expect("a search");
+    assert_eq!(settled, solver.settled());
+}
+
+#[test]
 fn the_same_nodes_give_the_same_plan() {
     let plans: Vec<(Plan, i64, usize)> = (0..2)
         .map(|_| {

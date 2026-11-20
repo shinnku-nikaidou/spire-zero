@@ -144,6 +144,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     {
         public long Nodes => solver.Counts.Nodes;
         public int Left => solver.Counts.Left;
+        public long Settled => solver.Counts.Settled;
 
         public void Seed(SlPlan plan)
         {

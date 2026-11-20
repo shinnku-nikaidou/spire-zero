@@ -82,8 +82,11 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// <param name="Nodes">The SL planner's search behind the result: the actions it simulated (<see cref="SlPlan.Nodes"/>).
 /// Two worlds that plan alike search alike, so the log keeps it.</param>
 /// <param name="Turns">With <paramref name="Nodes"/>: the turns its beams searched.</param>
+/// <param name="Settled">max's solver: the nodes into the decision's search when its answer's first action last changed
+/// (0: the answer it began with); null for any other search. A record of how soon an answer settles.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
-    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null, bool Proved = false);
+    IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null, bool Proved = false,
+    int? Settled = null);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again. A step is

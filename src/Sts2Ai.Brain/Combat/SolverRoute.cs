@@ -67,6 +67,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     /// <summary>How many solvers the route began: one a combat while the combat goes the picks' way.</summary>
     public int Begun { get; private set; }
 
+    /// <summary>The last decision's search: the solver's nodes into it when its answer's first action last changed (0:
+    /// the answer it began with); null in the background, whose solver its own thread owns.</summary>
+    private long? _settled;
+
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
     /// <param name="start">Takes the combat in where the decision stands; null where it cannot.</param>
     /// <param name="beam">The beam's decision, where no solver can begin.</param>
@@ -113,7 +117,10 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         }
         (_line, _taken, _given) = (plan.Line, 0, plan.Result.Plan.Count + 1);
         Took(plan.Line.Actions[0]);
-        var answer = plan.Result with { Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved };
+        var answer = plan.Result with
+        {
+            Nodes = (int)Math.Min(nodes, int.MaxValue), Proved = plan.Proved, Settled = _settled is { } s ? (int)Math.Min(s, int.MaxValue) : null,
+        };
         if (after != null && _background != null) Watch(answer, after);
         return answer;
     }
@@ -234,6 +241,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
             var (pick, searched) = _background.Await(budget.Solve, hurry, early == null ? null : (found, since) =>
                 Tell(early, found.Result with { Nodes = (int)Math.Min(begun + since, int.MaxValue), Proved = found.Proved }));
             nodes += searched;
+            _settled = null;
             return pick;
         }
         long before = _solver!.Nodes;
@@ -244,6 +252,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         }
         _solver.Run(budget.Solve);
         nodes += _solver.Nodes - before;
+        _settled = Math.Max(0, _solver.Settled - before);
         return _solver.Result(budget.Replan);
     }
 
