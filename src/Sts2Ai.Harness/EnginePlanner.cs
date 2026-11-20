@@ -101,7 +101,10 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     /// </summary>
     private CombatRoute Solver(Budget budget, string name, WorkerPool pool, bool background)
     {
-        var beam = Route(budget with { Solve = 0 }, name, pool);
+        // The beam's route keeps its plan only while the beam decides one decision after another. Once the solver
+        // answers, a step of that plan left over would meet a decision the beam did not plan (it showed as a replan at
+        // the next combat's first prompt, 16 in a SILENT A10 max run): the beam begins again with no plan.
+        CombatRoute? beam = null;
         var route = new SolverRoute(budget, background);
         // Every decision searched, the beam's where it decides: this process's threads, and the workers' where a prompt
         // is crossed.
@@ -112,8 +115,17 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         });
         return new(name, (decision, seed, node, history) =>
         {
-            CombatDecisionResult Decide() => route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision.Export),
-                () => beam.Decide(decision, seed, node, history), decision.Early, decision.Hurry, decision.After);
+            CombatDecisionResult Decide()
+            {
+                bool byBeam = false;
+                var made = route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision.Export), () =>
+                {
+                    byBeam = true;
+                    return (beam ??= Route(budget with { Solve = 0 }, name, pool)).Decide(decision, seed, node, history);
+                }, decision.Early, decision.Hurry, decision.After);
+                if (!byBeam) beam = null;
+                return made;
+            }
             if (PimcBrain.Forced(decision.Observation, decision.Legal) != null) return Decide();
             CombatDecisionResult? made = null;
             meter.Count(() =>
