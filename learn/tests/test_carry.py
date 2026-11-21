@@ -51,3 +51,48 @@ def test_a_weight_the_old_net_lacks_or_holds_in_another_shape_is_refused():
         carry.carried({}, {"phi.0.weight": torch.zeros(2, 2)}, ROWS, WAS, NOW)
     with pytest.raises(LearnError, match="in the old net"):
         carry.carried({"phi.0.weight": torch.zeros(2, 3)}, {"phi.0.weight": torch.zeros(2, 4)}, ROWS, WAS, NOW)
+
+
+CARDS = ["<unk>", "A", "B", "C", "D"]
+
+
+def card_weights():
+    return {name: torch.arange(10.0).reshape(5, 2) * (k + 1) for k, name in enumerate(carry.CARD_ROWS)} | {
+        "phi.0.weight": torch.ones(2, 2)
+    }
+
+
+def test_a_reset_gives_each_reset_id_the_mean_of_the_start_ids_rows_in_every_card_row():
+    old = card_weights()
+    out = carry.reset_rows(old, CARDS, ["A", "D"], ["B", "C"])
+    for name in carry.CARD_ROWS:
+        mean = (old[name][2] + old[name][3]) / 2
+        assert out[name][1].tolist() == mean.tolist()
+        assert out[name][4].tolist() == mean.tolist()
+
+
+def test_a_reset_leaves_every_other_row_and_weight_as_it_was():
+    old = card_weights()
+    out = carry.reset_rows(old, CARDS, ["A"], ["B", "C"])
+    for name in carry.CARD_ROWS:
+        assert out[name][[0, 2, 3, 4]].tolist() == old[name][[0, 2, 3, 4]].tolist()
+    assert out["phi.0.weight"].tolist() == old["phi.0.weight"].tolist()
+    assert old["cards.weight"][1].tolist() == [2.0, 3.0]  # the input is not changed in place
+
+
+def test_a_reset_refuses_unknown_ids_overlaps_and_an_empty_list():
+    with pytest.raises(LearnError, match="not ids"):
+        carry.reset_rows(card_weights(), CARDS, ["X"], ["B"])
+    with pytest.raises(LearnError, match="not ids"):
+        carry.reset_rows(card_weights(), CARDS, ["<unk>"], ["B"])
+    with pytest.raises(LearnError, match="both"):
+        carry.reset_rows(card_weights(), CARDS, ["A", "B"], ["B"])
+    with pytest.raises(LearnError, match="needs"):
+        carry.reset_rows(card_weights(), CARDS, ["A"], [])
+
+
+def test_the_test_runs_that_name_a_reset_id_are_left_out_of_the_comparison():
+    old = {"tests": [{"run": {"deck": [{"id": "A"}]}, "value": 0.1}, {"run": {"deck": [{"id": "B"}]}, "value": 0.2}]}
+    new = {"tests": [{"run": {"deck": [{"id": "A"}]}, "value": 0.9}, {"run": {"deck": [{"id": "B"}]}, "value": 0.25}]}
+    assert carry.off(old, new, ["A"]) == pytest.approx(0.05)
+    assert carry.off(old, new) == pytest.approx(0.8)

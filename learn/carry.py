@@ -12,9 +12,19 @@ reads more numbers than before (the new numbers come last), so that V's event-op
 Their own tables and rows (FRESH) start as a new net's, random: with both sides zero, neither would ever learn.
 Everything else is copied. The file's test states are the old file's, valued again; they must come to the old values,
 and the brain checks the same on load.
+
+    cd learn && uv run python carry.py reset ../weights/all/V.json --spec ../eval/resets/SPEC.toml \
+        --character SILENT --name NAME
+
+`reset` gives some card ids of one character's V new rows, with no training (plans/2026-11-22-0310-seed-study.md 2.2):
+each id's rows of `cards`, `card_up`, `card_damage`, `card_block` and `card_grown` become the mean of the same rows of
+the spec's start ids, so each reset card reads as an ordinary card of the start set with its own numbers, and keeps a
+row of its own to learn apart from the others. The ids are the spec's, never this code's. Its test runs are valued
+again: those that name no reset id must come to the old values.
 """
 
 import json
+import tomllib
 from typing import Annotated
 
 import torch
@@ -174,8 +184,18 @@ def v(
         carried(v_export.stored(old), model.state_dict(), V_ROWS, old["vocab"], tables, ["aux_head."])
     )
     model.eval()
+    net = v_file(old, model, tables, name, from_(old), common.checkout_encoder())
+    worst = off(old, net)
+    if worst > 1e-4:
+        raise LearnError(f"the carried net is {worst} off the old net on its test runs")
+    v_export.write(net, out_file)
+    logger.info("wrote {}: {} carried, {} off its test runs at most", out_file, old["name"], worst)
 
-    reader = common.Encoder(common.checkout_encoder())
+
+def v_file(old: dict, model, tables: dict, name: str, made: dict, encoder: str) -> dict:
+    """A V file of MODEL on TABLES, with the old file's state scaling and fit, its test runs valued again by MODEL
+    (read by the encoder ENCODER starts)."""
+    reader = common.Encoder(encoder)
     answers = reader.runs([json.dumps({"run_view": t["run"], "env": t.get("env", "SL")}) for t in old["tests"]])
     reader.close()
     if old["state"]["names"] != v_spec.STATE:
@@ -200,13 +220,74 @@ def v(
         }
         for t, a in zip(old["tests"], answers, strict=True)
     ]
-    net = v_export.net_file(name, old["floors"], tables, mean, std, model, samples, old["fit"], 0, from_(old))
+    return v_export.net_file(name, old["floors"], tables, mean, std, model, samples, old["fit"], 0, made)
+
+
+def off(old: dict, net: dict, ids: list[str] = ()) -> float:
+    """How far NET's test runs are from the OLD file's values, over the runs that name none of IDS."""
     was = {json.dumps(t["run"], sort_keys=True): t["value"] for t in old["tests"]}
-    worst = max(abs(t["value"] - was[json.dumps(t["run"], sort_keys=True)]) for t in net["tests"])
+    named = [f'"{i}"' for i in ids]
+    kept = [t for t in net["tests"] if not any(n in json.dumps(t["run"]) for n in named)]
+    return max((abs(t["value"] - was[json.dumps(t["run"], sort_keys=True)]) for t in kept), default=0.0)
+
+
+# V's rows that follow the card table, which a reset gives anew.
+CARD_ROWS = ["cards.weight", "card_up.weight", "card_damage.weight", "card_block.weight", "card_grown.weight"]
+
+
+def reset_rows(weights: dict[str, torch.Tensor], cards: list[str], reset: list[str], start: list[str]) -> dict:
+    """WEIGHTS with each RESET id's card rows (CARD_ROWS) set to the mean of the START ids' rows; CARDS is the card
+    table."""
+    index = {c: k for k, c in enumerate(cards)}
+    unknown = [i for i in [*reset, *start] if i not in index or i == cards[0]]
+    if unknown:
+        raise LearnError(f"not ids of the card table: {unknown}")
+    if not reset or not start:
+        raise LearnError("a reset needs ids to reset and ids to start from")
+    if set(reset) & set(start):
+        raise LearnError(f"ids both reset and started from: {sorted(set(reset) & set(start))}")
+    out = dict(weights)
+    rows, froms = torch.tensor([index[i] for i in reset]), torch.tensor([index[i] for i in start])
+    for name in CARD_ROWS:
+        w = weights[name].clone()
+        w[rows] = w[froms].mean(0)
+        out[name] = w
+    return out
+
+
+@script.command()
+def reset(
+    file: Annotated[str, typer.Argument(help="the V file whose rows to reset")],
+    spec: Annotated[str, typer.Option(help="a TOML file of characters, each with its `reset` and `start` card ids")],
+    character: Annotated[str, typer.Option(help="the spec's character whose ids to reset")],
+    name: Annotated[str, typer.Option(help="the reset net's name")],
+    encoder: Annotated[str | None, typer.Option(help="how to start the encoder (default: this checkout's)")] = None,
+    out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
+):
+    """V of FILE with CHARACTER's `reset` card ids given the mean rows of its `start` ids."""
+    with open(spec, "rb") as f:
+        lists = tomllib.load(f)
+    if character not in lists:
+        raise LearnError(f"{spec} has no {character}")
+    ids = lists[character]
+    old = v_export.read(file)
+    out_file = out_path(name, out)
+    tables = old["vocab"]
+    model = v_net.Net({t: len(i) for t, i in tables.items()}, old["floors"])
+    model.load_state_dict(reset_rows(v_export.weights(old, model), tables["cards"], ids["reset"], ids["start"]))
+    model.eval()
+    what = {"from": old["name"], "spec": spec, "character": character, "reset": ids["reset"], "start": ids["start"]}
+    made = {**old.get("trained", {}), "rev": common.revision(), "reset": what}
+    net = v_file(old, model, tables, name, made, encoder or common.checkout_encoder())
+    worst = off(old, net, ids["reset"])
     if worst > 1e-4:
-        raise LearnError(f"the carried net is {worst} off the old net on its test runs")
+        raise LearnError(f"the reset net is {worst} off the old net on test runs that name no reset card")
     v_export.write(net, out_file)
-    logger.info("wrote {}: {} carried, {} off its test runs at most", out_file, old["name"], worst)
+    changed = sum(1 for t in net["tests"] if any(f'"{i}"' in json.dumps(t["run"]) for i in ids["reset"]))
+    logger.info(
+        "wrote {}: {} with {} ids of {} reset; {} of its test runs name one, the others {} off at most",
+        out_file, old["name"], len(ids["reset"]), character, changed, worst,
+    )
 
 
 if __name__ == "__main__":
