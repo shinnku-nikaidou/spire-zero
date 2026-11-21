@@ -485,3 +485,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   Rebuilt for linux-x64 at 54cc1476 (still 1.0.4, never out of this machine): in a co-op run a card prompt in a turn
   start's setup is the player's (the engine stood a 3-player turn start's prompt and failed); that item goes into
   `mods/` once the game closes.
+- 2026-11-21 23:27: mod 1.0.5 uploaded (the user: 打包一份新的mod, 多人模式不能預設開啟,得只能指令開 ,然後上傳workshop; then ai mp
+  always 永久开启). Built at 37e4bc19 for all three platforms: multiplayer off by default, on only by the console's `ai mp
+  on` (until the game closes) or `ai mp always` (kept in settings.json), `ai mp off`; off, the panel says "Off in
+  multiplayer". Also on the Workshop for the first time: 1.0.4's co-op crash fix, the co-op card prompt fixes since and
+  XHigh. The packed brain answered the SL and NoSL v6 wires, 8 decisions each, the same as 1.0.2, no errors. The game
+  closed here and on the Mac. The commit timed out with the content through (the public API: updated 15:27:28Z,
+  435.2 MB; 1.0.5 on the changelog page); the texts unchanged, not sent again. Installed in `mods/` over 1.0.4 (moved to
+  `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
