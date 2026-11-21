@@ -470,3 +470,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   search scores a fight's end by HP + max HP + f of the potions kept; brain/nets/ holds the six nets. The packed brain
   answered the SL and NoSL wires (v6) with "+ f-sl-12-1-d2" / "+ f0-nosl-2" champions, the panel's net line naming f, no
   errors; on these 8 decisions the same answers as 1.0.1. Installed in `mods/` over 1.0.1.
+- 2026-11-21 18:26: mod 1.0.3 uploaded (asked by the co-op advice session; the user there: 先直接推送到新版mod裡面吧, then
+  打包好直接上傳吧). Built at 0c969d57 for all three platforms: 1.0.2's fight score (both champion files with their f)
+  and co-op advice (plans/2026-11-21-1733-coop-advice.md: in a run of more than one player the panel advises the local
+  seat, NoSL, and the AI never acts; not yet seen in a real co-op game). The first build failed at the Windows VM, which
+  was shut off; started again, the second went through. The packed brain answered the SL and NoSL v6 wires with the f
+  champions, 8 decisions each, no errors, the same answers as 1.0.2. The game closed here and on the Mac. The upload
+  went through with no timeout (the item updated 10:26:38Z, 435.1 MB), then the 17 languages' texts, unchanged. Installed
+  in `mods/` over 1.0.2 (moved to `tmp/modeng/old-installs/`).
