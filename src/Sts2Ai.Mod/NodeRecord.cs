@@ -460,12 +460,18 @@ internal static class NodeRecord
     private static void RestOption(RestSiteSynchronizer __instance, int index) =>
         Guard(() => Add(Surfaces.Rest, RestActions.Of(__instance.GetLocalOptions()[index]).ToString()));
 
-    private static void RewardTaken(Reward reward)
+    /// <summary>A potion reward clicked with a full belt is refused and stays on the screen: a reward not offered changes
+    /// nothing.</summary>
+    private static void RewardTaken(Reward reward) => Guard(() =>
     {
-        if (_screen is { Surface: Surfaces.Rewards, Source: RewardsSet set } && set.Rewards.IndexOf(reward) is var i and >= 0)
-            Add(Surfaces.Rewards, MacroAction.Of(MacroAction.Reward, i).ToString());
-        else Break("a reward taken from no rewards screen");
-    }
+        if (_screen is not { Surface: Surfaces.Rewards, Source: RewardsSet set } || set.Rewards.IndexOf(reward) is not (var i and >= 0))
+        {
+            Break("a reward taken from no rewards screen");
+            return;
+        }
+        var action = MacroAction.Of(MacroAction.Reward, i);
+        if (RewardActions.Legal(set).Contains(action)) Add(Surfaces.Rewards, action.ToString());
+    });
 
     /// <summary>The rewards screen's proceed button; the same calls leave a chest or a fight without rewards, which are no
     /// decisions. A fight's rewards end its room: the map opens, and the player may still go back.</summary>
