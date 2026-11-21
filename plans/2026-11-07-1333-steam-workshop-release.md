@@ -478,3 +478,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   champions, 8 decisions each, no errors, the same answers as 1.0.2. The game closed here and on the Mac. The upload
   went through with no timeout (the item updated 10:26:38Z, 435.1 MB), then the 17 languages' texts, unchanged. Installed
   in `mods/` over 1.0.2 (moved to `tmp/modeng/old-installs/`).
+- 2026-11-21 18:45: mod 1.0.4 built for linux-x64 only, not uploaded (the user: 直接打包到本地linux就好). At f888728f:
+  1.0.3 crashed the brain at every decision of a co-op run (CreatureView's id was required; a teammate has none),
+  fixed there. Its brain swapped into this machine's `mods/Sts2Ai/brain/linux-x64` while the game ran; the whole item
+  goes into `mods/` once the game closes. The Workshop still has 1.0.3, whose co-op runs crash the same way.
