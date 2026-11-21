@@ -458,3 +458,10 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   owner. The commit timed out with the content through (the public API: updated 08:45:02Z, 417.2 MB; the note on the
   changelog page); then the texts without `--content`, the 17 languages, all OK; checked on the public API (English)
   and page (Traditional Chinese). Installed in `mods/` over 0.3.29 (moved to `tmp/modeng/old-installs/`).
+- 2026-11-21 17:39: mod 1.0.1 uploaded (asked by the "Max 血量显示错误" session, where the user said 可以發版了; the user here:
+  要，上傳). Built at 5c036867 for all three platforms: max's solver takes each layer of turns' starts in turn
+  (cbb3aef5) and the game console's ai command (4e521148, 0740b0e2); f's structure is in but no champion file uses it,
+  and the champion files and nets are 1.0.0's. The packed brain answered the same SL and NoSL wires as 1.0.0 did, all 8
+  decisions the same (the wires' protocol 5 rewritten as 6, the version 1.0.1 speaks). The game closed here and on the
+  Mac. The commit timed out with the content through (the public API: updated 09:39:14Z, 417.6 MB; the note on the
+  changelog page); the texts unchanged since 1.0.0, not sent again. Installed in `mods/` over 1.0.0.
