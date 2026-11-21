@@ -496,4 +496,4 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
 - 2026-11-21 23:5x: mod 1.0.6 built for linux-x64 only, not uploaded (asked by the bug session, where the user said Yes,
   build it). At d1b616f8: a potion reward clicked with a full belt is no SL record step (the game refuses it, and the
   brain could not follow the record: "這個房間沒有 SL 複本"). The packed brain answered the SL and NoSL v6 wires the same as
-  1.0.5, no errors. The game was running; it goes into `mods/` over 1.0.5 once the game closes.
+  1.0.5, no errors. The game was running; installed in `mods/` over 1.0.5 once it closed (16:10Z, 00:10 Taiwan).
