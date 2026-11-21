@@ -446,3 +446,15 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   Necrobinder 198 / 138 / 40, the Fool 192 / 88 / 17 (of 200 but where named). Texts sent without `--content`, no
   note, the 17 languages, all OK; the game closed here and on the Mac, Steam logged on as the owner. The public web API
   (GetPublishedFileDetails) gives the new English table, visibility public; the item stays 0.3.29.
+- 2026-11-21 16:45: mod 1.0.0 uploaded (the user: 可以發版了, 新的mod, 新的數據; then 關好了). I had bumped 0.3.30 for it;
+  another session then made it 1.0.0 (the user there: 可以加主版本號了) and built 964ee4ab for all three platforms (the
+  Windows VM started for it, the Mac woken by the user). It carries NoSL's new champion v0-nosl-2 + c0-nosl-2, NoSL's
+  search at the card prompts a fight waits on (Gambling Chip's discard, with Ki Chant's fix), SL's search at a
+  combat-opening prompt, the fight details card, allies' HP in SL's turn dominance and max's replan fix. The packed
+  brain answered an SL and a NoSL wire (8 decisions each, cut from this machine's 07:03 log) with d2 and with
+  v0-nosl-2, no errors. Texts: NoSL's table is v0-nosl-2 + c0-nosl-2's from test-v0-nosl-2 with a Dread column (the
+  Fool's failed runs left out), its parentheses the user's words (完全0作弊, 禁止回檔) in 17 languages, two more line
+  breaks after the SL table (the user: 這裡記得多換兩行). The game closed here and on the Mac, Steam logged on as the
+  owner. The commit timed out with the content through (the public API: updated 08:45:02Z, 417.2 MB; the note on the
+  changelog page); then the texts without `--content`, the 17 languages, all OK; checked on the public API (English)
+  and page (Traditional Chinese). Installed in `mods/` over 0.3.29 (moved to `tmp/modeng/old-installs/`).
