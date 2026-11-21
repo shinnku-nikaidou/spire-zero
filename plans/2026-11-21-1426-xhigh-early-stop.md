@@ -6,6 +6,7 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
 用戶的話：
 
 - 2026-11-21：「我覺得得設計一個xhigh, 也就是帶早停的max, 這個xhigh之後用於訓練用的, 之前session討論過這個問題,你新開一個session繼續研究early stop」
+- 2026-11-21：「F1024 as proposed」（回答「要實作哪一條 xhigh 規則（等 turn-queues 改完之後）？」，看了 3 的數字）
 - 2026-11-20（plans/2026-11-20-1231-silent-shiv-poison.md 2.4）：「順便一提有時候max需要等蠻久才能做到滿意(不是說已經證明),得有個提前滿意的早退設計,不能每次都到已證明,這樣一輩子都打不完一場」、「能不能算出時間分佈，再依95截斷？」
 
 ## 0. 一頁看完
@@ -26,7 +27,8 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
 - **跟著搜尋順序走**（5）：3 的數字都會隨 turn-queues 的改動變，改完要重量；規則本身不讀順序。
 - **怎麼用**（6）：`--effort xhigh`，資料集的 game 寫 `effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }`，
   `box.py` 的 `EFFORTS` 加上 xhigh。
-- **等用戶**：選規則（或不做）；實作；用不用 xhigh 生成 Silent 的資料。
+- **用戶定了 F1024**（2026-11-21）。實作等 turn-queues 那個 session 的改動 commit 之後（7）；用不用 xhigh 生成 Silent 的資料，
+  用戶另外定。
 
 ## 1. max 的時間花在哪（11-20 的 9 局）
 
@@ -187,8 +189,10 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
 
 ## 7. 步驟
 
-1. **用戶看 3 的數字**，選規則和參數，或不做 xhigh。
-2. **實作**（用戶的話）：在 turn-queues 的 `solver.rs` 改動 commit 之後，在它上面改；動 `solver.rs` 之前先問那個 session。
+1. **用戶看 3 的數字**，選規則和參數，或不做 xhigh。**定了（2026-11-21）：F1024。**
+2. **實作**（用戶的話：F1024）：在 turn-queues 的改動 commit 之後，在它上面改；動 `solver.rs` 之前先問那個 session。
+   那個改動不只換搜尋順序，`SolverRoute` 也會在求解器還沒有自己打完的線時繼續搜（`ICombatSolver.Ended`、`OwnLineWait`，
+   turn-queues 的 2b），所以 xhigh 的規則要接在它上面：「選擇是贏的線」照舊看求解器的選擇。
    - `solver.rs`：規則在 `run` 裡每一批之後檢查（和副本一樣）；規則經 `sz_solver_new` 的參數進來。
    - C#：`Budget` 多一個欄位，`Effort("xhigh")`，`Efforts` 加上 xhigh，`EngineSolver` 把它傳給引擎。
    - `box.py` 的 `EFFORTS`；sl-selfplay skill 的思考深度那段；effort-ladder 的記憶（現在寫著「no xhigh」）。
