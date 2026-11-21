@@ -35,6 +35,7 @@ internal static partial class HeadlessPatches
         // (SapphireSeed's planting, rewritten by EventPresentation, did).
         ChoiceContexts.Patch(harmony);
         DrawPileLog.Patch(harmony);
+        CombatOpening.Patch(harmony);
         harmony.PatchAll(typeof(HeadlessPatches).Assembly);
     }
 }

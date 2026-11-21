@@ -53,6 +53,8 @@ pub struct Extra {
     /// world made of the import, and read only where a NoSL world is drawn from it (determinize.rs). A record the
     /// engine could not read is kept as what was wrong with it.
     pub draw_log: Option<std::sync::Arc<Result<crate::drawlog::DrawLog, String>>>,
+    /// A NoSL world drawn at one of the running action's prompts: where it is drawn (determinize.rs, `take_answer`).
+    pub draw_at: Option<std::sync::Arc<crate::determinize::DrawAt>>,
     /// The hooks that asked the player in the running step (manual/hook_player_choice_context.rs).
     pub hooks: hook_player_choice_context::Hooks,
     /// What the running step started from (world.rs), where a paused hook is found again; none between steps.

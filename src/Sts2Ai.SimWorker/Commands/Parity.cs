@@ -238,7 +238,7 @@ internal static class ParityCommand
         var clock = Stopwatch.StartNew();
         try
         {
-            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, Kept(dump));
+            var result = Lockstep.Check(pump, combat.Setup, combat.PolicySeed, worlds, continues, Kept(dump), dump == null ? null : dump.Opening);
             dump?.Write(combat.Info, result);
             MadeAgain(result.Steps);
             var line = ParityLine.Of(combat.Info, result, clock.Elapsed.TotalMilliseconds, full);
@@ -284,7 +284,7 @@ internal static class ParityCommand
             "run", run.Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, run.PolicySeed, combat?.Floor);
         try
         {
-            var (combats, end, gameErrors) = RunLockstep.Record(pump, run.Setup, run.PolicySeed, worlds, Kept(dump));
+            var (combats, end, gameErrors) = RunLockstep.Record(pump, run.Setup, run.PolicySeed, worlds, Kept(dump), dump == null ? null : dump.Opening);
             if (combats.Count == 0) throw new InvalidOperationException($"the run has no combat: it {end}");
             var lines = new List<ParityLine>();
             foreach (var combat in combats)

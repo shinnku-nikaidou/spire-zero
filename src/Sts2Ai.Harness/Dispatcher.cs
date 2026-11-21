@@ -199,7 +199,7 @@ public sealed class Dispatcher(
         if (choice.Context.InCombat && Fought(decision) is var (around, shown))
         {
             var (result, note, at, drawn, took, _) = Fight(new CombatDecision([], () => around with { Prompt = choice }, _ => shown,
-                early: decision.Early, hurry: decision.Hurry, after: decision.After));
+                early: decision.Early, hurry: decision.Hurry, after: decision.After, prompted: decision.Prompted));
             if (result.First.Kind != CombatActionKind.Pick || !choice.Accepts(result.First.Picks))
                 throw new InvalidOperationException($"{combat.Brain} gave {result.First}, which the prompt does not accept");
             if (log)

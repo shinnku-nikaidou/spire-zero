@@ -58,6 +58,29 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         return new(world.Weighing(export.Length), run, export.Length, new());
     }
 
+    /// <summary>The SL world of a combat written out as it begins, before its first turn (the host's export in the game's
+    /// StartCombatInternal, once the executor has finished what it ran: the bridge's CombatOpening), where the combat's start has run: where the player is first asked, at a card
+    /// prompt that opens the combat or at the first turn's plays (world.rs, <c>Live::begin</c>).</summary>
+    /// <param name="run">The run around the combat, as it stood at the export.</param>
+    /// <exception cref="EngineException">The engine cannot take the combat in, or its start failed.</exception>
+    public static EngineWorld Begin(ReadOnlySpan<byte> export, RunView run)
+    {
+        WorldHandle world;
+        fixed (byte* json = export) world = Native.sz_world_begin(json, (nuint)export.Length);
+        if (world.IsInvalid) throw Native.Failed("sz_world_begin");
+        return new(world.Weighing(export.Length), run, export.Length, new());
+    }
+
+    /// <summary>The draw pile's public record (JSON, as an export's <c>sim.draw_log</c>) as the host holds it where this
+    /// world stands now, having taken the actions since its export as the game did: what a NoSL world drawn here reads
+    /// (<see cref="Pimc"/> at a card prompt).</summary>
+    public void DrawLog(string json)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json);
+        fixed (byte* text = bytes)
+            if (Native.sz_world_draw_log(_at.Handle, text, (nuint)bytes.Length) != 0) throw Native.Failed("sz_world_draw_log");
+    }
+
     /// <summary>An independent world standing where this one stands.</summary>
     public EngineWorld Clone() => new(Copy(_at.Handle), _run, _weight, _changes, _base);
 
@@ -65,8 +88,9 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
     /// A NoSL world: this combat with everything the player cannot see drawn again from <paramref name="seed"/> (the
     /// engine's determinize: every random stream, the run's seeds, the relic bag, the draw pile's order from its
     /// public record, the queued moves that look alike), one sample of what they cannot see. Its states are told apart
-    /// by what the observation hides that changes how plays turn out (<c>HiddenState.Key</c>). This world stands
-    /// between the player's actions, and stays as it is.
+    /// by what the observation hides that changes how plays turn out (<c>HiddenState.Key</c>). A world at a card prompt
+    /// is drawn where the prompt takes its answer, from the record <see cref="DrawLog"/> set: what the prompt shows stays
+    /// the real combat's. This world stays as it is.
     /// </summary>
     /// <exception cref="EngineException">The engine cannot draw the world: its record of the draw pile does not
     /// hold.</exception>
@@ -148,9 +172,15 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 
     /// <summary>The world after the action is made from the one before, which stays for any snapshot taken there and
     /// is let go if there is none.</summary>
-    public void Execute(CombatAction action)
+    public void Execute(CombatAction action) => Step(action.ToString());
+
+    /// <summary>Answers the card prompt the world stands at with places in the game's own list of its options, as a
+    /// host's record of its steps has them (the simulator's trace: <c>card_choice 2,0</c>), not the canonical order's.</summary>
+    public void Answer(IReadOnlyList<int> given) => Step("given:" + string.Join(",", given));
+
+    private void Step(string action)
     {
-        var text = Encoding.UTF8.GetBytes(action.ToString());
+        var text = Encoding.UTF8.GetBytes(action);
         Native.Node node;
         WorldHandle after;
         fixed (byte* bytes = text) after = Native.sz_world_step(_at.Handle, bytes, (nuint)text.Length, &node);
@@ -224,7 +254,8 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
 
     /// <summary>
     /// NoSL's search of a decision in the engine (search/pimc.rs, C#: PimcBrain): <paramref name="worlds"/> worlds drawn
-    /// from the real combat this world is, the k-th from <c>world_seed(seed, k)</c>, each searched for the best line
+    /// from the real combat this world is, the k-th from <c>world_seed(seed, k)</c> (at a card prompt, drawn where the
+    /// prompt takes its answer, from the record <see cref="DrawLog"/> set), each searched for the best line
     /// after each of <paramref name="first"/> with <paramref name="nodesPerFirst"/> nodes, in
     /// <paramref name="threads"/> of the engine's threads, which ask V (<paramref name="value"/>) any number at once;
     /// every state is read in NoSL where <paramref name="nosl"/>. The lines by world, in world order, then by first

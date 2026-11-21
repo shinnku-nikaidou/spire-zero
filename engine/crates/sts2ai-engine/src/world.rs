@@ -17,6 +17,16 @@
 //! turn starts (manual/combat_manager.rs, `turn_loop`), and in the player's setup at that turn start, after the hand is
 //! drawn and before `AfterPlayerTurnStart`'s hooks (`setup_point`). A prompt of those hooks (Toasty Mittens' exhaust)
 //! is answered from there: the end of the players' turn, the enemies' turn and the draw are not run again.
+//!
+//! A combat can also be taken in as it begins, before its first turn (`begin`): the combat's start then runs here
+//! (C#: StartCombatInternal after its wait for the executor), so a prompt that opens the combat (Gambling Chip's discard, the Knowledge Demon
+//! dominion's choice) is a prompt of a world like any other.
+//!
+//! A NoSL world can be drawn at a card prompt (`draw_at_prompt`, plans/2026-11-21-1213-nosl-prompt-worlds.md): the
+//! real combat runs again to the prompt as it ran, and where the prompt takes its answer, everything the player cannot
+//! see is drawn again (determinize.rs), from the world's seed and the draw pile's record at the prompt. Every run again
+//! passes the same point with the same seed, so the world stays one world: what was seen up to the prompt is the real
+//! one, what comes after it is drawn.
 
 use crate::ffi;
 use crate::r#gen as g;
@@ -47,6 +57,39 @@ struct Prompted {
     asked: Asked,
     /// The step's last resume point before the prompt, which the answer runs from; none: from `before`.
     resume: Option<Arc<Combat>>,
+    /// Where the world was drawn, if it was drawn at one of the action's prompts (`draw_at_prompt`): every run of the
+    /// action draws it there again.
+    drawn: Option<Arc<crate::determinize::DrawAt>>,
+}
+
+/// The action that begins a combat taken in before its first turn (`Live::begin`).
+const BEGIN: &str = "begin";
+
+impl Live {
+    /// A world from a combat written out as it begins, before its first turn (the host's export in C#'s
+    /// StartCombatInternal, once the executor has finished what it ran, the bridge's CombatOpening), where the combat's start has run: where the player is first asked, at a card
+    /// prompt that opens the combat or at the first turn's plays.
+    pub fn begin(export: &str) -> Result<Live, String> {
+        let mut world = <Live as ffi::World>::import(export)?;
+        ffi::World::step(&mut world, BEGIN)
+    }
+
+    /// This world, standing at a card prompt, as one NoSL sample (`seed`): where the prompt takes its answer, everything
+    /// the player cannot see is drawn again (determinize.rs), from the draw pile's record the combat holds
+    /// (`Extra::draw_log`, the host's at the prompt). What the prompt shows stays the real combat's.
+    pub fn draw_at_prompt(&mut self, seed: u64) -> Result<(), String> {
+        let log = self.combat.x.draw_log.clone().ok_or("the combat came with no draw pile record (sim.draw_log)")?;
+        let prompted = self.prompted.as_mut().ok_or("a world between actions is drawn with determinize, not at a prompt")?;
+        if prompted.drawn.is_some() {
+            return Err("the world was drawn already".into());
+        }
+        prompted.drawn = Some(Arc::new(crate::determinize::DrawAt {
+            answer: prompted.answers.len(),
+            seed,
+            log,
+        }));
+        Ok(())
+    }
 }
 
 impl ffi::World for Live {
@@ -60,8 +103,8 @@ impl ffi::World for Live {
     fn step(&mut self, action: &str) -> Result<Self, String> {
         // What runs: the action from the combat as it stands, or at a card prompt the prompted action again from
         // the combat before it, with one more answer.
-        let (before, action, answers, resume) = match &self.prompted {
-            None => (&self.combat, action.to_string(), Vec::new(), None),
+        let (before, action, answers, resume, drawn) = match &self.prompted {
+            None => (&self.combat, action.to_string(), Vec::new(), None, None),
             Some(prompted) => {
                 let mut answers = prompted.answers.clone();
                 answers.push(picks(action, &prompted.asked, &mut self.combat)?);
@@ -70,18 +113,19 @@ impl ffi::World for Live {
                     prompted.action.clone(),
                     answers,
                     prompted.resume.clone(),
+                    prompted.drawn.clone(),
                 )
             }
         };
         // A hook that pauses for the player is found again from what the step started from
         // (manual/hook_player_choice_context.rs): a step where one pauses is run again keeping it.
         let (mut c, stopped) = match &resume {
-            None => match run(before, &action, &answers, false)? {
-                (c, _) if c.x.hooks.restart => run(before, &action, &answers, true)?,
+            None => match run(before, &action, &answers, false, &drawn)? {
+                (c, _) if c.x.hooks.restart => run(before, &action, &answers, true, &drawn)?,
                 ran => ran,
             },
-            Some(point) => match run_from(point, &answers, false) {
-                (c, _) if c.x.hooks.restart => run_from(point, &answers, true),
+            Some(point) => match run_from(point, &answers, false, &drawn) {
+                (c, _) if c.x.hooks.restart => run_from(point, &answers, true, &drawn),
                 ran => ran,
             },
         };
@@ -112,6 +156,8 @@ impl ffi::World for Live {
                     }
                 }
                 c.x.hooks = Default::default();
+                // The world was drawn where it was: the next action's prompts are not that one.
+                c.x.draw_at = None;
                 Ok(Live {
                     combat: c,
                     prompted: None,
@@ -125,6 +171,7 @@ impl ffi::World for Live {
             }
             Err(Stop::Choice) => {
                 c.x.hooks = Default::default();
+                c.x.draw_at = None;
                 let asked =
                     c.x.asked
                         .take()
@@ -141,6 +188,7 @@ impl ffi::World for Live {
                         answers,
                         asked,
                         resume: point,
+                        drawn,
                     })),
                 })
             }
@@ -163,9 +211,18 @@ impl ffi::World for Live {
 
 /// The action from `before` with these answers, and how it stopped. `keep`: the combat keeps what the step started
 /// from while it runs, which a hook that pauses for the player needs (manual/hook_player_choice_context.rs); without
-/// it, such a hook stops the step at once (`hooks.restart`).
-fn run(before: &Combat, action: &str, answers: &[Vec<i32>], keep: bool) -> Result<(Combat, R<()>), String> {
-    let mut c = before.clone();
+/// it, such a hook stops the step at once (`hooks.restart`). `drawn`: where the world was drawn at one of the action's
+/// prompts, which this run draws again (`Live::draw_at_prompt`); a replay of the step from what it started from does too.
+fn run(
+    before: &Combat,
+    action: &str,
+    answers: &[Vec<i32>],
+    keep: bool,
+    drawn: &Option<Arc<crate::determinize::DrawAt>>,
+) -> Result<(Combat, R<()>), String> {
+    let mut start_from = before.clone();
+    start_from.x.draw_at = drawn.clone();
+    let mut c = start_from.clone();
     c.choices = Choices {
         answers: answers.to_vec(),
         next: 0,
@@ -174,14 +231,13 @@ fn run(before: &Combat, action: &str, answers: &[Vec<i32>], keep: bool) -> Resul
     c.x.hooks = Default::default();
     if keep {
         c.x.step = Some(Arc::new(manual::hook_player_choice_context::StepStart {
-            before: before.clone(),
+            before: start_from,
             action: Some(action.to_string()),
         }));
     }
     c.x.points = true;
     c.x.resume_point = None;
-    start(action, &mut c)?;
-    let stopped = pump(&mut c).and_then(|()| cap(&mut c));
+    let stopped = act(action, &mut c)?.and_then(|()| pump(&mut c)).and_then(|()| cap(&mut c));
     c.x.step = None;
     c.x.points = false;
     Ok((c, stopped))
@@ -190,12 +246,14 @@ fn run(before: &Combat, action: &str, answers: &[Vec<i32>], keep: bool) -> Resul
 /// The step from its resume point `point` on (`resume_point`), with these answers, and how it stopped: as `run` from
 /// the action's start, which got there with the answers the point had taken. `keep` as for `run`, with the point as
 /// what the step started from.
-fn run_from(point: &Arc<Combat>, answers: &[Vec<i32>], keep: bool) -> (Combat, R<()>) {
-    let mut c = (**point).clone();
+fn run_from(point: &Arc<Combat>, answers: &[Vec<i32>], keep: bool, drawn: &Option<Arc<crate::determinize::DrawAt>>) -> (Combat, R<()>) {
+    let mut start_from = (**point).clone();
+    start_from.x.draw_at = drawn.clone();
+    let mut c = start_from.clone();
     c.choices.answers = answers.to_vec();
     c.x.step = keep.then(|| {
         Arc::new(manual::hook_player_choice_context::StepStart {
-            before: (**point).clone(),
+            before: start_from,
             action: None,
         })
     });
@@ -268,7 +326,29 @@ fn quiet(c: &Combat) -> bool {
 }
 
 /// "pick:0,2": the picked options of the prompt as the player sees it, as indexes into the game's list of cards.
+/// "given:2,0": an answer as places in the game's own list, as the simulator's trace records one (a host's record of
+/// the steps since it wrote the combat out).
 fn picks(action: &str, asked: &Asked, c: &mut Combat) -> Result<Vec<i32>, String> {
+    if let Some(list) = action.strip_prefix("given:").or(if action == "given" { Some("") } else { None }) {
+        let mut given = Vec::new();
+        for part in list.split(',').filter(|part| !part.is_empty()) {
+            given.push(part.parse::<i32>().map_err(|_| format!("{action}: not an answer"))?);
+        }
+        let (choice, _) = prompt::canonical(asked, c);
+        let mut seen = given.clone();
+        seen.sort();
+        seen.dedup();
+        let count = given.len() as i32;
+        if seen.len() != given.len() || given.iter().any(|&i| i < 0 || i as usize >= asked.cards.len()) || count < choice.min || count > choice.max {
+            return Err(format!(
+                "{action}: not an answer of this prompt ({} options, {} to {})",
+                asked.cards.len(),
+                choice.min,
+                choice.max
+            ));
+        }
+        return Ok(given);
+    }
     let Some(list) =
         action
             .strip_prefix("pick:")
@@ -296,6 +376,21 @@ fn picks(action: &str, asked: &Asked, c: &mut Combat) -> Result<Vec<i32>, String
         .into_iter()
         .map(|i| game_index[i as usize] as i32)
         .collect())
+}
+
+/// Starts the action: a player's through `start`, or the combat's own start (`BEGIN`, C#: StartCombatInternal after its wait for the executor), which
+/// runs the game's code here and may stop at a prompt in it. Refused (the outer error) as `start` refuses an action.
+fn act(action: &str, c: &mut Combat) -> Result<R<()>, String> {
+    if action != BEGIN {
+        start(action, c)?;
+        return Ok(Ok(()));
+    }
+    let manager = c.s.combat_manager__instance;
+    let turn_state = CombatManagerData::of(manager, c)._turn_state;
+    if turn_state.is_null() || CombatTurnStateData::of(turn_state, c).is_in_progress {
+        return Err("begin: no combat waits to begin (it began already, or none was set up)".into());
+    }
+    Ok(manual::combat_manager::start_combat_internal(manager, turn_state, c))
 }
 
 /// Starts an action through the entry points the game's own screen uses (C#: CombatActions.Start).
@@ -424,8 +519,9 @@ fn pump(c: &mut Combat) -> R<()> {
 pub(crate) fn replay(step: &manual::hook_player_choice_context::StepStart, c: &mut Combat) -> R<()> {
     match &step.action {
         Some(action) => {
-            if let Err(refused) = start(action, c) {
-                panic!("a replay of `{action}` was refused: {refused}");
+            match act(action, c) {
+                Err(refused) => panic!("a replay of `{action}` was refused: {refused}"),
+                Ok(started) => started?,
             }
             pump(c)?;
         }

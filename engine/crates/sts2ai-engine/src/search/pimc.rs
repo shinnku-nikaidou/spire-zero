@@ -8,8 +8,10 @@
 //! averages them over the worlds (never the max across worlds, which is strategy fusion) and plays only the first
 //! action, then asks again.
 //!
-//! A card prompt inside a world is a state, and its answers are its actions (`order::answers`); a prompt the combat
-//! itself waits on is answered by the caller, since no world is drawn in the middle of an action.
+//! A card prompt inside a world is a state, and its answers are its actions (`order::answers`). A prompt the combat
+//! itself waits on is a decision like any other (plans/2026-11-21-1213-nosl-prompt-worlds.md): the root stands at it,
+//! each world is the real combat drawn again where the prompt takes its answer (world.rs, `Live::draw_at_prompt`), and
+//! the first actions are the prompt's answers.
 //!
 //! Each world's nodes go to the first actions evenly, so each gets a fair look; inside a subtree the search stops
 //! expanding when its share is spent, and what is left is valued as ending the turn there (that option is tried first).
@@ -78,14 +80,11 @@ fn first_picks(prompt: &CardChoice) -> Action {
     Action::pick((0..prompt.min.min(prompt.options.len() as i32)).collect())
 }
 
-/// The decision's search: each world drawn from `root` (the real combat, between the player's actions) and searched
-/// in `threads` threads, the leaf of each made by `leaf_of`. The lines by world, in world order, then by first
-/// action, in `asked.first`'s order: the same on any number of threads. A world that fails fails the search, the first
-/// in world order.
+/// The decision's search: each world drawn from `root` (the real combat, between the player's actions or at a card
+/// prompt it waits on) and searched in `threads` threads, the leaf of each made by `leaf_of`. The lines by world, in
+/// world order, then by first action, in `asked.first`'s order: the same on any number of threads. A world that fails
+/// fails the search, the first in world order.
 pub fn search<'a, L: Leaf>(root: &Live, asked: &Asked, threads: usize, leaf_of: &(dyn Fn() -> L + Sync + 'a)) -> Result<Vec<Vec<Line>>, String> {
-    if root.asked().is_some() {
-        return Err("a combat at a card prompt has no worlds to draw: the middle of an action has no sample".into());
-    }
     let history = Arc::new(asked.history.clone());
     let results: Vec<WorldResult> = (0..asked.worlds).map(|_| Mutex::new(None)).collect();
     let next = AtomicUsize::new(0);
@@ -105,7 +104,12 @@ pub fn search<'a, L: Leaf>(root: &Live, asked: &Asked, threads: usize, leaf_of: 
                     }
                     let lines = panic::catch_unwind(AssertUnwindSafe(|| {
                         let mut world = mine.clone();
-                        crate::determinize::determinize(world.combat(), world_seed(asked.seed, k))?;
+                        let seed = world_seed(asked.seed, k);
+                        if world.asked().is_some() {
+                            world.draw_at_prompt(seed)?;
+                        } else {
+                            crate::determinize::determinize(world.combat(), seed)?;
+                        }
                         world_lines(State::new(world, true), asked, history, &leaf)
                     }))
                     .unwrap_or_else(|payload| Err(ffi::panic_text(payload)));

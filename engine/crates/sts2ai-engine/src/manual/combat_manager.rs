@@ -23,17 +23,15 @@ pub enum Waits {
     BeginEnemyTurn,
 }
 
-/// C#: CombatManager.StartCombatInternal, up to where the first turn waits for the player.
+/// C#: CombatManager.StartCombatInternal after its wait for the executor (`Unpause`, `FinishedExecutingActions`,
+/// `Pause`: in a run, the map move that entered the room runs to its end there, outside the combat), up to where the
+/// first turn waits for the player. A combat taken in as it begins is written out there (the bridge's CombatOpening).
 pub fn start_combat_internal(
     me: CombatManager,
     turn_state: CombatTurnState,
     c: &mut Combat,
 ) -> R<()> {
     let run = c.s.run_manager__instance;
-    let executor = RunManagerData::of(run, c).action_executor;
-    g::game_actions::action_executor::unpause(executor, c);
-    super::action_executor::execute_actions(executor, c)?;
-    g::game_actions::action_executor::pause(executor, c);
     let state = CombatTurnStateData::of(turn_state, c).state;
     for creature in g::combat::combat_state::creatures(state, c) {
         g::combat::combat_manager::after_creature_added__creature_combat_state(creature, state, c)?;

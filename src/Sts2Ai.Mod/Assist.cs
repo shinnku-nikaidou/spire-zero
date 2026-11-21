@@ -1,4 +1,5 @@
 using System.Globalization;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
@@ -94,6 +95,32 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private long _next;
     private Asked? _asked;
     private string? _askedKey;
+
+    /// <summary>The fight's combat as last written out (as it began, <see cref="Opening"/>, or with a combat decision),
+    /// the run as it stood then, and where the fight's steps since begin (<see cref="NodeRecord.Fight"/>): what the brain
+    /// stands the engine at a card prompt from (<see cref="PromptExport"/>).</summary>
+    private (string Export, bool Opening, RunView Run, int At)? _written;
+
+    /// <summary>A fight begins (<see cref="CombatOpening"/>): its combat as it begins is written out, which the brain
+    /// stands at a card prompt that opens it from, and the record of the fight's steps starts. Nothing with no brain
+    /// shipped, or in a run of more than one player.</summary>
+    public void Opening()
+    {
+        _written = null;
+        NodeRecord.FightBegins();
+        if (schemaPath == null || RunManager.Instance.DebugOnlyGetState() is not { Players.Count: 1 } run || LocalContext.GetMe(run) is not { } me) return;
+        _written = (Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes), true,
+            Observe.Run(run, me).WithoutPreviews(), 0);
+    }
+
+    /// <summary>At a card prompt during a fight: the combat for the brain's engine to stand at it; none where the fight's
+    /// steps were not all recorded.</summary>
+    private PromptExport? Prompted(Asking asking)
+    {
+        if (asking.Surface != Surfaces.CardChoice || !CombatManager.Instance.IsInProgress || _written is not { } written || NodeRecord.Fight is not { } fight)
+            return null;
+        return new(written.Export, written.Opening, written.Run, [.. fight.Skip(written.At)], DrawPileLog.Json());
+    }
     private Answered? _answer;
     private string? _key;
     private int _stable;
@@ -339,9 +366,10 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         string? export = asking.Surface == Surfaces.Combat
             ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)
             : null;
+        if (export != null) _written = (export, false, asking.Obs.Run.WithoutPreviews(), NodeRecord.Fight?.Count ?? 0);
         var trace = sl ? NodeRecord.Steps : null;
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs, Environment.TickCount64), key);
-        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace));
+        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace, Prompted(asking)));
         ModLog.Write("decision", $"{_asked.Id} asked: {asking.Surface}, floor {asking.Obs.Run.Floor}, {asking.Legal.Count} legal" +
                                  (trace != null ? $", checkpoint {NodeRecord.Node} + {trace.Count} steps" : "") + (export != null ? $", live combat {export.Length} chars" : ""));
     }

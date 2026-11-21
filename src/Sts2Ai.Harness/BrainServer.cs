@@ -205,7 +205,10 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             // A card prompt's plan goes on with plays of the combat, which the prompt's screen has no cards to name.
             (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs,
                 early: r => Early(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false), hurry: hurry,
-                after: r => After(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false)))),
+                after: r => After(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false),
+                prompted: request.Prompt is { } at
+                    ? () => new PromptCombat(new CombatExport(Convert.FromBase64String(at.Export), at.Run), at.Opening, at.Steps, at.DrawLog)
+                    : null))),
             (Surfaces.Combat or Surfaces.CardChoice, _) => throw new InvalidDataException($"a {request.Surface} decision without its screen"),
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };

@@ -101,6 +101,16 @@ internal static class NodeRecord
     /// <summary>Why the record cannot be cloned, or null.</summary>
     public static string? Broken { get; private set; }
 
+    /// <summary>The steps of the fight being played since it began (<see cref="FightBegins"/>), as <see cref="Steps"/>
+    /// names them, whatever checkpoints came since: what the brain's engine takes to stand at a card prompt; null when
+    /// the record missed one of them, being off or broken.</summary>
+    public static IReadOnlyList<string>? Fight => _fight;
+
+    private static List<string>? _fight;
+
+    /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole.</summary>
+    public static void FightBegins() => _fight = Checkpoint != null && Broken == null ? [] : null;
+
     /// <summary>How many times the player acted: took a step the AI did not, or went back. Auto-play stops on a change.</summary>
     public static int PlayerActs { get; private set; }
 
@@ -477,8 +487,17 @@ internal static class NodeRecord
         bool ai = action == _expected;
         if (ai) _expected = null;
         else PlayerActs++;
-        if (Checkpoint == null || Broken != null) return false;
+        if (Checkpoint == null || Broken != null)
+        {
+            _fight = null;
+            return false;
+        }
         _steps.Insert(at, new($"{surface} {action}", ai, SaveManager.Instance.CurrentRunSaveTask is { IsCompleted: false }));
+        if (_fight != null && surface is Surfaces.Combat or Surfaces.CardChoice)
+        {
+            if (at == _steps.Count - 1) _fight.Add($"{surface} {action}");
+            else _fight = null;
+        }
         ModLog.Write("record", $"step {at} of checkpoint {Node}: {surface} {action} ({(ai ? "AI" : "player")})");
         return true;
     }
@@ -504,6 +523,7 @@ internal static class NodeRecord
     {
         if (Checkpoint == null || Broken != null) return;
         Broken = reason;
+        _fight = null;
         ModLog.Warn("record", $"SL record of checkpoint {Node} broken after {_steps.Count} steps: {reason}");
     }
 }

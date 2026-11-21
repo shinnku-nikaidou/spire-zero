@@ -97,31 +97,28 @@ public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<Comb
 /// is searched. The SL planner's plan is the rest of the combat in its one exact world, so it ends only with the
 /// combat; a step that does not hold there means the world differs from the real combat. One per combat route.
 ///
-/// A plan that is not kept still leaves the answers it starts with: the prompts that the action just chosen raises are
-/// part of choosing it. PIMC's worlds are samples, so such an answer is given wherever the prompt takes it, without the
-/// state it expected.
+/// A plan that is not kept leaves nothing, not even the answers it starts with: a prompt the combat then shows is a
+/// decision searched where it stands (plans/2026-11-21-1213-nosl-prompt-worlds.md).
 /// </summary>
 /// <param name="all">Whether to keep every plan a search makes (the SL planner), or only one that repeats a cycle
 /// (<see cref="CombatDecisionResult.Repeats"/>; PIMC).</param>
 public sealed class TurnPlan(bool all = true)
 {
-    /// <summary>The steps left, each with the hash of the observation it expects; null: wherever it can be taken.</summary>
-    private readonly Queue<(CombatAction Action, ulong? Hash)> _steps = new();
+    /// <summary>The steps left, each with the hash of the observation it expects.</summary>
+    private readonly Queue<(CombatAction Action, ulong Hash)> _steps = new();
 
     /// <summary>The plan's next step if it still holds here, else <paramref name="search"/>, whose plan is kept; marked
     /// replanned if a step was left that did not hold.</summary>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatDecisionResult> search)
     {
         bool pending = _steps.TryDequeue(out var step);
-        if (pending && (step.Hash == null || step.Hash == ProtocolJson.Hash(observation)) && observation.Takes(step.Action, legal))
-            return new(step.Action, [.. _steps.Select(s => s.Action)], [], _steps.All(s => s.Hash != null) ? [.. _steps.Select(s => s.Hash!.Value)] : null);
+        if (pending && step.Hash == ProtocolJson.Hash(observation) && observation.Takes(step.Action, legal))
+            return new(step.Action, [.. _steps.Select(s => s.Action)], [], [.. _steps.Select(s => s.Hash)]);
         _steps.Clear();
         var result = search();
-        if (pending && step.Hash != null) result = result with { Replanned = true };
+        if (pending) result = result with { Replanned = true };
         if ((all || result.Repeats) && result.PlanHashes is { } hashes)
             foreach (var (action, hash) in result.Plan.Zip(hashes)) _steps.Enqueue((action, hash));
-        else
-            foreach (var answer in result.Plan.TakeWhile(a => a.Kind == CombatActionKind.Pick)) _steps.Enqueue((answer, null));
         return result;
     }
 }
@@ -136,9 +133,10 @@ public sealed class TurnPlan(bool all = true)
 /// first action is scored by its best line in each world, then averaged over the worlds (<see cref="Root"/>); never the
 /// max across worlds, which is strategy fusion. Only the first action is played: the caller asks again after it.
 ///
-/// A card prompt inside a world is a state, and its answers are its actions; the answers a line gives right after the
-/// first action go with it (<see cref="TurnPlan"/>). A prompt the combat shows that no plan answered gets
-/// <see cref="FirstPicks"/> (<see cref="Unplanned"/>): no world is drawn in the middle of an action.
+/// A card prompt inside a world is a state, and its answers are its actions. A prompt the combat itself waits on is a
+/// decision too (plans/2026-11-21-1213-nosl-prompt-worlds.md): each world is the real combat drawn again where the
+/// prompt takes its answer, the answers are the first actions, and each gets a decision's whole nodes
+/// (<see cref="Answers"/>), as the turn after it is searched as a decision's would be.
 ///
 /// Each world's nodes go to the first actions evenly, so each gets a fair look (<see cref="Root"/>); inside a subtree
 /// the search stops expanding when its share is spent, and what is left is valued as ending the turn there (that option
@@ -157,8 +155,11 @@ public static class PimcBrain
         return prompt.Answers().Take(2).ToList() is [var only] ? CombatAction.Pick(only) : null;
     }
 
-    /// <summary>PIMC's answer at a card prompt: none of its worlds stands there (<see cref="FirstPicks"/>).</summary>
-    public static CombatDecisionResult? Unplanned(CombatObservation obs) => obs.Prompt is { } prompt ? Only(FirstPicks.Of(prompt)) : null;
+    /// <summary>At a card prompt the combat waits on: every answer, each searched with the nodes a decision has in each
+    /// world, and the worlds' lines merged as at any decision. Shared among the answers, the nodes of one decision leave
+    /// each of Gambling Chip's 32 to 1,024 answers a few: the answer and then the turn's end, unsearched.</summary>
+    public static CombatDecisionResult Answers(IReadOnlyList<CombatAction> answers, Budget budget, RootSearch search) =>
+        Merge(answers, search(answers, Math.Max(1, budget.NodesPerWorld)));
 
     /// <summary>Shares each world's nodes evenly over the first actions and merges the worlds' lines.</summary>
     public static CombatDecisionResult Root(IReadOnlyList<CombatAction> first, Budget budget, RootSearch search) =>

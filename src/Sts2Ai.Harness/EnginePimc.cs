@@ -14,6 +14,11 @@ namespace Sts2Ai.Harness;
 /// see or remember is the combat's own, so a world holds the game's mode and dominion, the fight's history and every
 /// private number of its models, whatever the observation writes of them. The worlds' lines come back in world order
 /// and are merged here (<see cref="PimcBrain.Root"/>), so a decision is the same on any number of threads.
+///
+/// A card prompt the combat waits on is searched where it stands (plans/2026-11-21-1213-nosl-prompt-worlds.md): the
+/// game is in the middle of an action there, so the engine takes the combat as the host last wrote it out and the
+/// steps since (<see cref="PromptCombat"/>), and each world is drawn where the prompt takes its answer, from the
+/// host's record of the draw pile there. Every answer is searched (<see cref="PimcBrain.Answers"/>).
 /// </summary>
 /// <param name="net">The combat net in the environment it reads states in (<see cref="CombatNet.In"/>), loaded in the
 /// engine where a decision is first searched (the engine's library is loaded only once a world is made), once for each
@@ -29,15 +34,47 @@ public sealed class EnginePimc(CombatNet net, int threads)
     /// <param name="live">The real combat, written out between the player's actions, and the run around it.</param>
     /// <param name="seed">Draws the worlds: world k from FNV-1a of "SEED:K" (search/pimc.rs, world_seed).</param>
     /// <param name="history">The combat's record of enemy moves so far (<see cref="MoveRecord"/>).</param>
+    /// <param name="prompted">At a card prompt: the combat for the engine to stand there.</param>
     public CombatDecisionResult Decide(CombatObservation observation, IReadOnlyList<CombatAction> legal, Func<CombatExport> live, Budget budget,
-        ulong seed, IReadOnlyList<EnemyTurns> history)
+        ulong seed, IReadOnlyList<EnemyTurns> history, Func<PromptCombat>? prompted = null)
     {
-        if (PimcBrain.Unplanned(observation) is { } unplanned) return unplanned;
-        if (legal.Count == 1) return PimcBrain.Only(legal[0]);
+        if (PimcBrain.Forced(observation, legal) is { } only) return PimcBrain.Only(only);
+        RootSearch Search(EngineWorld real) => (first, nodes) =>
+            real.Pimc(_engine.Value, net.RunValue, history, first, nodes, budget.Worlds, seed, net.Env == PlayEnvironment.NoSL, threads);
+        if (observation.Prompt is { } prompt)
+        {
+            using var at = Stand(prompted?.Invoke() ?? throw new InvalidOperationException("a card prompt with no combat to stand at"));
+            return PimcBrain.Answers(PromptAnswers.Of(prompt, SlPlanner.Unlimited, out bool _), budget, Search(at));
+        }
         var export = live();
         using var real = EngineWorld.Import(export.Bytes, export.Run);
-        return PimcBrain.Root(PimcBrain.Ordered(legal, observation), budget, (first, nodes) =>
-            real.Pimc(_engine.Value, net.RunValue, history, first, nodes, budget.Worlds, seed, net.Env == PlayEnvironment.NoSL, threads));
+        return PimcBrain.Root(PimcBrain.Ordered(legal, observation), budget, Search(real));
+    }
+
+    /// <summary>The engine standing at the card prompt the combat waits on: the combat as the host last wrote it out,
+    /// begun first where it was written as it began, and the steps since taken as the game took them; with the host's
+    /// record of the draw pile at the prompt, which the worlds drawn there read.</summary>
+    public static EngineWorld Stand(PromptCombat at)
+    {
+        var world = at.Opening ? EngineWorld.Begin(at.From.Bytes, at.From.Run) : EngineWorld.Import(at.From.Bytes, at.From.Run);
+        try
+        {
+            foreach (var step in at.Steps)
+            {
+                int space = step.IndexOf(' ');
+                var (surface, text) = space < 0 ? (step, "") : (step[..space], step[(space + 1)..]);
+                if (surface == Surfaces.Combat) world.Execute(CombatAction.Parse(text));
+                else if (surface == Surfaces.CardChoice) world.Answer([.. text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)]);
+                else throw new InvalidDataException($"a step the combat does not take: {step}");
+            }
+            world.DrawLog(at.DrawLog);
+            return world;
+        }
+        catch
+        {
+            world.Dispose();
+            throw;
+        }
     }
 
     /// <summary>As Harness's combat route, one per run: the same decisions on the same seeds.</summary>
@@ -48,6 +85,7 @@ public sealed class EnginePimc(CombatNet net, int threads)
         return new(name, (decision, seed, _, history) => plan.Decide(decision.Observation, decision.Legal,
             () => Decide(decision.Observation, decision.Legal,
                 () => decision.Export ?? throw new InvalidOperationException("the host gives no live combat: NoSL's worlds are drawn from it"),
-                budget.For(decision.Observation.Room), seed, history)), budget);
+                budget.For(decision.Observation.Room), seed, history,
+                () => decision.Prompted ?? throw new InvalidOperationException("the host gives no combat at the card prompt: NoSL's worlds are drawn there"))), budget);
     }
 }

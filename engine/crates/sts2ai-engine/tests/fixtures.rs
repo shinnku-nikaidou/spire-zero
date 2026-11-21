@@ -9,6 +9,8 @@
 //!    (`sz_world_apply`).
 //!  - `sampled`: every record with an export imported as a NoSL sample tells its state apart by `HiddenState.Key`, the
 //!    first line of the record's hidden.txt, and so does the world after its action.
+//!  - `begin`: a combat written out as it began (opening.export.json) begun in the engine (`sz_world_begin`), its
+//!    start's prompts answered as the game's were, shows the combat's first record, and is carried through the combat.
 
 mod support;
 
@@ -37,6 +39,14 @@ fn take(buf: ffi::SzBuf) -> Vec<u8> {
 impl World {
     fn import(export: &[u8]) -> Result<World, String> {
         World::import_as(export, 0)
+    }
+
+    /// A world from a combat written out as it began (`sz_world_begin`).
+    fn begin(export: &[u8]) -> Result<World, String> {
+        match unsafe { ffi::sz_world_begin(export.as_ptr(), export.len()) } {
+            0 => Err(format!("error: sz_world_begin: {}", last_error())),
+            world => Ok(World(world)),
+        }
     }
 
     /// `sample`: 1 for a NoSL sample, 0 for the SL world (`sz_world_import`).
@@ -397,4 +407,41 @@ fn blockers() {
     for (error, exports) in said {
         println!("{exports:7}  {error}");
     }
+}
+
+/// The begin check: a combat written out as it began (opening.export.json, in the game's
+/// StartCombatInternal once the executor has finished what it ran) begun in the engine (`sz_world_begin`), the card prompts of its start answered as the game's
+/// were (opening.answers.json, places in the game's lists: `given:`), shows the combat's first record, and is carried
+/// from there through the whole combat as the step check carries its world. A combat with no opening is skipped.
+#[test]
+fn begin() {
+    sweep(|fixture| {
+        let mut tally = Tally::default();
+        let Ok(export) = std::fs::read(fixture.folder.join("opening.export.json")) else {
+            tally.skipped += fixture.records.len();
+            return tally;
+        };
+        let answers: Vec<Vec<i32>> = match std::fs::read(fixture.folder.join("opening.answers.json")) {
+            Ok(text) => serde_json::from_slice(&text).expect("opening.answers.json"),
+            Err(_) => Vec::new(),
+        };
+        let begun = World::begin(&export).and_then(|mut world| {
+            for answer in &answers {
+                let given = format!("given:{}", answer.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","));
+                world = world.step(&given)?;
+            }
+            shows(&world, fixture, 0).map(|()| world)
+        });
+        match begun {
+            Ok(world) => {
+                tally.passed += 1;
+                follow(world, fixture, 0, &mut tally, "begun", By::Step);
+            }
+            Err(difference) => tally
+                .failed
+                .push((format!("{} record 0 (begun, {} answers)", fixture.name, answers.len()), difference)),
+        }
+        tally
+    })
+    .finish("begin");
 }

@@ -745,8 +745,9 @@ public sealed partial class Body
             if (!declaredAhead.Contains(local)) sb.Append($"{let} = Default::default();\n");
             return;
         }
-        // A list read out of a field stays that field: C# holds a reference, and sees later changes.
-        if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && FieldPlaceOf(init) is { } place)
+        // A list read out of a field stays that field: C# holds a reference, and sees later changes. Not when the
+        // field is set again after it (`var x = _list; _list = null; Use(x)`): the local keeps the old list then, a copy.
+        if (World.CollOf(local.Type) != World.Coll.None && !reassigned.Contains(local) && !FieldSetAfter(init) && FieldPlaceOf(init) is { } place)
         {
             aliases[local] = place;
             if (Presence(init) is { } there) aliasPresence[local] = there;
@@ -1358,6 +1359,24 @@ public sealed partial class Body
             if (d is IInvocationOperation { Instance: var on } inv && IsValue(on) && World.IsSource(inv.TargetMethod.ContainingType) == false) return true;
         }
         return false;
+    }
+
+    /// <summary>Whether the field (or the field a property forwards) a value is read out of is set again after the read,
+    /// in the body: later in the text, or anywhere in a loop around the read.</summary>
+    private bool FieldSetAfter(IOperation read)
+    {
+        static IFieldSymbol? FieldOf(IOperation o) => Unwrapped(o) switch
+        {
+            IFieldReferenceOperation f => f.Field.OriginalDefinition,
+            IPropertyReferenceOperation p => Forwarded(p.Property.OriginalDefinition),
+            _ => null,
+        };
+        if (bodyOp == null || FieldOf(read) is not { } field) return false;
+        IOperation? loop = null;
+        for (var x = read.Parent; x != null && x != bodyOp; x = x.Parent)
+            if (x is ILoopOperation) loop = x;
+        return bodyOp.Descendants().OfType<IAssignmentOperation>().Any(a => FieldOf(a.Target) is { } set && Eq.Equals(set, field)
+            && (a.Syntax.SpanStart > read.Syntax.SpanStart || loop != null && loop.Syntax.Span.Contains(a.Syntax.Span)));
     }
 
     private static IOperation Unwrapped(IOperation o)

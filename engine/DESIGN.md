@@ -44,6 +44,19 @@ player can see or remember stays the combat's own: the mode and dominion, the fi
 the models. A drawn world tells its states apart by `HiddenState.Key`. plans/2026-11-17-1120-nosl-dread-architecture.md
 (option c) has the design and the checks.
 
+At a card prompt the combat waits on (Gambling Chip's discard, a dominion's choice, a card's pick), the real combat
+stands in the middle of an action, where no export can be taken. The host sends the combat as it last wrote it out in
+this fight and the steps since, as the simulator's trace names them (`PromptCombat`: `combat play:12`, and
+`card_choice 2,0` with the picks as places in the game's own list of the options), with the draw pile's record at the
+prompt; the engine takes them again, the answers as `given:2,0`, and stands at the same prompt (`EnginePimc.Stand`).
+A prompt that opens the fight comes before any decision, so hosts also write the combat out as it begins (the bridge's
+`CombatOpening`: in `StartCombatInternal` once the executor has finished what it ran, in a run the map move that
+entered the room, before any of the combat's start), and the engine runs the start itself (`sz_world_begin`,
+`Live::begin`). A world at a prompt is drawn where the prompt takes its answer (`Live::draw_at_prompt`): a prompt is
+run again for each answer, from the same point with the same seed, so the world stays one world, real up to the prompt
+and drawn after it. The search gives each answer a decision's nodes in every world
+(plans/2026-11-21-1213-nosl-prompt-worlds.md).
+
 The draw pile's record is `DrawPileLog` (`src/Sts2Ai.GameBridge`, Harmony patches in the sim and in the mod): from each
 shuffle, every card put in, moved, taken out or changed in the draw pile, by card key, with where (top, bottom, at
 random, or a place the player does not see). The engine replays it to draw the order: the shuffled cards are hidden
@@ -381,6 +394,7 @@ it (`import.rs`, with the reader `port` generates beside the structs, `gen/impor
 | `delegate` | `null`; `{"method": "<class>::<method>", "target": REF}`: the method's declaring class by its CLR full name and the method's name, both as reflection gives them (`...Monsters.BygoneEffigy::SlashMove`, `...Cards.Unleash+<>c::<get_CanonicalVars>b__6_0`, `...CreatureCmd+<>c__DisplayClass30_0::<Stun>g__Wrapper\|0`); `target` is `null` for a static method and for a lambda on `<>c`, else a reference like any other, to a game object or to an object of what the lambda captured. A delegate made of more than one is an error. The engine refuses a method it has no function for |
 
 An export is taken at a decision of the player with nothing running: the action queues are empty, no prompt is open.
+The one other export is a combat's as it begins (`CombatOpening`, above), also with nothing running.
 
 A `HashSet` or `Dictionary` from which items were removed keeps freed slots, and the next items added fill them
 before the end: its later enumeration order depends on them (an empty one with two freed slots already reverses its
@@ -582,9 +596,11 @@ another, so different worlds may be used from different threads. Every function 
 ```c
 uint64_t sz_world_import(const uint8_t *json, size_t len, int32_t sample);   // a live combat as EngineExport wrote it; 0 on error
 uint64_t sz_world_clone(uint64_t world);
+uint64_t sz_world_begin(const uint8_t *json, size_t len);          // an SL world of a combat written out as it begins, its start run; 0 on error
+int32_t  sz_world_draw_log(uint64_t world, const uint8_t *json, size_t len);   // the draw pile's record where the world stands (a prompt); 0 ok
 uint64_t sz_world_determinize(uint64_t world, uint64_t seed);       // a NoSL world: a copy with what the player cannot see drawn again; 0 on error
 void     sz_world_free(uint64_t world);
-int32_t  sz_world_apply(uint64_t world, const uint8_t *action, size_t len);   // "play:10:1", "potion:0", "end_turn", "pick:0,2"; 0 ok
+int32_t  sz_world_apply(uint64_t world, const uint8_t *action, size_t len);   // "play:10:1", "potion:0", "end_turn", "pick:0,2", "given:2,0"; 0 ok
 uint64_t sz_world_step(uint64_t world, const uint8_t *action, size_t len, sz_node *node);   // the world after the action; 0 on error
 int32_t  sz_world_status(uint64_t world);                          // 0 in progress, 1 won, 2 lost
 int32_t  sz_world_legal(uint64_t world, sz_buf *out);              // the plays, one per line, in the game's order; empty at a prompt
@@ -598,10 +614,12 @@ int32_t  sz_last_error(sz_buf *out);                               // this threa
 
 `sz_buf` is `{ uint8_t *ptr; size_t len; }`. Actions are `CombatAction`'s text form. `sample` is 1 for a NoSL world,
 whose hidden key is `HiddenState.Key`, and 0 for the SL world, whose hidden key is `HiddenState.Full`; every world made
-from it (a clone, a step) is of the same kind. `sz_world_determinize` makes a NoSL world of any world standing between
-the player's actions (not at a card prompt): the same combat with every random stream, the run's and the player's
-seeds, the relic grab bag, the draw pile's order (from `sim.draw_log`) and the queued moves that look alike drawn again
-from `seed` (`determinize.rs`); it fails when the draw pile's record cannot be drawn from.
+from it (a clone, a step) is of the same kind. `sz_world_determinize` makes a NoSL world of any world: the same
+combat with every random stream, the run's and the player's seeds, the relic grab bag, the draw pile's order (from
+`sim.draw_log`) and the queued moves that look alike drawn again from `seed` (`determinize.rs`); it fails when the draw pile's record cannot be drawn from. A world between the player's
+actions is drawn as it stands; one at a card prompt where the prompt takes its answer, from the record
+`sz_world_draw_log` gave it. `pick:` answers a prompt by places in the canonical order of its options, `given:` by
+places in the game's own list (what a host records).
 
 `sz_world_step` is how search makes a node: the world after the action is made of `world`, which stays as it is (what a
 snapshot is to search) and is freed on its own, in either order. It is one copy of the combat where a clone and an

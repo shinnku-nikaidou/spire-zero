@@ -59,6 +59,7 @@ internal static class Host
             var harmony = new Harmony("sts2ai.mod");
             ChoiceContexts.Patch(harmony);
             DrawPileLog.Patch(harmony);
+            CombatOpening.Patch(harmony);
             NodeRecord.Patch(harmony);
             Executor.Patch(harmony);
             SettingsTab.Patch(harmony);
@@ -67,6 +68,7 @@ internal static class Host
             var bundled = BundledBrain.Find(modDir, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!, version, ModLog.Folder!);
             var link = BrainLink.Start(bundled);
             _assist = new Assist(link, version, bundled?.SchemaPath);
+            CombatOpening.Starting = _assist.Opening;
             ModLog.Info("start", $"assist mode, {Settings.Current.Env}, brain: {link.Where}");
         }
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;

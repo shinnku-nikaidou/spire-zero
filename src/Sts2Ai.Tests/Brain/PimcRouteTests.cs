@@ -6,7 +6,7 @@ namespace Sts2Ai.Tests.Brain;
 /// <summary>
 /// What of NoSL's combat brain stays in C# since its search went to the engine (search/pimc.rs, whose tests carry the
 /// search's from LoopSearchTests and PimcMemoTests): the plan a search leaves and how it is followed, the answers to a
-/// prompt no search weighs, and the answers as actions.
+/// prompt no search weighs (a placeholder policy's), and the answers as actions.
 /// </summary>
 public class PimcRouteTests
 {
@@ -70,7 +70,7 @@ public class PimcRouteTests
     }
 
     [Fact]
-    public void TheAnswersAPlanStartsWithAreGivenWhenTheirPromptsComeEvenIfThePlanIsNotKept()
+    public void APlanNotKeptLeavesNoAnswersAPromptThatComesIsSearched()
     {
         var obs = Fixtures.Slugs();
         var asked = obs with { Prompt = Prompt().Choice };
@@ -78,23 +78,17 @@ public class PimcRouteTests
         CombatDecisionResult Search()
         {
             searches++;
-            // PIMC's worlds did not agree: no hashes, so the plan is not kept.
-            return new(R, [CombatAction.Pick([2]), H, CombatAction.EndTurn], []);
+            // PIMC's worlds did not agree: no hashes, so the plan is not kept, and the answer in it is world 0's alone.
+            return searches == 1 ? new(R, [CombatAction.Pick([2]), H, CombatAction.EndTurn], []) : new(CombatAction.Pick([1]), [], []);
         }
         var plan = new TurnPlan(all: false);
 
         Assert.Equal(R, plan.Decide(obs, [R, H], Search).First);
-        Assert.Equal(CombatAction.Pick([2]), plan.Decide(asked, [], Search).First);
-        Assert.Equal(1, searches);
-        // The plays after the answer were not kept.
-        Assert.Equal(R, plan.Decide(obs, [R, H], Search).First);
+        // The prompt the play raised is searched where it stands (plans/2026-11-21-1213-nosl-prompt-worlds.md).
+        var answered = plan.Decide(asked, [], Search);
+        Assert.Equal(CombatAction.Pick([1]), answered.First);
         Assert.Equal(2, searches);
-
-        // An answer the prompt does not take is not given, and that is no plan gone wrong.
-        var narrow = obs with { Prompt = Prompt(1, 1, "A", "B").Choice };
-        var searched = plan.Decide(narrow, [], () => new(CombatAction.Pick([0]), [], []));
-        Assert.Equal(CombatAction.Pick([0]), searched.First);
-        Assert.False(searched.Replanned);
+        Assert.False(answered.Replanned);
     }
 
     [Fact]
@@ -103,9 +97,6 @@ public class PimcRouteTests
         Assert.Empty(FirstPicks.Instance.Choose(Prompt()).Picks);
         Assert.Equal([0, 1], FirstPicks.Instance.Choose(Prompt(min: 2, max: 3)).Picks);
         Assert.Equal([0], FirstPicks.Instance.Choose(Prompt(min: 2, max: 2, "A")).Picks);
-        // PIMC has no world at a prompt: one its plan did not answer gets the first options.
-        Assert.Equal(CombatAction.Pick([0, 1]), PimcBrain.Unplanned(Fixtures.Slugs() with { Prompt = Prompt(min: 2, max: 3).Choice })!.First);
-        Assert.Null(PimcBrain.Unplanned(Fixtures.Slugs()));
     }
 
     [Fact]

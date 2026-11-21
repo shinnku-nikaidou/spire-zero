@@ -89,6 +89,15 @@ public static class DrawPileLog
         harmony.CreateClassProcessor(typeof(Rules)).Patch();
     }
 
+    /// <summary>The record as <see cref="Write"/> writes it, as text: what a host gives at a card prompt, where no export
+    /// can be taken (plans/2026-11-21-1213-nosl-prompt-worlds.md).</summary>
+    public static string Json()
+    {
+        using var buffer = new MemoryStream();
+        using (var json = new Utf8JsonWriter(buffer)) Write(json);
+        return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
     /// <summary>The record as the export's <c>sim.draw_log</c>: a list of events, the first a shuffle; empty before the
     /// combat's first shuffle.</summary>
     public static void Write(Utf8JsonWriter json)

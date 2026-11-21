@@ -20,7 +20,9 @@ internal static class RunLockstep
     /// <param name="seed">Seeds the player.</param>
     /// <param name="keep">Called at every decision of a combat and at its end, while it is live; null: nothing is dumped.</param>
     /// <returns>The run's combats in order, how the run ended, and the game's own Log.Error lines on the way.</returns>
-    public static (List<RunCombat> Combats, string End, IReadOnlyList<string> GameErrors) Record(Pump pump, RunSetup setup, int seed, IRunWorlds worlds, Keep? keep)
+    /// <param name="opening">Called as each combat begins (<see cref="CombatOpening"/>), after the run's own; null: nothing.</param>
+    public static (List<RunCombat> Combats, string End, IReadOnlyList<string> GameErrors) Record(Pump pump, RunSetup setup, int seed, IRunWorlds worlds, Keep? keep,
+        Action? opening = null)
     {
         HeadlessGame.TakeErrors();
         var rng = new Random(seed);
@@ -63,6 +65,12 @@ internal static class RunLockstep
             return new([.. action.Picks]);
         });
         using var session = live = RunSession.Start(pump, setup, choices, combat, new RandomMacro(rng));
+        var own = CombatOpening.Starting;
+        CombatOpening.Starting = () =>
+        {
+            own?.Invoke();
+            opening?.Invoke();
+        };
         while (!session.IsOver)
         {
             session.Step();

@@ -33,7 +33,7 @@ pub fn get_selected_cards(
     }
     let number = c.x.prompts;
     c.x.prompts += 1;
-    if let Some(picks) = c.choices.take() {
+    if let Some(picks) = crate::determinize::take_answer(c) {
         return Ok(picks.iter().map(|&i| options[i as usize]).collect());
     }
     c.x.asked = Some(asked(options, min_select, max_select, number, c));

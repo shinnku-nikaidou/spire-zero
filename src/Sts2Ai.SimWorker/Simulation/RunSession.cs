@@ -96,6 +96,11 @@ internal sealed class RunSession : IDisposable
     /// <summary>A loaded clone's recorded decisions, which come before the policies' own.</summary>
     private Replay? _replay;
 
+    /// <summary>The fight's combat as last written out (as it began, <see cref="CombatOpening"/>, or at a decision the
+    /// combat policy asked it at), and where the steps since begin in <see cref="Trace"/>: what the engine stands at a
+    /// card prompt from (<see cref="PromptCombat"/>). Null where the opening could not be written out.</summary>
+    private (CombatExport Export, bool Opening, int At)? _written;
+
     public RunSetup Setup { get; }
     public Player Player { get; }
     public RunState Run { get; }
@@ -161,6 +166,11 @@ internal sealed class RunSession : IDisposable
             _selector.RestartPrompts();
         };
         HeadlessPatches.RoomSaved = room => RoomSaved?.Invoke(Checkpoint.Take(player, room), _trace.Count, KindOf(room));
+        CombatOpening.Starting = () =>
+        {
+            _written = null;
+            _written = (LiveCombat.Export(player, View(previews: false)), true, _trace.Count);
+        };
     }
 
     /// <summary>A finished room's kind as a save names it: a fight by its room type, a fight inside an event, an event.</summary>
@@ -310,7 +320,23 @@ internal sealed class RunSession : IDisposable
     {
         var prompt = Prompt ?? throw new InvalidOperationException("no card prompt waits for an answer");
         if (_replay?.Picks() is { } picks) _selector.Replay(picks);
-        else _selector.Answer(_choices.Choose(new ChoiceDecision(prompt, () => Of(PromptScreen(prompt)))).Picks);
+        else _selector.Answer(_choices.Choose(new ChoiceDecision(prompt, () => Of(PromptScreen(prompt)), prompted: Prompted)).Picks);
+    }
+
+    /// <summary>The combat at the card prompt it waits on, for the engine to stand there: as last written out in this
+    /// fight, the steps since, and the draw pile's record now.</summary>
+    private PromptCombat Prompted()
+    {
+        var (export, opening, at) = _written
+            ?? throw new InvalidOperationException($"the fight's combat was never written out: its opening failed ({CombatOpening.Failed ?? "no fight began"})");
+        return new(export, opening, [.. _trace.Skip(at)], DrawPileLog.Json());
+    }
+
+    /// <summary>The live combat written out at a decision, kept as the fight's latest (<see cref="_written"/>).</summary>
+    private CombatExport Written(CombatExport export)
+    {
+        _written = (export, false, _trace.Count);
+        return export;
     }
 
     /// <summary>Makes one decision, after anything the game or the driver does on its own. Does nothing once the run is over.</summary>
@@ -505,7 +531,7 @@ internal sealed class RunSession : IDisposable
         }
         var legal = CombatActions.Legal(state, Player);
         var decision = new CombatDecision(legal, () => Observe.Combat(state, Player), combat => Of(new CombatScreen { Combat = combat }),
-            () => LiveCombat.Export(Player, View(previews: false)));
+            () => Written(LiveCombat.Export(Player, View(previews: false))));
         var action = _combat.Choose(decision);
         if (!legal.Contains(action)) throw new InvalidOperationException($"combat policy chose {action}, which is not legal");
         Record(Surfaces.Combat, action.ToString(), () => new CombatScreen { Combat = decision.Observation });

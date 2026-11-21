@@ -96,7 +96,16 @@ internal sealed record RealStep(Shown Shown, int Round, CombatAction? Action, st
 /// card prompt, and once the combat is over.</param>
 /// <param name="Run">What the combat has changed of the run (<c>RunChange</c>), as the JSON <c>sz_world_run</c> writes.</param>
 /// <param name="Keys">How search tells the state apart; null once the combat is over, where it does not ask.</param>
-internal sealed record Kept(bool Prompt, EngineExport.Written? Export, string Run, Keys? Keys);
+/// <param name="DrawLog">At a card prompt: the draw pile's public record there (<c>DrawPileLog</c>), which a NoSL world
+/// drawn at the prompt reads.</param>
+/// <param name="Opening">At the combat's first decision: the combat as <see cref="EngineExport"/> wrote it as the combat
+/// began (<see cref="CombatOpening"/>), which the engine begins it from.</param>
+/// <param name="OpeningAnswers">With <paramref name="Opening"/>, in a combat on its own: the answers its start's card
+/// prompts got before the first decision, which are no decisions of the check (<see cref="CombatSession"/>), as places in
+/// the game's own lists.</param>
+/// <param name="OpeningLogs">With <paramref name="OpeningAnswers"/>: the draw pile's record at each of those prompts.</param>
+internal sealed record Kept(bool Prompt, EngineExport.Written? Export, string Run, Keys? Keys, string? DrawLog = null, byte[]? Opening = null,
+    IReadOnlyList<int[]>? OpeningAnswers = null, IReadOnlyList<string>? OpeningLogs = null);
 
 /// <summary>What a dump keeps of the live combat where it stands: its player, its status, whether it waits on a card
 /// prompt, and its observation.</summary>
@@ -144,10 +153,21 @@ internal static class Lockstep
     /// <param name="seed">Seeds the policy, the answers to card prompts, and which decisions are continued from.</param>
     /// <param name="continues">How many decisions the continue check starts from, drawn evenly; null: every one.</param>
     /// <param name="keep">Called at every decision of the real combat and at its end, while it is live; null: nothing is dumped.</param>
-    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues, Keep? keep = null)
+    /// <param name="opening">Called as the combat begins (<see cref="CombatOpening"/>); null: nothing.</param>
+    public static LockstepResult Check(Pump pump, CombatSetup setup, int seed, ISecondWorlds worlds, int? continues, Keep? keep = null, Action? opening = null)
     {
         HeadlessGame.TakeErrors();
-        var (steps, outcome) = Record(pump, setup, seed, worlds, keep);
+        CombatOpening.Starting = opening;
+        List<RealStep> steps;
+        CombatOutcome outcome;
+        try
+        {
+            (steps, outcome) = Record(pump, setup, seed, worlds, keep);
+        }
+        finally
+        {
+            CombatOpening.Starting = null;
+        }
         var gameErrors = HeadlessGame.TakeErrors();
         return Compare(steps, continues, seed) with { Outcome = outcome.ToString(), GameErrors = gameErrors };
     }
@@ -157,7 +177,11 @@ internal static class Lockstep
     {
         var rng = new Random(seed);
         var steps = new List<RealStep>();
-        using var real = CombatSession.Start(pump, setup, new RandomChoices(rng));
+        // The start's prompts are answered inside the start, before any record: a dump keeps the draw pile's record at
+        // each of them, for a world drawn there.
+        var openingLogs = new List<string>();
+        var random = new RandomChoices(rng);
+        using var real = CombatSession.Start(pump, setup, keep == null ? random : new Logged(random, openingLogs));
         var policy = new SweepPolicy(rng);
         while (true)
         {
@@ -167,6 +191,8 @@ internal static class Lockstep
             var present = GameIds.Present(CombatSession.State, real.Player, real.Prompt);
             int round = CombatSession.State.RoundNumber;
             var kept = keep?.Invoke(real.Player, status, real.Prompt != null, observation);
+            if (steps.Count == 0 && kept != null)
+                kept = kept with { OpeningAnswers = [.. real.Trace.Where(e => e.Kind == TraceKind.Choice).Select(e => e.Picks!)], OpeningLogs = openingLogs };
             if (real.IsCapped)
             {
                 steps.Add(new(shown, round, null, null, null, present, kept));
@@ -176,6 +202,16 @@ internal static class Lockstep
             var action = real.Next(policy);
             steps.Add(new(shown, round, action, Subject(real.Player, real.Prompt, action), make, present, kept));
             real.Execute(action);
+        }
+    }
+
+    /// <summary>A choice policy that puts down the draw pile's record at each prompt it answers.</summary>
+    private sealed class Logged(IChoicePolicy policy, List<string> logs) : IChoicePolicy
+    {
+        public ChoiceAnswer Choose(ChoiceDecision decision)
+        {
+            logs.Add(DrawPileLog.Json());
+            return policy.Choose(decision);
         }
     }
 

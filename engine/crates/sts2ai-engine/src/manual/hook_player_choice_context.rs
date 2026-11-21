@@ -250,7 +250,7 @@ pub fn ask(me: HookPlayerChoiceContext, options: Vec<CardModel>, min_select: i32
     c.x.hooks.asking = Obj::NULL;
     if c.x.resume.as_ref().is_some_and(|r| r.target == c.x.hooks.asking_number) {
         take_over(me, c);
-        let picks = c.choices.take().expect("a hook resumed at its prompt without its answer");
+        let picks = crate::determinize::take_answer(c).expect("a hook resumed at its prompt without its answer");
         return Ok(picks.iter().map(|&i| options[i as usize]).collect());
     }
     let number = c.x.prompts;

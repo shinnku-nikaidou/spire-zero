@@ -39,7 +39,33 @@ pub struct Drawn {
     pub kept: u32,
 }
 
-/// Draws everything the player of `c` cannot see again, from `seed`. `c` is a combat between the player's actions.
+/// Where a NoSL world is drawn at a card prompt (world.rs, `Live::draw_at_prompt`): at the prompt whose answer is the
+/// running action's `answer`-th (from 0), from `seed` and the draw pile's record there (`log`, the host's at the
+/// prompt).
+#[derive(Debug)]
+pub struct DrawAt {
+    pub answer: usize,
+    pub seed: u64,
+    pub log: std::sync::Arc<Result<DrawLog, String>>,
+}
+
+/// The answer to the prompt the running action has just reached (`Choices::take`); where the world is drawn at this
+/// prompt (`Extra::draw_at`), everything the player cannot see is drawn first, as the prompt stands: what it shows was
+/// the real combat's, what follows its answer is drawn. A record that does not hold fails the world, as at an import.
+pub fn take_answer(c: &mut Combat) -> Option<Vec<i32>> {
+    if let Some(at) = c.x.draw_at.clone() {
+        if at.answer == c.choices.next && c.choices.next < c.choices.answers.len() {
+            c.x.draw_log = Some(at.log.clone());
+            if let Err(why) = determinize(c, at.seed) {
+                panic!("a world drawn at a card prompt: {why}");
+            }
+        }
+    }
+    c.choices.take()
+}
+
+/// Draws everything the player of `c` cannot see again, from `seed`. `c` is a combat between the player's actions, or
+/// one at a card prompt that takes its answer next (`take_answer`).
 pub fn determinize(c: &mut Combat, seed: u64) -> Result<Drawn, String> {
     let mut rng = Stream::new(seed);
     let log = c.x.draw_log.clone().ok_or("the combat came with no draw pile record (sim.draw_log)")?;

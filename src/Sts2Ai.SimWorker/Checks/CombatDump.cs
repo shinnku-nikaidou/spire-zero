@@ -14,6 +14,12 @@ namespace Sts2Ai.SimWorker.Checks;
 /// </summary>
 internal sealed class CombatDump(EngineExport export, string root)
 {
+    /// <summary>The combat as it began, written out (<see cref="Opening"/>), until the combat's first decision keeps it.</summary>
+    private byte[]? _opening;
+
+    /// <summary>A combat begins (<see cref="CombatOpening"/>): it is written out as it stands, kept with its first decision.</summary>
+    public void Opening() => _opening = export.Write(HeadlessGame.GameVersion, PromptSelector.Around()).Bytes;
+
     /// <summary>What the dump keeps of the live combat where it stands (a <see cref="Checks.Keep"/>).</summary>
     public Kept Keep(Player player, CombatStatus status, bool prompt, CombatObservation observation)
     {
@@ -25,7 +31,8 @@ internal sealed class CombatDump(EngineExport export, string root)
         return new(going && prompt,
             going && !prompt ? export.Write(HeadlessGame.GameVersion, PromptSelector.Around()) : null,
             ProtocolJson.Serialize(run),
-            going ? new Keys(HiddenState.Full(state, player), PimcBrain.StateKey(observation), HiddenState.KeyText(state, player), HiddenState.FullText(state, player)) : null);
+            going ? new Keys(HiddenState.Full(state, player), PimcBrain.StateKey(observation), HiddenState.KeyText(state, player), HiddenState.FullText(state, player)) : null,
+            going && prompt ? DrawPileLog.Json() : null, Interlocked.Exchange(ref _opening, null));
     }
 
     /// <summary>The combat's folder: what was kept at each decision, and combat.json, which lists them.</summary>
@@ -42,6 +49,10 @@ internal sealed class CombatDump(EngineExport export, string root)
             File.WriteAllText(Path.Combine(dir, $"{k}.run.json"), kept.Run);
             if (kept.Export != null) File.WriteAllBytes(Path.Combine(dir, $"{k}.export.json"), kept.Export.Bytes);
             if (kept.Keys != null) File.WriteAllText(Path.Combine(dir, $"{k}.hidden.txt"), $"{kept.Keys.HiddenKeyText}\n{kept.Keys.HiddenText}\n");
+            if (kept.DrawLog != null) File.WriteAllText(Path.Combine(dir, $"{k}.draw_log.json"), kept.DrawLog);
+            if (kept.Opening != null) File.WriteAllBytes(Path.Combine(dir, "opening.export.json"), kept.Opening);
+            if (kept.OpeningAnswers != null) File.WriteAllText(Path.Combine(dir, "opening.answers.json"), ProtocolJson.Serialize(kept.OpeningAnswers));
+            if (kept.OpeningLogs != null) File.WriteAllText(Path.Combine(dir, "opening.draw_logs.json"), $"[{string.Join(",", kept.OpeningLogs)}]");
             decisions.Add(new(step.Round, step.Shown.Status switch { CombatStatus.InProgress => "in_progress", CombatStatus.Won => "won", _ => "lost" },
                 kept.Prompt ? true : null, step.Shown.Legal, kept.Keys?.Hidden, kept.Keys?.State, step.Action?.ToString(),
                 kept.Export is { Freed: { Count: > 0 } freed } ? freed : null));
@@ -76,6 +87,10 @@ internal sealed class CombatDump(EngineExport export, string root)
               <k>.observation.json                            what the game shows there
               <k>.run.json                                    what the combat has changed of the run by then
               <k>.hidden.txt                                  the two texts the hidden key is the hash of
+              <k>.draw_log.json                               at a card prompt: the draw pile's record there
+              opening.export.json                             the combat as it began, before its first turn
+              opening.answers.json                            the answers its start's prompts got before record 0
+              opening.draw_logs.json                          the draw pile's record at each of those prompts
 
         `k` counts from 0. A record is a place where the player is asked (a play, or the answer to a card prompt), and
         the last record is the combat's end, with no action. (A combat the sweep cut at 1000 actions ends on a record
@@ -126,6 +141,15 @@ internal sealed class CombatDump(EngineExport export, string root)
           (`PromptSelector.Prompts`). The next prompt is number N, and its number seeds the order of its options that
           look the same (`new Random(N)` in `CardChoices.Canonical`), so a world that goes on from the export counts
           on from N. In a whole run the count starts again at every room.
+        - `<k>.draw_log.json`: at a card prompt, the draw pile's public record there, as an export's `sim.draw_log`
+          (`DrawPileLog`): what a NoSL world drawn at the prompt reads (`sz_world_draw_log`).
+        - `opening.export.json`: the combat as it began, written in the game's `StartCombatInternal` once the
+          executor has finished what it ran, before any of the combat's start ran (the bridge's `CombatOpening`), in the export's format; `sz_world_begin` runs the combat's start from it, to record 0.
+        - `opening.answers.json`: in a combat on its own (not of a whole run), the answers the card prompts of its start
+          got before record 0, which are no records: a list of answers, each the picks as places in the game's own list
+          of the options (`given:` in `sz_world_step`). A world begun from the opening and given these stands at record 0.
+        - `opening.draw_logs.json`: with `opening.answers.json`, the draw pile's record at each of those prompts, as
+          `<k>.draw_log.json` is at a record.
         - `<k>.observation.json`: the bytes `sz_world_observe` must write: the observation as `ProtocolJson` writes it
           (snake_case names, a null member left out, members in the order of `CombatObservation`'s declaration).
         - `<k>.run.json`: the bytes `sz_world_run` must write: `{"hp":..,"max_hp":..,"gold":..,"deck":[..],"relics":[..],

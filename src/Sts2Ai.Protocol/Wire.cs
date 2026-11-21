@@ -64,12 +64,28 @@ public sealed record Ready(string Champion, string Shown) : WireMessage;
 /// order the steps took effect, as "surface action" (a card prompt's picks as the game's own indexes). With the
 /// checkpoint it is the clone this decision is asked on (<see cref="NodeClone"/>). Sent whole each time: a host whose
 /// player went back (into a room left for the map, out of a card reward unanswered) sends a shorter one.</param>
+/// <param name="Prompt">At a card prompt during a combat: the combat for the engine to stand at it, as the host last wrote
+/// it out in the fight and the steps since (<see cref="PromptExport"/>); none where the host's record of the fight's
+/// steps broke.</param>
 public sealed record DecisionRequest(long DecisionId, string ObsHash, string Surface, Observation Obs, IReadOnlyList<string> Legal, string? Export = null,
-    IReadOnlyList<string>? Trace = null)
+    IReadOnlyList<string>? Trace = null, PromptExport? Prompt = null)
     : WireMessage
 {
     public static string HashOf(Observation obs) => ProtocolJson.Hash(obs).ToString("x16");
 }
+
+/// <summary>
+/// The combat at a card prompt it waits on, as the host gives it for the engine to stand there
+/// (plans/2026-11-21-1213-nosl-prompt-worlds.md): the game is in the middle of an action, which no export can be
+/// taken in.
+/// </summary>
+/// <param name="Export">The combat as the host last wrote it out in the fight, in base64, as
+/// <see cref="DecisionRequest.Export"/>.</param>
+/// <param name="Opening">Whether it was written as the combat began, before its first turn.</param>
+/// <param name="Run">The run as it stood when it was written.</param>
+/// <param name="Steps">The steps taken since, in order, as <see cref="DecisionRequest.Trace"/> names them.</param>
+/// <param name="DrawLog">The draw pile's public record at the prompt, as an export's <c>sim.draw_log</c>.</param>
+public sealed record PromptExport(string Export, bool Opening, RunView Run, IReadOnlyList<string> Steps, string DrawLog);
 
 /// <summary>Brain → host, the answer to a decision.</summary>
 /// <param name="Brain">The brain that decided, from the champion's routing table.</param>

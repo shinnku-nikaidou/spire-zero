@@ -14,6 +14,10 @@
 //!    at random: the decisions of one shuffle share one real order), a queued move one decision of each roll.
 //!  - `leak_probe` (ignored): every field of every object of the combat, real against K worlds: the fields the worlds
 //!    draw (they differ among themselves), and the fields every world holds alike but not as the real combat does.
+//!  - `drawn_at_a_prompt`: at every card prompt the combat waits on (plans/2026-11-21-1213-nosl-prompt-worlds.md), a
+//!    world stood there from the export before it (or the combat's opening) and drawn where the prompt takes its
+//!    answer: drawn twice from one seed it is one world; given the game's answer, no random stream is the real one's,
+//!    and the draw pile is not the real one in every world.
 
 mod support;
 
@@ -522,3 +526,168 @@ fn leak_probe() {
 }
 
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Worlds drawn at a card prompt
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// The live combat's hand, as the card keys of its cards, in order.
+fn hand_keys(c: &mut Combat) -> Vec<String> {
+    let manager = g::combat::combat_manager::instance(c);
+    let st = g::combat::combat_manager::debug_only_get_state(manager, c);
+    let player = g::context::local_context::get_me__i_combat_state(st, c);
+    let pcs = g::entities_players::player::player_combat_state(player, c);
+    let hand = g::entities_players::player_combat_state::hand(pcs, c);
+    g::entities_cards::card_pile::cards(hand, c)
+        .into_iter()
+        .map(|card| String::from_utf8(sts2ai_engine::protocol::card_key(&sts2ai_engine::observe::card(card, false, c))).unwrap())
+        .collect()
+}
+
+/// The world standing at record `k`, a card prompt, as a host stands the engine there: the combat as last written out
+/// before it (the record's export, or the opening with its start's answers), along the combat's actions since, with the
+/// draw pile's record at the prompt.
+fn stood(fixture: &Fixture, k: usize) -> Result<sts2ai_engine::world::Live, String> {
+    use sts2ai_engine::ffi::World as _;
+    use sts2ai_engine::world::Live;
+    let from = (0..k).rev().find(|&j| fixture.has_export(j));
+    let mut live = match from {
+        Some(j) => Live::import(&String::from_utf8(fixture.bytes(j, "export.json")).expect("UTF-8"))?,
+        None => {
+            let opening = std::fs::read_to_string(fixture.folder.join("opening.export.json")).map_err(|e| format!("no opening: {e}"))?;
+            let mut live = Live::begin(&opening)?;
+            let answers: Vec<Vec<i32>> = match std::fs::read(fixture.folder.join("opening.answers.json")) {
+                Ok(text) => serde_json::from_slice(&text).expect("opening.answers.json"),
+                Err(_) => Vec::new(),
+            };
+            for answer in answers {
+                live.apply(&format!("given:{}", answer.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",")))?;
+            }
+            live
+        }
+    };
+    for r in from.unwrap_or(0)..k {
+        live.apply(fixture.records[r].action.as_deref().expect("a record before the last has an action"))?;
+    }
+    if live.asked().is_none() {
+        return Err(format!("record {k} is a card prompt, and the world stood there is not"));
+    }
+    let log: serde_json::Value = serde_json::from_slice(&fixture.bytes(k, "draw_log.json")).map_err(|e| e.to_string())?;
+    live.combat().x.draw_log = Some(std::sync::Arc::new(sts2ai_engine::drawlog::DrawLog::parse(&log)));
+    Ok(live)
+}
+
+/// The random streams of a combat, as text.
+fn streams(c: &Combat) -> String {
+    objects(c).into_iter().filter(|(name, _)| name.contains("random")).map(|(_, text)| text).collect::<Vec<_>>().join("\n")
+}
+
+#[test]
+fn drawn_at_a_prompt() {
+    use sts2ai_engine::ffi::World as _;
+    const K: u64 = 16;
+    let (redrawn, kept) = (std::sync::atomic::AtomicUsize::new(0), std::sync::atomic::AtomicUsize::new(0));
+    let (opened, opened_redrawn) = (std::sync::atomic::AtomicUsize::new(0), std::sync::atomic::AtomicUsize::new(0));
+    sweep(|fixture| {
+        let mut tally = Tally::default();
+        // The prompts of the combat's start, before record 0 (a combat on its own answers them there): a world drawn
+        // at each, given the rest of the start's answers, against record 0.
+        if let (Ok(opening), Ok(answers), Ok(logs)) = (
+            std::fs::read_to_string(fixture.folder.join("opening.export.json")),
+            std::fs::read(fixture.folder.join("opening.answers.json")),
+            std::fs::read(fixture.folder.join("opening.draw_logs.json")),
+        ) {
+            let answers: Vec<Vec<i32>> = serde_json::from_slice(&answers).expect("opening.answers.json");
+            let logs: Vec<serde_json::Value> = serde_json::from_slice(&logs).expect("opening.draw_logs.json");
+            let given = |answer: &Vec<i32>| format!("given:{}", answer.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","));
+            for i in 0..answers.len() {
+                let name = format!("{} opening prompt {i}", fixture.name);
+                let checked = (|| -> Result<(), String> {
+                    let mut live = sts2ai_engine::world::Live::begin(&opening)?;
+                    for answer in &answers[..i] {
+                        live.apply(&given(answer))?;
+                    }
+                    live.combat().x.draw_log = Some(std::sync::Arc::new(sts2ai_engine::drawlog::DrawLog::parse(&logs[i])));
+                    let mut real = import(fixture, 0);
+                    let mut same_hand = 0;
+                    for seed in 0..K {
+                        let mut world = live.clone();
+                        world.draw_at_prompt(seed)?;
+                        for answer in &answers[i..] {
+                            world.apply(&given(answer))?;
+                        }
+                        if streams(world.combat()) == streams(&real) {
+                            return Err(format!("seed {seed}: a random stream at record 0 is the real one's"));
+                        }
+                        same_hand += (hand_keys(world.combat()) == hand_keys(&mut real)) as u64;
+                    }
+                    opened.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if same_hand < K {
+                        opened_redrawn.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Ok(())
+                })();
+                match checked {
+                    Ok(()) => tally.passed += 1,
+                    Err(e) => tally.failed.push((name, e)),
+                }
+            }
+        }
+        for k in 0..fixture.records.len().saturating_sub(1) {
+            if !fixture.records[k].prompt || !fixture.file(k, "draw_log.json").exists() {
+                continue;
+            }
+            let name = format!("{} record {k}", fixture.name);
+            let answer = fixture.records[k].action.clone().expect("a prompt's answer");
+            let checked = stood(fixture, k).and_then(|live| {
+                let draw = |seed: u64| -> Result<sts2ai_engine::world::Live, String> {
+                    let mut world = live.clone();
+                    world.draw_at_prompt(seed)?;
+                    world.step(&answer)
+                };
+                // The real combat after the answer, where it stands between actions.
+                let mut real = fixture.has_export(k + 1).then(|| import(fixture, k + 1));
+                let (mut same_pile, mut same_hand) = (0, 0);
+                for seed in 0..K {
+                    let mut once = draw(seed)?;
+                    let mut again = draw(seed)?;
+                    if objects(once.combat()) != objects(again.combat()) {
+                        return Err(format!("seed {seed}: drawn twice at the prompt, two worlds"));
+                    }
+                    let Some(real) = real.as_mut() else { continue };
+                    if streams(once.combat()) == streams(real) {
+                        return Err(format!("seed {seed}: a random stream after the answer is the real one's"));
+                    }
+                    same_pile += (draw_order(once.combat()) == draw_order(real)) as u64;
+                    same_hand += (hand_keys(once.combat()) == hand_keys(real)) as u64;
+                }
+                let Some(real) = real.as_mut() else { return Ok(()) };
+                let pile = draw_order(real);
+                let distinct: HashSet<&String> = pile.iter().collect();
+                if distinct.len() >= 2 && same_pile == K {
+                    return Err(format!("the draw pile after the answer is the real one in all {K} worlds: {pile:?}"));
+                }
+                if same_hand == K {
+                    kept.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    redrawn.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                Ok(())
+            });
+            match checked {
+                Ok(()) => tally.passed += 1,
+                Err(e) => tally.failed.push((name, e)),
+            }
+        }
+        tally
+    })
+    .finish("drawn_at_a_prompt");
+    println!(
+        "prompts whose answer leaves a hand not the real one in some world: {}; the real hand in every world: {}; \
+         prompts of a combat's start: {}, of them with record 0's hand not the real one in some world: {}",
+        redrawn.into_inner(),
+        kept.into_inner(),
+        opened.into_inner(),
+        opened_redrawn.into_inner()
+    );
+}

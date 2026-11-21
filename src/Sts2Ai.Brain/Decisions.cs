@@ -8,19 +8,35 @@ namespace Sts2Ai.Brain;
 public sealed record CombatExport(byte[] Bytes, RunView Run);
 
 /// <summary>
+/// The combat at a card prompt it waits on, as a host gives it for the engine to stand there
+/// (plans/2026-11-21-1213-nosl-prompt-worlds.md): the game stands in the middle of an action, which no export can be
+/// taken in, so the engine takes the steps since the combat was last written out as the game took them.
+/// </summary>
+/// <param name="From">The combat as the host last wrote it out in this fight, with the run as it stood then.</param>
+/// <param name="Opening">Whether <paramref name="From"/> was written as the combat began, before its first turn (in the
+/// game's StartCombatInternal, once the executor has finished what it ran: the bridge's CombatOpening): the engine runs the combat's start first.</param>
+/// <param name="Steps">The steps taken since, in order, as the simulator's trace names them: "combat ACTION", and
+/// "card_choice I,J" with the picks as places in the game's own list of the options.</param>
+/// <param name="DrawLog">The draw pile's public record at the prompt (the bridge's <c>DrawPileLog</c>, the JSON of an
+/// export's <c>sim.draw_log</c>), which a NoSL world drawn there reads.</param>
+public sealed record PromptCombat(CombatExport From, bool Opening, IReadOnlyList<string> Steps, string DrawLog);
+
+/// <summary>
 /// What a combat policy gets at each decision: the legal actions, and the observation on request. In a run, the run
 /// observation around the combat too (<paramref name="inRun"/> makes it from the combat's); a combat started on its
 /// own has none. A host that holds the live game can write the combat out for the engine (<paramref name="export"/>),
-/// where the game stands between actions: not at a card prompt. A host that shows answers as they come and may move on
-/// before one comes gives <paramref name="early"/>, <paramref name="hurry"/> and <paramref name="after"/>.
+/// where the game stands between actions: not at a card prompt; at a card prompt it gives what the engine stands there
+/// from (<paramref name="prompted"/>). A host that shows answers as they come and may move on before one comes gives
+/// <paramref name="early"/>, <paramref name="hurry"/> and <paramref name="after"/>.
 /// </summary>
 public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null,
     Func<CombatExport>? export = null, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default,
-    Action<CombatDecisionResult>? after = null)
+    Action<CombatDecisionResult>? after = null, Func<PromptCombat>? prompted = null)
 {
     private CombatObservation? _observation;
     private Observation? _runObservation;
     private CombatExport? _export;
+    private PromptCombat? _prompted;
 
     public IReadOnlyList<CombatAction> Legal { get; } = legal;
 
@@ -32,6 +48,10 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
 
     /// <summary>The live combat for the engine, written on first use; null where the host has none to give.</summary>
     public CombatExport? Export => _export ??= export?.Invoke();
+
+    /// <summary>At a card prompt: the combat for the engine to stand at it, made on first use; null where the host has
+    /// none to give.</summary>
+    public PromptCombat? Prompted => _prompted ??= prompted?.Invoke();
 
     /// <summary>Told the pick so far, by a brain that searches on before it answers (<see cref="SolverRoute"/>); null
     /// for a host that only takes answers.</summary>
@@ -88,8 +108,11 @@ public sealed class MacroDecision(string surface, IReadOnlyList<MacroAction> leg
 /// <param name="early">During a combat, as a combat decision's (<see cref="CombatDecision.Early"/>).</param>
 /// <param name="hurry">During a combat, as a combat decision's (<see cref="CombatDecision.Hurry"/>).</param>
 /// <param name="after">During a combat, as a combat decision's (<see cref="CombatDecision.After"/>).</param>
+/// <param name="prompted">During a combat, the combat for the engine to stand at the prompt
+/// (<see cref="CombatDecision.Prompted"/>).</param>
 public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe = null, IMacroClone? clone = null,
-    Action<CombatDecisionResult>? early = null, CancellationToken hurry = default, Action<CombatDecisionResult>? after = null)
+    Action<CombatDecisionResult>? early = null, CancellationToken hurry = default, Action<CombatDecisionResult>? after = null,
+    Func<PromptCombat>? prompted = null)
 {
     private Observation? _observation;
 
@@ -104,8 +127,10 @@ public sealed class ChoiceDecision(CardChoice choice, Func<Observation>? observe
 
     public Action<CombatDecisionResult>? After { get; } = after;
 
+    public Func<PromptCombat>? Prompted { get; } = prompted;
+
     /// <summary>The same prompt with <paramref name="node"/>'s clone.</summary>
-    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node, Early, Hurry, After);
+    public ChoiceDecision With(IMacroClone node) => new(Choice, () => Observation!, node, Early, Hurry, After, Prompted);
 
     /// <summary>Built on first use, like <see cref="CombatDecision.Observation"/>.</summary>
     public Observation? Observation => _observation ??= observe?.Invoke();

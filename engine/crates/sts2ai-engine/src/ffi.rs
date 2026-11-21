@@ -297,6 +297,33 @@ pub unsafe extern "C" fn sz_world_import(json: *const u8, len: usize, sample: i3
     call(0, || Ok(make(Engine::import(unsafe { text(json, len, "the export") }?)?, sample != 0)))
 }
 
+/// The SL world of a combat written out as it begins, before its first turn (world.rs, `Live::begin`), where the
+/// combat's start has run: where the player is first asked; 0 on error.
+///
+/// # Safety
+/// `json` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_begin(json: *const u8, len: usize) -> u64 {
+    call(0, || Ok(make(Engine::begin(unsafe { text(json, len, "the export") }?)?, false)))
+}
+
+/// The draw pile's public record (JSON, as an export's `sim.draw_log`) as the host holds it where the world stands
+/// now: what a NoSL world drawn here reads (`sz_pimc` at a card prompt). The world took the actions since its export
+/// as the game did, so the host's record is the one of this state. 0 when it was set.
+///
+/// # Safety
+/// `world` as for `sz_world_clone`; `json` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_draw_log(world: u64, json: *const u8, len: usize) -> i32 {
+    call(1, || {
+        let handle = unsafe { self::world(world) }?;
+        let value: serde_json::Value =
+            serde_json::from_str(unsafe { text(json, len, "the draw pile's record") }?).map_err(|e| format!("the draw pile's record is not JSON: {e}"))?;
+        handle.world.combat().x.draw_log = Some(std::sync::Arc::new(crate::drawlog::DrawLog::parse(&value)));
+        Ok(0)
+    })
+}
+
 /// An independent world standing where this one stands; 0 on error.
 ///
 /// # Safety
@@ -310,8 +337,9 @@ pub unsafe extern "C" fn sz_world_clone(world: u64) -> u64 {
 }
 
 /// A NoSL world from this one: a copy with everything the player cannot see drawn again from `seed`
-/// (determinize.rs), a sample whose states are told apart by `HiddenState.Key`; 0 on error. `world` stands between
-/// the player's actions, as an import does; it stays as it is.
+/// (determinize.rs), a sample whose states are told apart by `HiddenState.Key`; 0 on error. A world between the
+/// player's actions is drawn as it stands; one at a card prompt where the prompt takes its answer, from the draw pile's
+/// record it holds there (`sz_world_draw_log`; world.rs, `Live::draw_at_prompt`). `world` stays as it is.
 ///
 /// # Safety
 /// `world` as for `sz_world_clone`.
@@ -319,11 +347,12 @@ pub unsafe extern "C" fn sz_world_clone(world: u64) -> u64 {
 pub unsafe extern "C" fn sz_world_determinize(world: u64, seed: u64) -> u64 {
     call(0, || {
         let handle = unsafe { self::world(world) }?;
-        if handle.world.asked().is_some() {
-            return Err("a world at a card prompt is not drawn again: the middle of an action has no sample".into());
-        }
         let mut copy = handle.world.clone();
-        crate::determinize::determinize(copy.combat(), seed)?;
+        if copy.asked().is_some() {
+            copy.draw_at_prompt(seed)?;
+        } else {
+            crate::determinize::determinize(copy.combat(), seed)?;
+        }
         Ok(make(copy, true))
     })
 }
