@@ -123,6 +123,10 @@ internal static class NodeRecord
 
     private static bool Coop => RunManager.Instance.DebugOnlyGetState() is { Players.Count: > 1 };
 
+    /// <summary>The run the steps are taken in: the record's, or in a run of more than one player (which has none) the
+    /// game's.</summary>
+    private static RunState? Run => Coop ? RunManager.Instance.DebugOnlyGetState() : _run;
+
     /// <summary>A teammate acted in the fight: the fight's steps since the combat was last written out are not all in the
     /// record, so no card prompt stands on them.</summary>
     private static void Teammate()
@@ -354,7 +358,7 @@ internal static class NodeRecord
     private static void Used() => Guard(() =>
     {
         if (RunningAction is UsePotionAction { WasEnqueuedInCombat: true } other && !Mine(other)) Teammate();
-        if (RunningAction is not UsePotionAction use || !Mine(use) || _run is not { } run || LocalContext.GetMe(run) is not { } me) return;
+        if (RunningAction is not UsePotionAction use || !Mine(use) || Run is not { } run || LocalContext.GetMe(run) is not { } me) return;
         if (use.WasEnqueuedInCombat) Add(Surfaces.Combat, CombatActions.PotionOf(me, (int)use.PotionIndex, use.TargetId).ToString());
         else Belt(MacroAction.Of(MacroAction.Potion, (int)use.PotionIndex));
     });
@@ -407,7 +411,8 @@ internal static class NodeRecord
     /// <summary>Card prompts, card rewards and bundles answer through the choice synchronizer.</summary>
     private static void Chosen(PlayerChoiceResult result) => Guard(() =>
     {
-        if (Checkpoint == null || Broken != null) return;
+        // A run of more than one player has no record, but its fight's steps (Fight) take the card prompts' answers.
+        if ((Checkpoint == null || Broken != null) && !(Coop && _fight != null)) return;
         switch (_screen)
         {
             case { Surface: Surfaces.CardChoice, Source: IReadOnlyList<CardModel> options }:
@@ -560,6 +565,7 @@ internal static class NodeRecord
 
     private static void Break(string reason)
     {
+        if (Coop) _fight = null;
         if (Checkpoint == null || Broken != null) return;
         Broken = reason;
         _fight = null;

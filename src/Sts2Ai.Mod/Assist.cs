@@ -86,6 +86,10 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     private string? _run;
     private string? _champion;
     private string? _failure;
+
+    /// <summary>In a run of more than one player, the decision the brain could not answer and what it said: that decision
+    /// is the player's, the run goes on with the brain.</summary>
+    private (string Key, string Message)? _missed;
     private (bool Over, bool Won, int Floor) _last;
     private string? _line;
 
@@ -336,6 +340,11 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         string key = hash + " " + string.Join(" ", asking.Legal);
         if (key != _key) (_key, _stable) = (key, 0);
         if (++_stable < IdleFrames) return;
+        if (_missed is { } missed && missed.Key == key)
+        {
+            panel.Show(champion, status, L10n.T("Brain error"), L10n.T("{0} · answer this one yourself", missed.Message), Tone.Error, Drive());
+            return;
+        }
 
         if (_answer is { } answer && answer.Key == key)
         {
@@ -632,6 +641,13 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
                     string line = error.Message.Split('\n')[0];
                     int cause = line.LastIndexOf(": ", StringComparison.Ordinal);
                     NodeRecord.CloneFailed($"the brain could not follow it ({(cause < 0 ? line : line[(cause + 2)..])})");
+                    Forget();
+                    break;
+                }
+                // A run of more than one player: the decision is the player's, and the next ones are asked as ever.
+                if (_coop && _asked != null)
+                {
+                    _missed = (_asked.Key, error.Message.Split('\n')[0]);
                     Forget();
                     break;
                 }

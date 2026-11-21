@@ -32,6 +32,7 @@ internal static class L10n
         ["Off in a run without Neow"] = ["Désactivé dans une partie sans Neow", "Desactivado en una partida sin Neow", "没有涅奥的一局里关闭", "沒有涅奧的一局裡關閉", "ネオーのいないランではオフ"],
         ["a new profile's first run · play it yourself"] = ["la première partie d'un nouveau profil · jouez-la vous-même", "la primera partida de un perfil nuevo · juégala tú", "新存档的第一局 · 请自己打", "新存檔的第一局 · 請自己打", "新しいプロフィールの最初のラン · ご自身でプレイしてください"],
         ["Brain error"] = ["Erreur du cerveau", "Error del cerebro", "大脑出错", "大腦出錯", "ブレインのエラー"],
+        ["{0} · answer this one yourself"] = ["{0} · à vous de répondre à celle-ci", "{0} · responde tú a esta", "{0} · 这一步请自己决定", "{0} · 這一步請自己決定", "{0} · これは自分で選んでください"],
         ["{0} · back on at the next run"] = ["{0} · de retour à la prochaine partie", "{0} · vuelve en la próxima partida", "{0} · 下一局恢复", "{0} · 下一局恢復", "{0} · 次のランで再開"],
         ["Waiting for the brain"] = ["En attente du cerveau", "Esperando al cerebro", "等待大脑", "等待大腦", "ブレインを待っています"],
         ["it loads the champion for this run"] = ["il charge le champion de cette partie", "está cargando el campeón de esta partida", "正在为本局载入冠军", "正在為本局載入冠軍", "このラン用のチャンピオンを読み込み中"],
