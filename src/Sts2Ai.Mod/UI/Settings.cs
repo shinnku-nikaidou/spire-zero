@@ -13,8 +13,8 @@ internal enum RouteMode { Off, Next, Whole }
 /// <summary>How long auto-play waits before each of the AI's actions, so the player can follow it.</summary>
 internal enum AutoSpeed { Slow, Medium, Fast }
 
-/// <summary>How hard the SL planner searches each fight: one of its presets.</summary>
-internal enum SearchEffort { Low, Medium, High, Max }
+/// <summary>How hard the SL planner searches each fight: one of its presets (XHigh: Max with an early stop).</summary>
+internal enum SearchEffort { Low, Medium, High, XHigh, Max }
 
 /// <summary>
 /// The player's choices for the mod, set in the game's settings screen (<see cref="SettingsTab"/>) and some in the

@@ -94,6 +94,7 @@ internal static class L10n
         ["Effort"] = ["Réflexion", "Esfuerzo", "思考深度", "思考深度", "思考の深さ"],
         ["Low"] = ["Bas", "Bajo", "低", "低", "低"],
         ["High"] = ["Haut", "Alto", "高", "高", "高"],
+        ["XHigh"] = ["Très haut", "Muy alto", "极高", "極高", "超高"],
         ["Max"] = ["Max", "Máx", "最高", "最高", "最大"],
         ["Stop at"] = ["Arrêt", "Parar", "停在", "停在", "停止"],
         ["elites, bosses"] = ["élites, boss", "élites, jefes", "精英、Boss 前", "菁英、頭目前", "エリート・ボス前"],
