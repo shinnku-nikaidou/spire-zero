@@ -125,19 +125,43 @@ fn live(c: &mut Combat) -> (CombatState, Player) {
 
 /// The draw pile in an order drawn from its record: the record gives the order as card keys, and the pile's cards
 /// that show one key take its places in a uniform order. The pile's cards then take its cards' ids in a uniform order.
+///
+/// At Ki Chant's prompt the record already holds the cards the prompt shows as taken together (the bridge's
+/// DrawPileLog writes them so where the prompt opens: every one of them leaves the pile once it is answered), while
+/// they are still the pile's top cards, the prompt's options. Those stay as they are, the real ones with their ids,
+/// and the rest of the pile is drawn below them.
 fn draw_pile(c: &mut Combat, log: &DrawLog, rng: &mut Stream) -> Result<drawlog::Cost, String> {
     let (_, player) = live(c);
     let pcs = g::entities_players::player::player_combat_state(player, c);
     let pile = g::entities_players::player_combat_state::draw_pile(pcs, c);
-    let cards = g::entities_cards::card_pile::cards(pile, c);
+    let all = g::entities_cards::card_pile::cards(pile, c);
+    let key_of = |card: CardModel, c: &mut Combat| -> Result<String, String> {
+        String::from_utf8(protocol::card_key(&observe::card(card, false, c))).map_err(|e| format!("a card key is not UTF-8: {e}"))
+    };
+    let (order, cost) = drawlog::sample(log, rng)?;
+    let shown = match log.events.last() {
+        Some(drawlog::Event::TakeTop(ks)) if all.len() == order.len() + ks.len() => {
+            let mut seen: Vec<String> = ks.iter().map(|&k| log.keys[k as usize].clone()).collect();
+            let mut top = Vec::with_capacity(ks.len());
+            for card in &all[..ks.len()] {
+                top.push(key_of(*card, c)?);
+            }
+            seen.sort();
+            top.sort();
+            if seen != top {
+                return Err(format!("the draw pile's record ends with top cards taken together that are not the pile's top: {seen:?}, {top:?}"));
+            }
+            ks.len()
+        }
+        _ => 0,
+    };
+    let cards = all[shown..].to_vec();
     // The pile's cards by what they show, as the record names cards.
     let mut by_key: HashMap<String, Vec<CardModel>> = HashMap::new();
     for card in &cards {
-        let key = protocol::card_key(&observe::card(*card, false, c));
-        let key = String::from_utf8(key).map_err(|e| format!("a card key is not UTF-8: {e}"))?;
+        let key = key_of(*card, c)?;
         by_key.entry(key).or_default().push(*card);
     }
-    let (order, cost) = drawlog::sample(log, rng)?;
     // Each group in an order of its own (the cards' places in the combat's arena), then shuffled: what is dealt
     // owes nothing to the pile's order, nor to the map's.
     let mut keys: Vec<&String> = by_key.keys().collect();
@@ -160,7 +184,7 @@ fn draw_pile(c: &mut Combat, log: &DrawLog, rng: &mut Stream) -> Result<drawlog:
         let left: Vec<&String> = by_key.iter().filter(|(_, group)| !group.is_empty()).map(|(key, _)| key).collect();
         return Err(format!("the draw pile holds cards its record does not end with: {left:?}"));
     }
-    CardPileData::of_mut(pile, c)._cards = dealt.clone();
+    CardPileData::of_mut(pile, c)._cards = all[..shown].iter().copied().chain(dealt.iter().copied()).collect();
 
     let db = g::game_actions_multiplayer::net_combat_card_db::instance(c);
     let mut ids: Vec<u32> = dealt

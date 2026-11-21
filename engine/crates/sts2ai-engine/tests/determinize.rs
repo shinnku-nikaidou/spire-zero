@@ -25,6 +25,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use sts2ai_engine::drawlog::{Event, Place};
 use sts2ai_engine::ffi;
 use sts2ai_engine::r#gen as g;
+use sts2ai_engine::r#gen::kinds::{CardPile, PlayerCombatState};
 use sts2ai_engine::rt::Combat;
 use support::dump::{Fixture, Tally, json_difference, sweep};
 
@@ -531,17 +532,27 @@ fn leak_probe() {
 // Worlds drawn at a card prompt
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// The live combat's hand, as the card keys of its cards, in order.
-fn hand_keys(c: &mut Combat) -> Vec<String> {
+/// A pile of the live combat's player, as the card keys of its cards, in order.
+fn pile_keys(c: &mut Combat, which: fn(PlayerCombatState, &mut Combat) -> CardPile) -> Vec<String> {
     let manager = g::combat::combat_manager::instance(c);
     let st = g::combat::combat_manager::debug_only_get_state(manager, c);
     let player = g::context::local_context::get_me__i_combat_state(st, c);
     let pcs = g::entities_players::player::player_combat_state(player, c);
-    let hand = g::entities_players::player_combat_state::hand(pcs, c);
-    g::entities_cards::card_pile::cards(hand, c)
+    let pile = which(pcs, c);
+    g::entities_cards::card_pile::cards(pile, c)
         .into_iter()
         .map(|card| String::from_utf8(sts2ai_engine::protocol::card_key(&sts2ai_engine::observe::card(card, false, c))).unwrap())
         .collect()
+}
+
+/// The live combat's hand, as the card keys of its cards, in order.
+fn hand_keys(c: &mut Combat) -> Vec<String> {
+    pile_keys(c, g::entities_players::player_combat_state::hand)
+}
+
+/// The live combat's discard pile, as the card keys of its cards, in order.
+fn discard_keys(c: &mut Combat) -> Vec<String> {
+    pile_keys(c, g::entities_players::player_combat_state::discard_pile)
 }
 
 /// The world standing at record `k`, a card prompt, as a host stands the engine there: the combat as last written out
@@ -588,6 +599,7 @@ fn drawn_at_a_prompt() {
     const K: u64 = 16;
     let (redrawn, kept) = (std::sync::atomic::AtomicUsize::new(0), std::sync::atomic::AtomicUsize::new(0));
     let (opened, opened_redrawn) = (std::sync::atomic::AtomicUsize::new(0), std::sync::atomic::AtomicUsize::new(0));
+    let shown = std::sync::atomic::AtomicUsize::new(0);
     sweep(|fixture| {
         let mut tally = Tally::default();
         // The prompts of the combat's start, before record 0 (a combat on its own answers them there): a world drawn
@@ -639,6 +651,10 @@ fn drawn_at_a_prompt() {
             }
             let name = format!("{} record {k}", fixture.name);
             let answer = fixture.records[k].action.clone().expect("a prompt's answer");
+            // A prompt whose options are the draw pile's top cards (Ki Chant) shows them: they are the real ones in
+            // every world, so the hand and the discard pile they go to are too.
+            let observation: serde_json::Value = serde_json::from_slice(&fixture.bytes(k, "observation.json")).expect("observation.json");
+            let shows_pile = observation["prompt"]["context"]["purpose"] == "draw_pile";
             let checked = stood(fixture, k).and_then(|live| {
                 let draw = |seed: u64| -> Result<sts2ai_engine::world::Live, String> {
                     let mut world = live.clone();
@@ -660,10 +676,16 @@ fn drawn_at_a_prompt() {
                     }
                     same_pile += (draw_order(once.combat()) == draw_order(real)) as u64;
                     same_hand += (hand_keys(once.combat()) == hand_keys(real)) as u64;
+                    if shows_pile && (hand_keys(once.combat()), discard_keys(once.combat())) != (hand_keys(real), discard_keys(real)) {
+                        return Err(format!("seed {seed}: the prompt showed the draw pile's top cards, and after the answer the hand or the discard pile is not the real one's"));
+                    }
                 }
                 let Some(real) = real.as_mut() else { return Ok(()) };
                 let pile = draw_order(real);
                 let distinct: HashSet<&String> = pile.iter().collect();
+                if shows_pile {
+                    shown.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
                 if distinct.len() >= 2 && same_pile == K {
                     return Err(format!("the draw pile after the answer is the real one in all {K} worlds: {pile:?}"));
                 }
@@ -684,10 +706,12 @@ fn drawn_at_a_prompt() {
     .finish("drawn_at_a_prompt");
     println!(
         "prompts whose answer leaves a hand not the real one in some world: {}; the real hand in every world: {}; \
-         prompts of a combat's start: {}, of them with record 0's hand not the real one in some world: {}",
+         prompts of a combat's start: {}, of them with record 0's hand not the real one in some world: {}; \
+         prompts that show the draw pile's top cards: {}",
         redrawn.into_inner(),
         kept.into_inner(),
         opened.into_inner(),
-        opened_redrawn.into_inner()
+        opened_redrawn.into_inner(),
+        shown.into_inner()
     );
 }
