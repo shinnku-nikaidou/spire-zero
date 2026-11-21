@@ -465,3 +465,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   decisions the same (the wires' protocol 5 rewritten as 6, the version 1.0.1 speaks). The game closed here and on the
   Mac. The commit timed out with the content through (the public API: updated 09:39:14Z, 417.6 MB; the note on the
   changelog page); the texts unchanged since 1.0.0, not sent again. Installed in `mods/` over 1.0.0.
+- 2026-11-21 18:1x: mod 1.0.2 built, not uploaded (asked by the fight-score session, where the user said 重新打包; build
+  only). At aa3f85fb, all three platforms: both champion files name their f (f-sl-12-1-d2, f0-nosl-2) and every combat
+  search scores a fight's end by HP + max HP + f of the potions kept; brain/nets/ holds the six nets. The packed brain
+  answered the SL and NoSL wires (v6) with "+ f-sl-12-1-d2" / "+ f0-nosl-2" champions, the panel's net line naming f, no
+  errors; on these 8 decisions the same answers as 1.0.1. Installed in `mods/` over 1.0.1.
