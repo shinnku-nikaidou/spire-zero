@@ -9,6 +9,7 @@
 //! - the relic grab bag: each rarity's relics in a new order;
 //! - the draw pile's order: drawn from its public record since the last shuffle (drawlog.rs), and the ids of its
 //!   cards, which the game gave in the order of the opening shuffle, among them in a new order;
+//! - a co-op combat's other players' hands and draw piles: dealt again from the two together, each pile its size;
 //! - each monster's queued move where other moves show the same intents: rolled again from where the monster rolled
 //!   it, by the game's own transition, until it shows what the player sees.
 
@@ -99,6 +100,7 @@ pub fn determinize(c: &mut Combat, seed: u64) -> Result<Drawn, String> {
         }
     }
     drawn.draw = draw_pile(c, log, &mut rng)?;
+    teammates(c, &mut rng);
     moves(c, &mut rng, &mut drawn)?;
     Ok(drawn)
 }
@@ -199,6 +201,27 @@ fn draw_pile(c: &mut Combat, log: &DrawLog, rng: &mut Stream) -> Result<drawlog:
         numbers._id_to_card.set(id, card);
     }
     Ok(cost)
+}
+
+/// A co-op combat's other players: the local player sees how many cards each holds, not which, nor their draw pile's
+/// order, so each one's hand and draw pile are dealt again from the two together, each pile keeping its size.
+fn teammates(c: &mut Combat, rng: &mut Stream) {
+    let (st, me) = live(c);
+    for player in g::combat::combat_state::players(st, c) {
+        if player == me {
+            continue;
+        }
+        let pcs = g::entities_players::player::player_combat_state(player, c);
+        let (hand, draw) = (g::entities_players::player_combat_state::hand(pcs, c), g::entities_players::player_combat_state::draw_pile(pcs, c));
+        let held = g::entities_cards::card_pile::cards(hand, c);
+        let mut cards: Vec<CardModel> = held.iter().copied().chain(g::entities_cards::card_pile::cards(draw, c)).collect();
+        // In an order of their own (their places in the combat's arena) first: the deal owes nothing to the piles' order.
+        cards.sort_by_key(|card| card.0);
+        drawlog::shuffle(&mut cards, rng);
+        let rest = cards.split_off(held.len());
+        CardPileData::of_mut(hand, c)._cards = cards;
+        CardPileData::of_mut(draw, c)._cards = rest;
+    }
 }
 
 /// Each living enemy's queued move, where another of its moves shows the same intents, rolled again: the monster's
