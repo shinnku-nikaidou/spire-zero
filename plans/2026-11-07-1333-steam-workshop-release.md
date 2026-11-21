@@ -482,3 +482,6 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   1.0.3 crashed the brain at every decision of a co-op run (CreatureView's id was required; a teammate has none),
   fixed there. Its brain swapped into this machine's `mods/Sts2Ai/brain/linux-x64` while the game ran; the whole item
   goes into `mods/` once the game closes. The Workshop still has 1.0.3, whose co-op runs crash the same way.
+  Rebuilt for linux-x64 at 54cc1476 (still 1.0.4, never out of this machine): in a co-op run a card prompt in a turn
+  start's setup is the player's (the engine stood a 3-player turn start's prompt and failed); that item goes into
+  `mods/` once the game closes.
