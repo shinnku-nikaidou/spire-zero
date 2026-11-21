@@ -84,4 +84,21 @@ When it plays for the player, the AI keeps a few rules:
 - If the player asks, it also stops at the rewards after each fight, once, so the player takes them and picks the card. Played on from there after the player took any, it leaves the rest.
 - It stops when an action has no effect at all.
 
-In multiplayer games the mod offers no help.
+In a multiplayer run the panel advises the local player, in NoSL, and the AI never plays.
+
+## Asking in the console
+
+The game's own console, opened with the ~ key, gets one command, `ai`, whose first word says what to do. Each question is answered on a run of its own on the brain's side, so asking never moves the player's run.
+
+- **The toolbar and the settings.** *status* shows the brain, the run and the settings; *set* shows or changes any setting the settings screen has. *auto*, *step* and *finish* are the toolbar's buttons, and *auto until* stops at a place of the player's own: the next elite or boss, the next act, a floor, or the run's end. In a multiplayer run these three refuse.
+- **Reading the answer.** *why* lists every option the brain scored, or one option's plan; *legal* numbers what the decision allows; *line* shows the fight as the plan plays it, turn by turn; *lethal* says whether the plan kills this turn; *danger* shows what the enemies intend and how much of it the plan takes.
+- **Questions on the side.** *try* sets an option of the player's own against the AI's: what it gives up, and its plan. *deep* asks the same decision of SL at its highest effort, the solver; *compare* asks the other environment; *replay* asks a recent decision again at today's settings.
+- **What the run is worth.** V is the value net's estimate of the run's chance to win. *deck* shows what each card, relic and potion is worth to V, and *worth* what one more card, relic or potion would add.
+- **Looking back.** *review* sets the player's own answers in this fight, act or run against the AI's, worst first; *graph* draws V along the floors; *quiz* hides the panel's answer until the player has chosen, and keeps scores by kind of decision.
+- **Checks.** *parity* compares SL's line in the engine with the real fight at the end of each turn; *mark* writes the decision down whole, with the player's note, so it can be given to the brain again.
+- **Jobs beside the game.** *race* has the AI play this run's seed from floor 1, and *rollout* plays the rest of this run several times from the room's save, with chance drawn anew. Both run the simulator that comes with the mod, on half the brain's threads.
+- **Keeping it in hand.** *jobs* lists the open questions and jobs, *stop* answers the open questions at once and ends the jobs, and *restart* starts the brain again while the game goes on.
+
+The `ai` command does nothing a player could not do, so the game does not mark the run for it.
+
+A second command, `scout`, is a spoiler. From the game's save of this room it walks the rooms ahead with the game's own code, along a route the player names or the AI's planned one, and shows what they hold: the map, what each ? room becomes, shops, chests and card rewards. The AI never uses it, because neither environment may know that much, and the game marks a run in which it was used, as it does for its own debug commands.
