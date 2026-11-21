@@ -131,7 +131,8 @@ internal sealed class Screens
 
     /// <summary>In a run of several players, what the screen waits on that no decision of this player's answers; null when
     /// it asks one. A card prompt in a fight is searched where the fight's steps since the combat was last written out
-    /// are all the local player's (<see cref="NodeRecord.Fight"/>): a teammate's in between are in no record.</summary>
+    /// are all the local player's in this turn (<see cref="NodeRecord.Fight"/>): a teammate's in between are in no record,
+    /// and a prompt in a turn start's setup has every player starting the turn, which the engine does not stand.</summary>
     private static string? Waits(RunState run, Player me, object? top)
     {
         bool prompt = CombatManager.Instance.IsInProgress && top is not NCombatRoom || top is NCombatRoom && NPlayerHand.Instance is { IsInCardSelection: true };

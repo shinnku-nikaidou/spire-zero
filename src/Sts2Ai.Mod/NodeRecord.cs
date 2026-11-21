@@ -108,12 +108,14 @@ internal static class NodeRecord
 
     private static List<string>? _fight;
 
-    /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole, or in a run of more than
-    /// one player (which has no record) until a teammate acts.</summary>
-    public static void FightBegins() => _fight = Checkpoint != null && Broken == null || Coop ? [] : null;
+    /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole. A run of more than one
+    /// player has no record, and its fight's steps start at the first decision (<see cref="Rearm"/>): the engine stands
+    /// a prompt in a turn start's setup (the fight's first turn's too) with one player starting the turn only.</summary>
+    public static void FightBegins() => _fight = Checkpoint != null && Broken == null ? [] : null;
 
     /// <summary>In a run of more than one player, the combat was written out again at a decision of the local player's:
-    /// its steps are recorded from here, until a teammate acts.</summary>
+    /// its steps are recorded from here, until a teammate acts or the turn ends (the next turn's start is several
+    /// players').</summary>
     public static void Rearm()
     {
         if (Coop && CombatManager.Instance.IsInProgress) _fight = [];
@@ -518,7 +520,8 @@ internal static class NodeRecord
         else PlayerActs++;
         if (Checkpoint == null || Broken != null)
         {
-            if (Coop && _fight != null && surface is Surfaces.Combat or Surfaces.CardChoice) _fight.Add($"{surface} {action}");
+            if (Coop && _fight != null && surface is Surfaces.Combat or Surfaces.CardChoice && action != CombatAction.EndTurn.ToString())
+                _fight.Add($"{surface} {action}");
             else _fight = null;
             return false;
         }
