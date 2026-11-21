@@ -154,6 +154,9 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private double? _before;
     private (double Win, double Hp)? _fight;
 
+    /// <summary>The latest combat answer's line turn by turn (<see cref="Recommendation.Table"/>), for the details card; null outside a fight.</summary>
+    private FightTable? _table;
+
     private PlayEnvironment _env = Settings.Current.Env;
     private SearchEffort _effort = Settings.Current.Effort;
     private bool _turnDecay = Settings.Current.TurnDecay;
@@ -338,7 +341,10 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
             string foot = answer.Searching && _asked != null
                 ? $"{answer.Answer.Brain} · {L10n.T("searching")} {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s{Searched(answer.Answer)}"
                 : answer.Foot;
-            panel.Show(champion, status, answer.Shown, Sub(answer), foot, answer.Route, answer.Plan, Drive());
+            // A combat answer's table stays until the next one that has one (the card prompts of the fight have none).
+            if (!CombatManager.Instance.IsInProgress) _table = null;
+            else if (answer.Answer.Table is { } table) _table = table;
+            panel.Show(champion, status, answer.Shown, Sub(answer), foot, answer.Route, answer.Plan, Drive(), _table);
             return;
         }
         _shown = 0;

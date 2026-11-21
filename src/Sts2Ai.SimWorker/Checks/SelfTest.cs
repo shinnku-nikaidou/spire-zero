@@ -154,6 +154,7 @@ internal static partial class SelfTest
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
         TheNetsOutcomeIsTheEngines(pump, pool, act, net.Leaf, Check);
+        FightTablesPlayTheLine(pump, pool, act, net.Leaf, Check);
         NodeWorldPlaysAsTheRun(pump, seed, Check);
         NodeWorldStandsAtTheEntrysPrompt(pump, seed, Check);
         CloneStopsAtTheExit(pump, seed, Check);

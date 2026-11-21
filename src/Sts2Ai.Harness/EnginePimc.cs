@@ -79,13 +79,34 @@ public sealed class EnginePimc(CombatNet net, int threads)
 
     /// <summary>As Harness's combat route, one per run: the same decisions on the same seeds.</summary>
     /// <param name="name">The brain's name in reports: pimc and its leaf's name.</param>
-    public CombatRoute Route(Budget budget, string name)
+    /// <param name="tables">Whether each answer between actions carries its line's table (<see cref="Table"/>): the
+    /// mod's brain.</param>
+    public CombatRoute Route(Budget budget, string name, bool tables = false)
     {
         var plan = new TurnPlan(all: false);
-        return new(name, (decision, seed, _, history) => plan.Decide(decision.Observation, decision.Legal,
-            () => Decide(decision.Observation, decision.Legal,
-                () => decision.Export ?? throw new InvalidOperationException("the host gives no live combat: NoSL's worlds are drawn from it"),
-                budget.For(decision.Observation.Room), seed, history,
-                () => decision.Prompted ?? throw new InvalidOperationException("the host gives no combat at the card prompt: NoSL's worlds are drawn there"))), budget);
+        return new(name, (decision, seed, _, history) =>
+        {
+            var result = plan.Decide(decision.Observation, decision.Legal,
+                () => Decide(decision.Observation, decision.Legal,
+                    () => decision.Export ?? throw new InvalidOperationException("the host gives no live combat: NoSL's worlds are drawn from it"),
+                    budget.For(decision.Observation.Room), seed, history,
+                    () => decision.Prompted ?? throw new InvalidOperationException("the host gives no combat at the card prompt: NoSL's worlds are drawn there")));
+            return tables && decision.Observation.Prompt == null && decision.Export is { } live
+                ? result with { Table = Table(live, seed, history, result) }
+                : result;
+        }, budget);
+    }
+
+    /// <summary>The answer's line played out on the world it was planned in, PIMC's first (drawn as search/pimc.rs draws
+    /// world 0), to the end of the enemies' turn; then the combat net's outcome there.</summary>
+    private FightTable Table(CombatExport live, ulong seed, IReadOnlyList<EnemyTurns> history, CombatDecisionResult result)
+    {
+        using var real = EngineWorld.Import(live.Bytes, live.Run);
+        using var world = real.Determinize(FightTables.WorldSeed(seed, 0));
+        return FightTables.Of(world, [result.First, .. result.Plan], at =>
+        {
+            var (_, win, hp) = at.Outcome(_engine.Value, net.RunValue, history);
+            return (win, hp);
+        });
     }
 }

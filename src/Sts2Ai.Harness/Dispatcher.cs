@@ -58,7 +58,7 @@ public sealed record DecisionEntry(
 
 /// <summary>Who made a decision, and what it planned and scored: what its recommendation carries.</summary>
 public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, long? Nodes = null,
-    bool? Proved = null);
+    bool? Proved = null, FightTable? Table = null);
 
 /// <summary>
 /// Harness for one run. The host asks it as its combat, card-prompt and macro policy; it routes
@@ -187,7 +187,7 @@ public sealed class Dispatcher(
     public DecisionNote Note(CombatDecisionResult result) =>
         // A plan that repeats a cycle may have thousands of steps left, at each of them.
         new(combat.Brain, result.Plan.Count > 0 ? result.Plan.Take(ShownPlan).Select(a => a.ToString()).ToList() : null,
-            result.Candidates.Count > 0 ? result.Candidates : null, result.Nodes, result.Proved ? true : null);
+            result.Candidates.Count > 0 ? result.Candidates : null, result.Nodes, result.Proved ? true : null, result.Table);
 
     /// <summary>A card prompt's answer, with who gave it and what it scored. During a combat the prompt is a decision of
     /// the combat, the combat brain's (<see cref="CombatRoute"/>); the host needs the combat it is asked in for that. A

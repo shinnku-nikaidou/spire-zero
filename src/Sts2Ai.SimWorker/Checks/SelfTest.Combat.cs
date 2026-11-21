@@ -302,6 +302,57 @@ internal static partial class SelfTest
     }
 
     /// <summary>
+    /// The details card's table (<see cref="FightTables"/>): the SL planner's line played out on the real combat has a
+    /// row a turn and ends as the line does; each row's HP and the enemies' HP are the world's where that turn ended,
+    /// the HP the enemies lost adds up to what they lost over the line, and every card played is in a row. NoSL's route
+    /// gives the table of this turn alone.
+    /// </summary>
+    private static void FightTablesPlayTheLine(Pump pump, List<EncounterModel> pool, int act, ICombatLeaf leaf, Action<string, bool, string> check)
+    {
+        for (int e = 0; e < Math.Min(3, pool.Count); e++)
+        {
+            var setup = new CombatSetup("SILENT", pool[e], act, GameSeeds.MakeSeed(e, 2));
+            string label = pool[e].Id.Entry;
+            CombatObservation obs;
+            IReadOnlyList<CombatAction> legal;
+            CombatExport export;
+            using (var session = CombatSession.Start(pump, setup, FirstPicks.Instance))
+            {
+                obs = session.Observation();
+                legal = session.LegalActions();
+                export = new CombatExport(LiveCombat.Bytes(), Alone(obs));
+            }
+            var plan = new EnginePlanner((CombatNet)leaf.In(PlayEnvironment.SL), 2).Plan(export, new Budget(NodesPerWorld: 300, Beam: 8), []);
+            var line = plan.Result.Plan.Prepend(plan.Result.First).ToList();
+            using var world = EngineWorld.Import(export.Bytes, export.Run);
+            var table = FightTables.Of(world, line);
+            var uids = obs.Enemies.Select(c => c.Uid).ToHashSet();
+            int Enemies(CombatObservation o) => o.Enemies.Where(c => uids.Contains(c.Uid)).Sum(c => c.Hp);
+            using var at = world.Clone();
+            var ends = new List<CombatObservation>();
+            foreach (var action in line)
+            {
+                if (at.Status != CombatStatus.InProgress) break;
+                at.Execute(action);
+                if (action.Kind == CombatActionKind.EndTurn || at.Status != CombatStatus.InProgress) ends.Add(at.Observe());
+            }
+            check("a fight table has a row a turn and ends as its line", table.Turns.Count == ends.Count && table.Status == at.Status,
+                $"{label}: {table.Turns.Count} rows for {ends.Count} turns, {table.Status} against {at.Status}");
+            check("a fight table's rows end where the turns do", table.Turns.Zip(ends).All(p => p.First.Hp == p.Second.Player.Hp && p.First.Enemies.Sum() == Enemies(p.Second)),
+                $"{label}: {string.Join(" ", table.Turns.Select(t => $"{t.Hp}/{t.Enemies.Sum()}"))} against {string.Join(" ", ends.Select(o => $"{o.Player.Hp}/{Enemies(o)}"))}");
+            check("a fight table's damage adds up", table.Turns.Sum(t => t.Dealt) == Enemies(obs) - (ends.Count > 0 ? Enemies(ends[^1]) : Enemies(obs)),
+                $"{label}: {table.Turns.Sum(t => t.Dealt)} dealt, {Enemies(obs)} to {(ends.Count > 0 ? Enemies(ends[^1]) : Enemies(obs))}");
+            check("a fight table holds every card played", table.Turns.Sum(t => t.Cards.Count) == line.TakeWhile((_, i) => i < line.Count).Count(a => a.Kind == CombatActionKind.PlayCard),
+                $"{label}: {table.Turns.Sum(t => t.Cards.Count)} cards in rows, {line.Count(a => a.Kind == CombatActionKind.PlayCard)} in the line");
+            var route = new EnginePimc((CombatNet)leaf.In(PlayEnvironment.NoSL), 2).Route(new Budget(Worlds: 2, NodesPerWorld: 300), "pimc", tables: true);
+            var nosl = route.Decide(new CombatDecision(legal, () => obs, export: () => export), 1, null, []);
+            check("NoSL's fight table is this turn's", nosl.Table is { Turns: [{ } turn] } t && turn.Round == obs.Round
+                    && (t.Status != CombatStatus.InProgress || t.Win != null),
+                $"{label}: {(nosl.Table is { } x ? $"{x.Turns.Count} rows, {x.Status}, win {x.Win}" : "no table")}");
+        }
+    }
+
+    /// <summary>
     /// On the real game, with --combat-net's leaf and the champion's nodes, against 535 HP: Monologue and two Flash of Steel,
     /// which draw each other. A plain search does not get past the first chain, in either world. Then with a prompt in front
     /// of the cycle, in SL: Particle Wall costs stars this character has none of until Touch of Insanity makes it free,

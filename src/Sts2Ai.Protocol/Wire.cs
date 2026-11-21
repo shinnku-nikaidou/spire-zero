@@ -102,9 +102,33 @@ public sealed record PromptExport(string Export, bool Opening, RunView Run, IRea
 /// (max's solver in the mod's brain): the same action, with the plan after it, its chance to win and HP left and whether
 /// it is proved, as the search has them now. One comes each time they change, until the host asks the next decision.
 /// Null otherwise.</param>
+/// <param name="Table">In combat, for the mod's details panel: the picked line played out turn by turn
+/// (<see cref="FightTable"/>). Null elsewhere, and where the brain was asked with no live combat (at a card prompt).</param>
 public sealed record Recommendation(long DecisionId, string ObsHash, string Action, string Brain,
     IReadOnlyList<string>? Plan = null, IReadOnlyList<Candidate>? Candidates = null, bool? Searching = null, long? Nodes = null,
-    bool? Proved = null, bool? After = null) : WireMessage;
+    bool? Proved = null, bool? After = null, FightTable? Table = null) : WireMessage;
+
+/// <summary>
+/// The picked line of a combat answer played out in the engine, turn by turn: in SL on the real combat, as far as the
+/// plan goes (to the combat's end where it is the rest of the fight); in NoSL on the world the plan was made in (PIMC's
+/// first), to the end of this turn's enemy turn. After the last row, where the combat goes on, the combat net's guess.
+/// </summary>
+/// <param name="Hp">The player's HP when the line starts.</param>
+/// <param name="Enemies">The enemies when the line starts, in the observation's order; each row's
+/// <see cref="TurnRow.Enemies"/> follows it.</param>
+/// <param name="Status">Where the line ends: won, lost, or in progress.</param>
+/// <param name="Win">With the status in progress: the combat net's chance to win from where the line ends.</param>
+/// <param name="HpLeft">With <paramref name="Win"/>: the HP the net expects at a win.</param>
+public sealed record FightTable(int Hp, IReadOnlyList<TableEnemy> Enemies, IReadOnlyList<TurnRow> Turns, CombatStatus Status,
+    double? Win = null, double? HpLeft = null);
+
+/// <summary>An enemy of a <see cref="FightTable"/>: its monster id and its HP when the line starts.</summary>
+public sealed record TableEnemy(string? Id, int Hp, int MaxHp);
+
+/// <summary>One turn of a <see cref="FightTable"/>: the round, the cards played (their ids, "+" after an upgraded one), and from the turn's
+/// start to the end of the enemies' turn after it (or the combat's end): the HP the enemies lost, the player's block
+/// when the turn ended, the HP the player lost, and the HP the player and each enemy were left with (0 once dead).</summary>
+public sealed record TurnRow(int Round, IReadOnlyList<string> Cards, int Dealt, int Block, int Taken, int Hp, IReadOnlyList<int> Enemies);
 
 /// <summary>Host → brain: the action taken for a decision, and whether it worked.</summary>
 public sealed record Executed(long DecisionId, string Action, bool Ok, string? Error = null) : WireMessage;

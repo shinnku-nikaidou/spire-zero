@@ -86,9 +86,11 @@ public delegate IReadOnlyList<IReadOnlyList<PlannedLine>> RootSearch(IReadOnlyLi
 /// (0: the answer it began with); null for any other search. A record of how soon an answer settles.</param>
 /// <param name="Opened">With <paramref name="Settled"/>: the answer the search began with, its first action and its line's
 /// value, chance to win and HP left. A record of what an answer that changed late gained.</param>
+/// <param name="Table">For the mod's brain: <paramref name="First"/> and <paramref name="Plan"/> played out turn by turn
+/// (<see cref="FightTable"/>); null in self-play, the tests and run search.</param>
 public sealed record CombatDecisionResult(CombatAction First, IReadOnlyList<CombatAction> Plan, IReadOnlyList<Candidate> Candidates,
     IReadOnlyList<ulong>? PlanHashes = null, bool Replanned = false, bool Repeats = false, int? Nodes = null, int? Turns = null, bool Proved = false,
-    int? Settled = null, Candidate? Opened = null);
+    int? Settled = null, Candidate? Opened = null, FightTable? Table = null);
 
 /// <summary>
 /// The rest of the plan that a search made, played without searching again. A step is

@@ -213,7 +213,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             _ => Text(harness.Decide(new MacroDecision(request.Surface, [.. request.Legal.Select(MacroAction.Parse)], () => obs))),
         };
         return (new Recommendation(request.DecisionId, request.ObsHash, action, note.Brain, note.Plan, note.Candidates, Nodes: note.Nodes,
-            Proved: note.Proved), state);
+            Proved: note.Proved, Table: note.Table), state);
     }
 
     private static (string Action, DecisionNote Note, ulong? State) Text((CombatAction Action, DecisionNote Note) decided) =>

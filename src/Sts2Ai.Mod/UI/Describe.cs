@@ -236,6 +236,12 @@ internal static partial class Describe
     private static string Card(CardView card) => (Text("cards", card.Id + ".title") ?? card.Id) + (card.Up is > 0 ? "+" : "");
     private static string Relic(string id) => Text("relics", id + ".title") ?? id;
     private static string Potion(string id) => Text("potions", id + ".title") ?? id;
+    /// <summary>A card of a fight table (<see cref="TurnRow.Cards"/>): its id, "+" after it when upgraded.</summary>
+    public static string TableCard(string card) => card.EndsWith('+') ? (Text("cards", card[..^1] + ".title") ?? card[..^1]) + "+" : Text("cards", card + ".title") ?? card;
+
+    /// <summary>An enemy of a fight table by its monster id.</summary>
+    public static string TableEnemy(string? id) => id != null ? Monster(id) : "?";
+
     private static string Monster(string id) => Text("monsters", id + ".name") is { } name ? Variable().Replace(name, "") : id;
 
     /// <summary>The text as the game's loc tables hold it, without its markup; null when it has none.</summary>

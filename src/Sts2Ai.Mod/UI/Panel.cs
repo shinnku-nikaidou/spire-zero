@@ -49,15 +49,15 @@ internal sealed class Panel
 {
     public static readonly Color Accent = new(0.75f, 0.35f, 1f);
     public static readonly Color Ink = Color.FromHtml("#14081f");
-    private static readonly Color Fg = Color.FromHtml("#f3effa");
-    private static readonly Color Lead = Color.FromHtml("#d9a6ff");
-    private static readonly Color Muted = Color.FromHtml("#b5abc8");
-    private static readonly Color Rule = Color.FromHtml("#2e2540");
-    private static readonly Color Track = Color.FromHtml("#221b30");
+    internal static readonly Color Fg = Color.FromHtml("#f3effa");
+    internal static readonly Color Lead = Color.FromHtml("#d9a6ff");
+    internal static readonly Color Muted = Color.FromHtml("#b5abc8");
+    internal static readonly Color Rule = Color.FromHtml("#2e2540");
+    internal static readonly Color Track = Color.FromHtml("#221b30");
     private static readonly Color StripFill = Color.FromHtml("#17111f");
-    private static readonly Color Dim = Color.FromHtml("#5a4d72");
-    private static readonly Color Warn = Color.FromHtml("#f5b544");
-    private static readonly Color Error = Color.FromHtml("#ff8a70");
+    internal static readonly Color Dim = Color.FromHtml("#5a4d72");
+    internal static readonly Color Warn = Color.FromHtml("#f5b544");
+    internal static readonly Color Error = Color.FromHtml("#ff8a70");
 
     private const float BarWidth = 56;
 
@@ -82,6 +82,7 @@ internal sealed class Panel
     private readonly VBoxContainer _body;
     private readonly MapMark _map;
     private readonly CombatMark _combat;
+    private readonly Details _details;
     private readonly Action<Command>? _pressed;
     private readonly PanelContainer _orb;
     private readonly Label _orbLabel;
@@ -228,6 +229,7 @@ internal sealed class Panel
         layer.AddChild(_orb);
         _map = new MapMark(layer);
         _combat = new CombatMark(layer);
+        _details = new Details(layer);
         tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
     }
 
@@ -257,6 +259,7 @@ internal sealed class Panel
         _card.Visible = _orb.Visible = false;
         _map.Show(null, false);
         _combat.Show(null, false);
+        _details.Show(null, false, default, 1);
     }
 
     /// <summary>A message instead of an answer.</summary>
@@ -272,21 +275,27 @@ internal sealed class Panel
             Recent(drive);
         });
         Marks(null, null);
+        _details.Show(null, false, default, 1);
     }
 
     /// <summary>The brain's answer, and the marks it draws on the map or in combat.</summary>
     /// <param name="sub">A line under the next action: how the fight or the run is expected to go after it.</param>
     /// <param name="foot">Which brain answered, and how long it took.</param>
-    public void Show(string champion, string status, Shown answer, string? sub, string foot, MapRoute? route, CombatPlan? plan, Drive? drive)
+    /// <param name="table">In a fight, the answer's line turn by turn, for the details card (<see cref="Details"/>),
+    /// which a button under the answer opens and closes; null for none.</param>
+    public void Show(string champion, string status, Shown answer, string? sub, string foot, MapRoute? route, CombatPlan? plan, Drive? drive,
+        FightTable? table = null)
     {
         Head(champion, status, drive);
-        Build((answer, sub, foot, drive?.Key), () =>
+        Build((answer, sub, foot, drive?.Key, table != null), () =>
         {
             StatusStrip(drive);
-            Answer(answer, sub, foot);
+            Answer(answer, sub, foot, table != null);
             Recent(drive);
         });
         Marks(route, plan);
+        var settings = Settings.Current;
+        _details.Show(table, !_hidden && settings.Panel && settings.Details, new Rect2(_card.Position, _card.Size), settings.Opacity);
     }
 
     private void Head(string champion, string status, Drive? drive)
@@ -506,7 +515,7 @@ internal sealed class Panel
         _body.AddChild(row);
     }
 
-    private void Answer(Shown answer, string? sub, string foot)
+    private void Answer(Shown answer, string? sub, string foot, bool details)
     {
         _body.AddChild(Text(L10n.T("Next").ToUpperInvariant(), 11, Muted));
         var next = Row(10);
@@ -547,7 +556,20 @@ internal sealed class Panel
             _body.AddChild(later);
         }
         if (considered) Options(answer, mode == ConsideredMode.Bars);
+        if (details) _body.AddChild(DetailsButton());
         _body.AddChild(Text(foot, 11, Muted));
+    }
+
+    /// <summary>Opens and closes the fight's details card beside the panel's (<see cref="Settings.Details"/>).</summary>
+    private static Button DetailsButton()
+    {
+        bool open = Settings.Current.Details;
+        var button = new Button { Text = $"{L10n.T("Fight details")} · {L10n.T(open ? "Hide" : "Show")}", FocusMode = Control.FocusModeEnum.None,
+            CustomMinimumSize = new Vector2(0, 32), Alignment = HorizontalAlignment.Left };
+        button.AddThemeFontSizeOverride("font_size", 13);
+        RestyleTool(button, open);
+        button.Pressed += () => Settings.Set(Settings.Current with { Details = !Settings.Current.Details });
+        return button;
     }
 
     /// <summary>
@@ -702,7 +724,7 @@ internal sealed class Panel
         return button;
     }
 
-    private static void RestyleTool(Button button, bool on)
+    internal static void RestyleTool(Button button, bool on)
     {
         var fill = Box(on ? Color.FromHtml("#2a2238") : Colors.Transparent, 7);
         fill.ContentMarginLeft = fill.ContentMarginRight = 8;
@@ -793,7 +815,7 @@ internal sealed class Panel
         return label;
     }
 
-    private static Label Wrapped(Label label)
+    internal static Label Wrapped(Label label)
     {
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -802,7 +824,7 @@ internal sealed class Panel
     }
 
     /// <summary>One line, cut with an ellipsis where its space ends, instead of widening the card.</summary>
-    private static Label Clipped(Label label)
+    internal static Label Clipped(Label label)
     {
         label.ClipText = true;
         label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
@@ -811,14 +833,14 @@ internal sealed class Panel
 
     private static Control Indent(int width) => Quiet(new Control { CustomMinimumSize = new Vector2(width, 0) });
 
-    private static VBoxContainer Column(int gap)
+    internal static VBoxContainer Column(int gap)
     {
         var box = Quiet(new VBoxContainer());
         box.AddThemeConstantOverride("separation", gap);
         return box;
     }
 
-    private static HBoxContainer Row(int gap)
+    internal static HBoxContainer Row(int gap)
     {
         var box = Quiet(new HBoxContainer());
         box.AddThemeConstantOverride("separation", gap);
@@ -826,7 +848,7 @@ internal sealed class Panel
     }
 
     /// <summary>The panel takes no clicks but its buttons': the game under it gets them.</summary>
-    private static T Quiet<T>(T control) where T : Control
+    internal static T Quiet<T>(T control) where T : Control
     {
         control.MouseFilter = Control.MouseFilterEnum.Ignore;
         return control;

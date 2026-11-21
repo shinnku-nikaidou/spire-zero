@@ -33,6 +33,8 @@ internal enum SearchEffort { Low, Medium, High, Max }
 /// <param name="StopAtRewards">Auto-play stops once at each fight's rewards, for the player's own; resumed after the player took
 /// one, it leaves the rest.</param>
 /// <param name="Effort">The SL planner's effort the mod asks the brain for; a change starts the run anew for the brain.</param>
+/// <param name="Details">The fight's details card beside the panel: the picked line turn by turn, opened and closed
+/// from the panel.</param>
 /// <param name="TurnDecay">The mod asks the SL planner to take a little off a line for each turn it ended
 /// (<see cref="Hello.TurnDecay"/>), so a fight is not drawn out for nothing; a change starts the run anew for the brain.</param>
 internal sealed record Settings(
@@ -51,7 +53,8 @@ internal sealed record Settings(
     bool StopAtAncients = false,
     bool StopAtRewards = false,
     SearchEffort Effort = SearchEffort.Medium,
-    bool TurnDecay = true)
+    bool TurnDecay = true,
+    bool Details = false)
 {
     /// <summary>The effort as hello names it.</summary>
     public string EffortName => Effort.ToString().ToLowerInvariant();

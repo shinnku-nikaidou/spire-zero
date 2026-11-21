@@ -76,8 +76,11 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     /// <param name="pool">The workers that play the node's clone across a card prompt.</param>
     /// <param name="background">Whether the solver searches between decisions too (<see cref="SolverRoute"/>): the
     /// mod's brain, whose game takes its time; self-play, the tests and run search each decision's budget alone.</param>
-    public CombatRoute Route(Budget budget, string name, WorkerPool pool, bool background = false)
+    /// <param name="tables">Whether each answer between actions carries its line's table (<see cref="Tabled"/>): the
+    /// mod's brain.</param>
+    public CombatRoute Route(Budget budget, string name, WorkerPool pool, bool background = false, bool tables = false)
     {
+        if (tables) return Tabled(Route(budget, name, pool, background));
         if (budget.Solve > 0) return Solver(budget, name, pool, background);
         var route = new SlRoute(budget);
         // The search's processor time: this process's threads, and the workers' where a prompt is crossed.
@@ -101,6 +104,23 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             return meter.Count(() => Plan(live, b, history, importMs => meter.Imported(live.Bytes.Length, exportMs, importMs)));
         }), budget, () => meter.Tally);
     }
+
+    /// <summary>The route's answers between actions with their line's table: the line played out on the real combat,
+    /// as far as it goes; where it stops with the combat in progress, the pick's chance to win and HP as its search
+    /// valued them.</summary>
+    private static CombatRoute Tabled(CombatRoute route) => route with
+    {
+        Decide = (decision, seed, node, history) =>
+        {
+            var result = route.Decide(decision, seed, node, history);
+            if (decision.Observation.Prompt != null || decision.Export is not { } live) return result;
+            using var real = EngineWorld.Import(live.Bytes, live.Run);
+            var table = FightTables.Of(real, [result.First, .. result.Plan]);
+            if (table.Status == CombatStatus.InProgress && result.Candidates is [{ Win: { } win, Hp: { } hp }, ..])
+                table = table with { Win = win, HpLeft = hp };
+            return result with { Table = table };
+        },
+    };
 
     /// <summary>
     /// max's route (<see cref="SolverRoute"/>): the combat taken in once where a solver begins, each turn's search a copy
