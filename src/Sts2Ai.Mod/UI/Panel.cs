@@ -114,7 +114,7 @@ internal sealed class Panel
         cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
         cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
         cardStyle.ShadowSize = 12;
-        // Wide enough for the champion's name in the head ("net v11-0-td4 + c11-0 beam 16x300") beside the switch.
+        // Wide enough for the champion's name in the head ("v-sl-td4-12-1-d2") beside the switch.
         _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(380, 0) });
         _card.AddThemeStyleboxOverride("panel", cardStyle);
         var column = Column(10);

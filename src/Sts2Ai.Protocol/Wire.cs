@@ -51,8 +51,8 @@ public sealed record RunHeader(string RunId, string Character, int Ascension)
 
 /// <summary>Brain → host, the answer to hello: the run is accepted, and which champion plays it.</summary>
 /// <param name="Champion">The champion's full name, as reports and champion files give it.</param>
-/// <param name="Shown">The champion as a player sees it on the mod's panel: its nets and the size of its combat search
-/// ("net v11-0-td4 + c11-0 beam 8x300").</param>
+/// <param name="Shown">The champion as a player sees it on the mod's panel: its V's name, the one version of its nets
+/// ("v-sl-td4-12-1-d2").</param>
 public sealed record Ready(string Champion, string Shown) : WireMessage;
 
 /// <summary>

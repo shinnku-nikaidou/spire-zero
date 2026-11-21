@@ -106,20 +106,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         }
     }
 
-    /// <summary>The champion as a player sees it on the mod's panel (<see cref="Ready.Shown"/>): its V, combat net and f,
-    /// then the size of the combat search (<see cref="Budget.Size"/>) and the solver's nodes a decision and its early stop, if
-    /// it solves.</summary>
-    public string Shown
-    {
-        get
-        {
-            string size = Searches
-                ? $" {Budget.Size}{(Budget.Solve > 0 ? FormattableString.Invariant($" solve {Budget.Solve}") : "")}{(Budget.Solve > 0 && Budget.Stop > 0 ? FormattableString.Invariant($" stop {Budget.Stop}") : "")}"
-                : "";
-            string[] nets = [.. new[] { Value?.Name, Leaf.Net?.Name, Leaf.Net?.SavesName }.OfType<string>()];
-            return nets.Length > 0 ? $"net {string.Join(" + ", nets)}{size}" : $"{Combat}{size}";
-        }
-    }
+    /// <summary>The champion as a player sees it on the mod's panel (<see cref="Ready.Shown"/>): its V's name alone, the one
+    /// version of its V, combat net and f, which go together (the user, 2026-11-22: 只显示v的名字, never V + c + f). A
+    /// champion without a V shows its combat policy.</summary>
+    public string Shown => Value?.Name ?? Combat;
 
     public override string ToString() =>
         $"policy {Combat}{(Searches ? $" budget {Budget} on {Workers} workers" : "")}, macro {(Macro == "l0" ? L0 : Macro)}";
