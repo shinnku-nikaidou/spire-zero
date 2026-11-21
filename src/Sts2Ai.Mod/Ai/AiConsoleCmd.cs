@@ -62,6 +62,7 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
         new("jobs", "", "the questions and jobs open", _ => Jobs.List()),
         new("stop", "", "answer the open questions now, end the jobs", _ => $"{A.Hurry()} questions hurried; {Jobs.StopAll()} jobs ended"),
         new("restart", "", "start the brain again (the game goes on)", _ => BrainLink.Restart()),
+        new("mp", "[on|off]", "advice in runs of more than one player, NoSL, for this game session (off at start)", Mp, a => a.Length <= 1 ? ["on", "off"] : []),
     ];
 
     private static Assist A => Assist.Current ?? throw new AiError("the mod is off (its panel says why)");
@@ -118,6 +119,23 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
         int width = Subs.Max(s => (s.Name + " " + s.Args).Length);
         return Out.Code(Subs.Select(s => $"ai {Out.Pad(s.Name + " " + s.Args, width)}  {s.Help}")
             .Append("ai scout [route]  (its own command) what the rooms ahead hold, from the game's save: a spoiler, the game marks the run"));
+    }
+
+    private static string Mp(string[] args)
+    {
+        switch (args.ElementAtOrDefault(0))
+        {
+            case null:
+                return $"mp {(Assist.Multiplayer ? "on" : "off")}";
+            case "on":
+                Assist.Multiplayer = true;
+                return "mp on: in a run of more than one player the AI advises you, in NoSL, until the game closes (teammates are taken to pass in its fights)";
+            case "off":
+                Assist.Multiplayer = false;
+                return "mp off";
+            default:
+                throw new AiError("mp on|off");
+        }
     }
 
     private static string Version()

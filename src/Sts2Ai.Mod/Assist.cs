@@ -133,7 +133,8 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     // The AI's play: what it was asked to do, what it did, and why it stopped.
     private Goal _goal;
 
-    /// <summary>The run has more than one player: NoSL, and the AI only advises (plans/2026-11-21-1733-coop-advice.md).</summary>
+    /// <summary>The run has more than one player: served only with the console's <c>ai mp on</c>, NoSL, and the AI only
+    /// advises (plans/2026-11-21-1733-coop-advice.md).</summary>
     private bool _coop;
     private int _acts;
     private string? _lastSurface;
@@ -235,7 +236,8 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         var settings = Settings.Current;
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
-        // A run of more than one player is NoSL's (no clone holds the others' choices), and the AI only advises in it.
+        // A run of more than one player is served only after the console's `ai mp on`; it is NoSL's (no clone holds the
+        // others' choices), and the AI only advises in it.
         _coop = run is { Players.Count: > 1 };
         panel.Coop = _coop;
         if (_coop && _goal != Goal.Off) Stop(L10n.T("advice only in multiplayer"));
@@ -245,9 +247,10 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
 
         string? id = run != null ? RunHeader.IdOf(run.Rng.StringSeed) : null;
+        bool served = !_coop || Multiplayer;
         if (_run != null && _run != id) End(_last.Over ? _last.Won ? "won" : "lost" : "aborted");
-        else if (_run != null && !settings.Assist) End("aborted");
-        bool inRun = run != null && me != null && id != null;
+        else if (_run != null && (!settings.Assist || !served)) End("aborted");
+        bool inRun = served && run != null && me != null && id != null;
         // Read with assist off and without a brain too: the SL record needs the screen the player answers.
         string note = "";
         var asking = inRun ? _screens.Read(run!, me!, out note) : null;
@@ -277,6 +280,11 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         if (run == null || me == null || id == null)
         {
             panel.Show(champion, L10n.T("ready"), L10n.T("Start or continue a run"));
+            return;
+        }
+        if (!served)
+        {
+            panel.Show(champion, L10n.T("off"), L10n.T("Off in multiplayer"));
             return;
         }
         // A run that started without Neow (a new profile's first, before the timeline reveals Neow's epoch) is one
