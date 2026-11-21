@@ -710,6 +710,7 @@ int32_t  sz_solver_advance_crossed(uint64_t solver, uint64_t net, sz_cross cross
                                    const int32_t *stop);   // the solver's root at the clone's prompt after `path` (answers, JSON)
 int32_t  sz_solver_result(uint64_t solver, sz_buf *out);
 int32_t  sz_solver_counts(uint64_t solver, int64_t *out);   // nodes, turns searched, states, states left, proved, settled
+int32_t  sz_solver_content(uint64_t solver, int64_t begun, int32_t *out);   // xhigh's early stop holds for a decision begun at begun nodes
 ```
 
 What goes across is JSON in `ProtocolJson`'s form (`search/read.rs`): what is asked, and what was found (the pick, its

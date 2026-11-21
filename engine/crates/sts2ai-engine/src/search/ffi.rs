@@ -539,6 +539,20 @@ pub unsafe extern "C" fn sz_solver_result(solver: u64, out: *mut SzBuf) -> i32 {
     })
 }
 
+/// Whether xhigh's early stop holds for a decision whose search began at `begun` nodes (`Solver::content`): `out`
+/// gets 1 or 0. 0 when it worked.
+///
+/// # Safety
+/// `solver` is live, used by no other thread during the call; `out` points at an int.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_solver_content(solver: u64, begun: i64, out: *mut i32) -> i32 {
+    call(1, || {
+        let holds = unsafe { self::solver(solver) }?.content(begun);
+        unsafe { *out = holds as i32 };
+        Ok(0)
+    })
+}
+
 /// The solver's counts: `out` gets its nodes, the turns searched, the states it holds, the states left, 1 where its
 /// pick is proved, and the nodes when the pick's first action last changed. 0 when it worked.
 ///

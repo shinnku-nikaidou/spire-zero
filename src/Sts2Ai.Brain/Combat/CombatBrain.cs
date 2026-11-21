@@ -23,7 +23,8 @@ namespace Sts2Ai.Brain.Combat;
 /// <param name="Stop">xhigh's early stop (plans/2026-11-21-1426-xhigh-early-stop.md): after a solver's first decision, a
 /// decision's search ends at the end of a batch once the pick is a won line, the root's turn searched, whose first action
 /// held this many nodes of the decision; 0: none, every decision searches <paramref name="Solve"/> (max). The mod's
-/// background search answers by its own wait (<see cref="SolverRoute"/>). Left out of the logs when 0.</param>
+/// background search answers by it too, counted from where its root moved (<see cref="SolverRoute"/>; the user,
+/// 2026-11-22: 「要，照早停作答」). Left out of the logs when 0.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0,
     Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1, long Solve = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long Stop = 0)

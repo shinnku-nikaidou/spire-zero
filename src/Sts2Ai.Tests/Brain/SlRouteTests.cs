@@ -371,7 +371,7 @@ public class SlRouteTests
     /// pick is the seed's line, then the best line there is. Its root moves along the steps played; each search first
     /// waits <paramref name="slow"/> milliseconds.
     /// </summary>
-    private sealed class ToySolver(IReadOnlyList<CombatAction> begun, int slow) : ICombatSolver
+    private sealed class ToySolver(IReadOnlyList<CombatAction> begun, int slow, long stop = 0) : ICombatSolver
     {
         public const long Work = 60;
         private readonly List<CombatAction> _root = [.. begun];
@@ -382,6 +382,8 @@ public class SlRouteTests
         public long Settled { get; private set; }
 
         private CombatAction? First => _line.Count > 0 ? _line[0] : null;
+
+        public bool Content(long begun) => stop > 0 && Result(1).End == CombatStatus.Won && Nodes - Math.Max(Settled, begun) >= stop;
 
         private void Look(CombatAction? before)
         {
@@ -421,7 +423,7 @@ public class SlRouteTests
     /// the beam's plan there.</summary>
     private static TakenCombat ToyTaken(IReadOnlyList<CombatAction> played, int slow = 0) =>
         new(more => After([.. played, .. more]).Observe(), (budget, _) => Planned(played, Greedy(played), budget.Replan),
-            (_, _, _) => new ToySolver(played, slow));
+            (_, _, stop) => new ToySolver(played, slow, stop));
 
     /// <summary>The record of enemy moves after <paramref name="played"/>, as a decision there has it: each round's
     /// intents from the second on, as the planner's lines record them from a root with none.</summary>
@@ -527,6 +529,29 @@ public class SlRouteTests
         var beam = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20))
             .Decide(world.Observe(), world.Legal(), [], () => null, () => PimcBrain.Only(CombatAction.EndTurn));
         Assert.Equal(CombatAction.EndTurn, beam.First);
+    }
+
+    [Fact]
+    public void XhighInTheBackgroundAnswersOnceItsEarlyStopHolds()
+    {
+        // The mod's xhigh (the user, 2026-11-22: 「要，照早停作答」): the solver's first decision searched as max's; at the
+        // next, the pick a won line, answered once its first action held the stop's nodes there, before max's.
+        Assert.Equal(CombatStatus.Won, Planned([], Greedy([]), 1).End);
+        (long First, long Next) Searched(long stop)
+        {
+            var route = new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 40, Stop: stop), background: true);
+            var world = new Toy();
+            var first = route.Decide(world.Observe(), world.Legal(), [], () => ToyTaken([], 1),
+                () => throw new InvalidOperationException("the toy is always taken in"));
+            world.Execute(first.First);
+            var next = route.Decide(world.Observe(), world.Legal(), Moves([first.First]), () => ToyTaken([first.First], 1),
+                () => throw new InvalidOperationException("the toy is always taken in"));
+            route.Rest();
+            return (first.Nodes!.Value, next.Nodes!.Value);
+        }
+        var (max, xhigh) = (Searched(0), Searched(5));
+        Assert.True(xhigh.First >= 40, $"xhigh's first decision {xhigh.First} nodes");
+        Assert.True(xhigh.Next < max.Next, $"the next: xhigh {xhigh.Next} nodes, max {max.Next}");
     }
 
     [Fact]

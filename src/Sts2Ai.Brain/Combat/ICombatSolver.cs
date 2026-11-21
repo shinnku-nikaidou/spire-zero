@@ -19,6 +19,11 @@ public interface ICombatSolver : IDisposable
     /// settles (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4), which nothing the search does reads.</summary>
     long Settled { get; }
 
+    /// <summary>Whether xhigh's early stop (<see cref="Budget.Stop"/>) holds for a decision whose search began at
+    /// <paramref name="begun"/> nodes: the root's turn searched, the pick a won line, its first action unchanged for the
+    /// stop's nodes since; never without a stop.</summary>
+    bool Content(long begun);
+
     /// <summary>A line another search found from the root: the beam's plan.</summary>
     void Seed(SlPlan plan);
 

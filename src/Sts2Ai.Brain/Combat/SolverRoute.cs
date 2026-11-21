@@ -32,15 +32,16 @@ public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CombatObserva
 /// take as soon as the route gives it, and the solver searches on there until the next decision. That decision is
 /// answered once the solver has searched at least <see cref="Budget.Solve"/> nodes since its root moved there, or at
 /// once when nothing is left, so it is never searched less than without the background, and what was found while the
-/// game played the step stays. <see cref="Rest"/> stops it. Meanwhile the host is told the pick so far
-/// (<see cref="CombatDecision.Early"/>), at once and before any search: the rest of the plan given at the last answer
-/// while the combat goes its way, the beam's plan where a solver begins; then again each time the solver's pick changes
-/// (the user, 2026-11-18: 「ai得能及時給出來怎麼走，並且同時在搜索更好的」). A host that moved on from the decision
-/// (<see cref="CombatDecision.Hurry"/>) gets the pick at once. After the answer, while the solver searches on from where
-/// it leads, the host is told the answer again each time the plan after its action changes, a better line found or the
-/// pick there proved (<see cref="CombatDecision.After"/>), until the next decision (the user, 2026-11-19, of the panel
-/// showing the answer's plan unchanged while the solver had found a better one: 「肯定要更新啊」); the plan told last is
-/// then the line the combat goes along from that decision.
+/// game played the step stays; with xhigh's early stop (<see cref="Budget.Stop"/>), also once it holds there, after the
+/// solver's first decision as without the background (the user, 2026-11-22: 「要，照早停作答」). <see cref="Rest"/> stops it.
+/// Meanwhile the host is told the pick so far (<see cref="CombatDecision.Early"/>), at once and before any search: the
+/// rest of the plan given at the last answer while the combat goes its way, the beam's plan where a solver begins; then
+/// again each time the solver's pick changes (the user, 2026-11-18: 「ai得能及時給出來怎麼走，並且同時在搜索更好的」). A host that moved on
+/// from the decision (<see cref="CombatDecision.Hurry"/>) gets the pick at once. After the answer, while the solver
+/// searches on from where it leads, the host is told the answer again each time the plan after its action changes, a
+/// better line found or the pick there proved (<see cref="CombatDecision.After"/>), until the next decision (the user,
+/// 2026-11-19, of the panel showing the answer's plan unchanged while the solver had found a better one: 「肯定要更新啊」); the
+/// plan told last is then the line the combat goes along from that decision.
 /// </summary>
 public sealed class SolverRoute(Budget budget, bool background = false)
 {
@@ -299,6 +300,9 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         private readonly List<CombatAction> _played = [];
         private readonly MoveRecord _record;
         private int _round;
+        /// <summary>The thread's own: whether the root moved since the solver began. The solver's first decision is
+        /// searched whole, as without the background.</summary>
+        private bool _went;
 
         // Under the lock of _posted: the steps posted, how many the root moved by, and what the solver found there.
         private readonly List<CombatAction> _posted = [];
@@ -307,6 +311,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         private long _since, _answered;
         private long _nodes;
         private bool _done;
+        /// <summary>xhigh's early stop holds where the root stands (<see cref="ICombatSolver.Content"/>).</summary>
+        private bool _content;
         private SlPlan? _pick;
         private Exception? _failed;
         /// <summary>Who is told each pick shown where the root stands at the steps posted when it was set
@@ -348,7 +354,8 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         }
 
         /// <summary>Waits until the root stands at every step posted and the solver has searched at least
-        /// <paramref name="nodes"/> there, or nothing is left, or <paramref name="hurry"/> is cancelled; its pick then,
+        /// <paramref name="nodes"/> there, or xhigh's early stop holds there, or nothing is left, or <paramref name="hurry"/>
+        /// is cancelled; its pick then,
         /// and the nodes it searched since the last. Meanwhile <paramref name="found"/> gets each pick it shows from the
         /// root there, with the nodes since the last, on the waiting thread.</summary>
         public (SlPlan Pick, long Nodes) Await(long nodes, CancellationToken hurry, Action<SlPlan, long>? found)
@@ -367,7 +374,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                     {
                         if (_failed != null) ExceptionDispatchInfo.Capture(_failed).Throw();
                         bool here = _moved == _posted.Count && _pick != null;
-                        if (here && (_done || hurry.IsCancellationRequested || _nodes - _since >= nodes))
+                        if (here && (_done || hurry.IsCancellationRequested || _nodes - _since >= nodes || _content))
                         {
                             long searched = _nodes - _answered;
                             _answered = _nodes;
@@ -410,6 +417,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                             }
                         _played.AddRange(steps);
                         _solver.Advance(steps, _record.History, _stop.Token);
+                        _went = true;
                     }
                     else _solver.Run(1, _stop.Token);
                     var pick = _solver.Result(_replan);
@@ -419,6 +427,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
                     {
                         if (steps.Length > 0) (_moved, _since) = (_moved + steps.Length, _solver.Nodes);
                         (_nodes, _done, _pick) = (_solver.Nodes, _solver.Left == 0, pick);
+                        _content = _went && _solver.Content(_since);
                         watcher = _moved == _watchAt && _posted.Count == _watchAt ? _watcher : null;
                         since = _nodes - _answered;
                         Monitor.PulseAll(_posted);

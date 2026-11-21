@@ -101,6 +101,7 @@ internal static unsafe partial class Native
         delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads, int* stop);
     [LibraryImport(Library)] internal static partial int sz_solver_result(SolverHandle solver, Buf* result);
     [LibraryImport(Library)] internal static partial int sz_solver_counts(SolverHandle solver, long* counts);
+    [LibraryImport(Library)] internal static partial int sz_solver_content(SolverHandle solver, long begun, int* holds);
     [LibraryImport(Library)] internal static partial int sz_plan_crossed(NetHandle net, delegate* unmanaged<nint, byte*, nuint, nint, int> cross,
         nint crossCtx, byte* asked, nuint len, ulong @base, delegate* unmanaged<nint, byte*, nuint, double*, int> price, nint ctx, int threads,
         int* stop, Buf* result);

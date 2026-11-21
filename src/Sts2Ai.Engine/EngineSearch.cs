@@ -226,6 +226,16 @@ public sealed unsafe class EngineSolver : IDisposable
         }
     }
 
+    /// <summary>Whether xhigh's early stop holds for a decision whose search began at <paramref name="begun"/> nodes: the
+    /// root's turn searched, the pick a won line, its first action unchanged for the stop's nodes since; never without
+    /// a stop.</summary>
+    public bool Content(long begun)
+    {
+        int holds;
+        if (Native.sz_solver_content(_solver, begun, &holds) != 0) throw Native.Failed("sz_solver_content");
+        return holds != 0;
+    }
+
     /// <summary>Runs the engine's <paramref name="call"/>, V asked over <paramref name="runOf"/>; a failure crossing a
     /// prompt (<paramref name="crosser"/>) is thrown as it was.</summary>
     private void Searching(CancellationToken stop, string call, Pricer.RunOf runOf, Func<nint, nint, int> search, EngineCrossing.Crosser? crosser = null)

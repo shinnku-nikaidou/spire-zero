@@ -353,8 +353,10 @@ impl Solver {
 
     /// xhigh's early stop holds for a run begun at `begun` nodes: the root's turn is searched, the pick is a won line,
     /// and its first action has not changed for `stop` nodes of the run. `run` checks it after the solver's first run
-    /// only: stopped early there, a smaller tree leaves the combat's later decisions a worse line (the plan's 3.3).
-    fn content(&self, begun: i64) -> bool {
+    /// only: stopped early there, a smaller tree leaves the combat's later decisions a worse line (the plan's 3.3). The
+    /// mod's background search, whose runs are a batch each, asks it of a decision begun where the root moved
+    /// (`sz_solver_content`; the user, 2026-11-22: 「要，照早停作答」).
+    pub fn content(&self, begun: i64) -> bool {
         self.stop > 0
             && self.rooting.is_none()
             && matches!(&self.best, Some((line, _)) if line.status == Status::Won)

@@ -250,6 +250,8 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         public int Left => solver.Counts.Left;
         public long Settled => solver.Counts.Settled;
 
+        public bool Content(long begun) => solver.Content(begun);
+
         public void Seed(SlPlan plan)
         {
             if (plan.Line is { } line) solver.Seed(line, plan.From);
