@@ -8,7 +8,7 @@ namespace Sts2Ai.Brain.Macro;
 /// real game and searched on through the node's screens (<see cref="CloneSearch"/>); only the map's moves, which leave
 /// the node, are predicted, as the point added to the path. Without it, version 0: every afterstate is predicted from
 /// what the screen shows (<see cref="ScreenAfterstates"/>). It also answers the card prompts outside combat (upgrade,
-/// remove, transform, choose a card).
+/// remove, transform, choose a card); a removal takes the basic Strikes, Defends and curses first (<see cref="RemovalOrder"/>).
 ///
 /// How an answer is taken from the valued options is <see cref="MacroDraws"/>'s: the best in play; in self-play, with
 /// <paramref name="uniform"/> or <paramref name="softmax"/>, some are drawn.
@@ -255,7 +255,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
-            var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i))
+            var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i) && RemovalOrder.Opens(choice, picks, i))
                 .Select(i =>
                 {
                     var next = Picked(state, i);
@@ -299,21 +299,27 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
         bool explored = false;
         var groups = choice.Groups();
-        // An answer is how many of each group it picks.
+        // An answer is how many of each group it picks. The first one picks a removal's cards that go first before any
+        // other (RemovalOrder: the cards of a group are the same card, so a group goes first or not), and every answer
+        // weighed keeps that rule.
+        var firsts = RemovalOrder.Firsts(choice);
         var counts = new int[groups.Count];
-        for (int left = Math.Min(min, choice.Options.Count), g = 0; left > 0; g++)
+        var filled = Enumerable.Range(0, groups.Count).OrderBy(g => firsts.Contains(groups[g][0]) ? 0 : 1).ToList();
+        for (int left = Math.Min(min, choice.Options.Count), k = 0; left > 0; k++)
         {
+            int g = filled[k];
             counts[g] = Math.Min(left, groups[g].Count);
             left -= counts[g];
         }
         var worth = new Dictionary<MacroAction, double>();
+        List<int> Picks(int[] c) => [.. c.SelectMany((n, g) => groups[g].Take(n)).Order()];
         // In the prompt's canonical order, so that the same picks are the same answer.
-        MacroAction Answer(int[] c) => MacroAction.Pick(c.SelectMany((n, g) => groups[g].Take(n)).Order());
+        MacroAction Answer(int[] c) => MacroAction.Pick(Picks(c));
         // Without exploring, each step is better than the last; exploring could wander, so the steps are capped.
         for (int step = 0; step < 4 * Math.Max(choice.Max, 1); step++)
         {
             var current = counts;
-            var near = Near(current, groups, min, choice.Max).Prepend(current).ToList();
+            var near = Near(current, groups, min, choice.Max).Where(c => RemovalOrder.Keeps(choice, Picks(c))).Prepend(current).ToList();
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {
@@ -324,7 +330,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
             if (taken == current) break;
             counts = taken;
         }
-        return new([.. counts.SelectMany((n, g) => groups[g].Take(n)).Order()], explored,
+        return new(Picks(counts), explored,
             explored ? [] : Rank(worth.Select(kv => (kv.Key, kv.Value, (IReadOnlyList<MacroAction>?)null)), Answer(counts)), Answered(CloneSearch.Key(root)));
     }
 

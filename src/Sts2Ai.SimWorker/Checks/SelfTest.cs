@@ -151,6 +151,7 @@ internal static partial class SelfTest
         DrawnMovesGoOn(pump, Check);
         LoadoutPotionSlots(pump, pool, act, Check);
         FoulPotionAtMerchants(pump, Check);
+        RemovalTakesStrikesFirst(pump, Check);
         WorldRestoresAfterPrompts(pump, pool, act, Check);
         CyclesKillInOneTurn(pump, pool, act, net.Leaf, Check);
         TheNetsOutcomeIsTheEngines(pump, pool, act, net.Leaf, Check);

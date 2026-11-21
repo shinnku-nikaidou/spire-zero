@@ -1,5 +1,6 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Encounters;
@@ -461,6 +462,54 @@ internal static partial class SelfTest
                     $"{seen}, fight {fight}, errors {errors.FirstOrDefault()}");
             }
         }
+    }
+
+    /// <summary>
+    /// A removal takes the basic Strikes, Defends and curses first (<see cref="RemovalOrder"/>, the user's rule,
+    /// 2026-11-22). The cards it names are the game's: its curses (<c>CardType.Curse</c>) and its basic Strikes and Defends
+    /// (Basic rarity and a Strike or Defend tag, as Pandora's Box finds them). And at a shop's merchant, the prompt the
+    /// removal service opens is one the rule covers: the brain, with a V that would rather remove Neutralize, removes the
+    /// plain Strike, not Neutralize, nor the upgraded Strike or Defend.
+    /// </summary>
+    private static void RemovalTakesStrikesFirst(Pump pump, Action<string, bool, string> check)
+    {
+        var all = ModelDb.AllCards.Select(c => c.Id.Entry).ToHashSet();
+        var game = ModelDb.AllCards.Where(c => c.Type == CardType.Curse
+            || c.Rarity == CardRarity.Basic && (c.Tags.Contains(CardTag.Strike) || c.Tags.Contains(CardTag.Defend))).Select(c => c.Id.Entry).ToHashSet();
+        var ours = all.Where(id => RemovalOrder.First(new CardView { Id = id })).ToHashSet();
+        check("a removal's first cards are the game's curses, Strikes and Defends", game.SetEquals(ours) && RemovalOrder.Curses.All(all.Contains),
+            $"the game's only {string.Join(",", game.Except(ours).Order())}; ours only {string.Join(",", ours.Except(game).Order())}; "
+            + $"no such card {string.Join(",", RemovalOrder.Curses.Where(id => !all.Contains(id)).Order())}");
+
+        var deck = new Loadout(Deck: [new CardSpec("STRIKE_SILENT"), new CardSpec("STRIKE_SILENT", 1), new CardSpec("NEUTRALIZE"), new CardSpec("DEFEND_SILENT", 1)]);
+        var macro = new BeforeMacro(new RandomMacro(new Random(0)), d => d.Legal.Contains(MacroAction.Remove) ? MacroAction.Remove : null);
+        string? wrong;
+        try
+        {
+            using var run = RunSession.Start(pump, new RunSetup("SILENT", GameSeeds.MakeSeed(0, 0), Loadout: deck),
+                new MacroBrain(new RatherNoNeutralize()), new PlayPolicy(new Random(0)), macro);
+            var enter = RunManager.Instance.EnterRoomDebug(RoomType.Shop, showTransition: false);
+            pump.RunUntil(() => enter.IsCompleted, run.Describe);
+            if (enter.IsFaulted) throw enter.Exception!.GetBaseException();
+            for (int steps = 0; steps < 5 && run.Player.Deck.Cards.Count == 4; steps++) run.Step();
+            run.Settle();
+            string left = string.Join(",", run.Player.Deck.Cards.Select(c => c.Id.Entry + (c.CurrentUpgradeLevel > 0 ? "+" : "")).Order());
+            wrong = left == "DEFEND_SILENT+,NEUTRALIZE,STRIKE_SILENT+" ? null : $"deck left {left}";
+        }
+        catch (Exception e)
+        {
+            wrong = $"{e.GetType().Name}: {Logs.FirstLine(e.Message)}";
+        }
+        if (HeadlessGame.TakeErrors() is [var error, ..]) wrong ??= $"game error: {Logs.FirstLine(error)}";
+        check("a merchant's removal takes the plain Strike first", wrong == null, wrong ?? "");
+    }
+
+    /// <summary>A V that would rather remove Neutralize, and rather remove a card than none.</summary>
+    private sealed class RatherNoNeutralize : IRunValue
+    {
+        public string Name => "rather no Neutralize";
+
+        public double Value(RunView run) => (run.Deck.Any(c => c.Id == "NEUTRALIZE") ? 1 : 2) + 0.1 * (5 - run.Deck.Count);
     }
 
     /// <summary>Throws the potion in slot 0 where it is offered, and otherwise takes the first legal action.</summary>

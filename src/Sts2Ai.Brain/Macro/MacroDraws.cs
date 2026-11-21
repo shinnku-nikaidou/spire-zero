@@ -66,11 +66,12 @@ public sealed class MacroDraws(Uniform? uniform = null, Softmax? softmax = null)
         return open.Count >= 2 && uniform.Draw(open.Count) is { } drawn ? open[drawn] : null;
     }
 
-    /// <summary>With <c>uniform</c>, a card prompt's picks drawn evenly (<see cref="Uniform.Picks"/>), at least <paramref name="min"/>; or null.</summary>
+    /// <summary>With <c>uniform</c>, a card prompt's picks drawn evenly (<see cref="Uniform.Picks"/>), at least <paramref name="min"/>,
+    /// a removal's cards that go first before any other (<see cref="RemovalOrder"/>); or null.</summary>
     public IReadOnlyList<int>? Even(CardChoice choice, int min)
     {
         int n = choice.Options.Count;
-        return uniform?.Picks(n, Math.Min(min, n), Math.Min(choice.Max, n));
+        return uniform?.Picks(n, Math.Min(min, n), Math.Min(choice.Max, n), RemovalOrder.Firsts(choice));
     }
 
     /// <summary>

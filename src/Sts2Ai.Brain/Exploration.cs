@@ -15,13 +15,15 @@ public sealed class Uniform(double share, Random rng)
 
     /// <summary>
     /// For a card prompt of <paramref name="options"/> cards that takes <paramref name="min"/> to <paramref name="max"/>
-    /// picks: null to leave it to the brain, else how many picks drawn evenly, then which, evenly, in order.
+    /// picks: null to leave it to the brain, else how many picks drawn evenly, then which, evenly, in order. The options
+    /// in <paramref name="first"/> are picked before any other (a removal's, <see cref="Macro.RemovalOrder"/>).
     /// </summary>
-    public IReadOnlyList<int>? Picks(int options, int min, int max)
+    public IReadOnlyList<int>? Picks(int options, int min, int max, IReadOnlyList<int>? first = null)
     {
         if (rng.NextDouble() >= Share) return null;
         int n = min + rng.Next(max - min + 1);
-        return [.. Enumerable.Range(0, options).OrderBy(_ => rng.Next()).Take(n).Order()];
+        first ??= [];
+        return [.. Enumerable.Range(0, options).OrderBy(i => first.Contains(i) ? 0 : 1).ThenBy(_ => rng.Next()).Take(n).Order()];
     }
 }
 

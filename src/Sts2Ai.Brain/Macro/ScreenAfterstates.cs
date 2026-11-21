@@ -138,9 +138,10 @@ public sealed class ScreenAfterstates(IRunValue value)
 
     private RunView? Best(IEnumerable<RunView> runs) => runs.MaxBy(value.Value);
 
-    /// <summary>The best of the removals the game offers: an Eternal card cannot be removed.</summary>
+    /// <summary>The best of the removals the game offers (an Eternal card cannot be removed), as the rule lets them be picked:
+    /// a basic Strike, Defend or curse first (<see cref="RemovalOrder"/>).</summary>
     private RunView? BestRemoval(RunView run) =>
-        Best(Distinct(run.Deck).Where(c => c.Keywords?.Contains("Eternal") != true).Select(c => run with { Deck = Without(run.Deck, c) }));
+        Best(RemovalOrder.Removable(Distinct(run.Deck).Where(c => c.Keywords?.Contains("Eternal") != true)).Select(c => run with { Deck = Without(run.Deck, c) }));
 
     private RunView? BestUpgrade(RunView run) => Best(Distinct(run.Deck).Where(c => c.Upgraded != null).Select(c => Upgrade(run, c)));
 
