@@ -62,7 +62,8 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
         new("jobs", "", "the questions and jobs open", _ => Jobs.List()),
         new("stop", "", "answer the open questions now, end the jobs", _ => $"{A.Hurry()} questions hurried; {Jobs.StopAll()} jobs ended"),
         new("restart", "", "start the brain again (the game goes on)", _ => BrainLink.Restart()),
-        new("mp", "[on|off]", "advice in runs of more than one player, NoSL, for this game session (off at start)", Mp, a => a.Length <= 1 ? ["on", "off"] : []),
+        new("mp", "[on|always|off]", "advice in runs of more than one player, NoSL: on until the game closes, always from now on, off by default", Mp,
+            a => a.Length <= 1 ? ["on", "always", "off"] : []),
     ];
 
     private static Assist A => Assist.Current ?? throw new AiError("the mod is off (its panel says why)");
@@ -121,20 +122,28 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
             .Append("ai scout [route]  (its own command) what the rooms ahead hold, from the game's save: a spoiler, the game marks the run"));
     }
 
+    /// <summary>The multiplayer switch as <c>ai mp</c> names it.</summary>
+    public static string MpState => Settings.Current.Multiplayer ? "always" : Assist.Multiplayer ? "on" : "off";
+
     private static string Mp(string[] args)
     {
-        switch (args.ElementAtOrDefault(0))
+        switch (args.ElementAtOrDefault(0)?.ToLowerInvariant())
         {
             case null:
-                return $"mp {(Assist.Multiplayer ? "on" : "off")}";
+                return $"mp {MpState}";
             case "on":
                 Assist.Multiplayer = true;
+                Settings.Set(Settings.Current with { Multiplayer = false });
                 return "mp on: in a run of more than one player the AI advises you, in NoSL, until the game closes (teammates are taken to pass in its fights)";
+            case "always":
+                Settings.Set(Settings.Current with { Multiplayer = true });
+                return "mp always: in a run of more than one player the AI advises you, in NoSL, from now on, after the game restarts too (teammates are taken to pass in its fights)";
             case "off":
                 Assist.Multiplayer = false;
+                Settings.Set(Settings.Current with { Multiplayer = false });
                 return "mp off";
             default:
-                throw new AiError("mp on|off");
+                throw new AiError("mp on|always|off");
         }
     }
 
@@ -153,7 +162,9 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
     // ---- settings ----
 
     /// <summary>The settings the console may change: every one the settings screen and the panel have.</summary>
-    private static IEnumerable<PropertyInfo> Settable => typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.SetMethod?.IsPublic == true);
+    /// <summary>The settings <c>ai set</c> shows and changes: all but the multiplayer switch, which is <c>ai mp</c>'s.</summary>
+    private static IEnumerable<PropertyInfo> Settable => typeof(Settings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.SetMethod?.IsPublic == true && p.Name != nameof(Settings.Multiplayer));
 
     private static string Set(string[] args)
     {

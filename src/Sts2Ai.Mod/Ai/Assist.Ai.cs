@@ -24,8 +24,8 @@ internal sealed partial class Assist
     /// <summary>The mod's assist, for the console; null when the mod is off.</summary>
     public static Assist? Current { get; set; }
 
-    /// <summary>The console's switch for runs of more than one player (<c>ai mp</c>): off, the mod sits out such a run.
-    /// Kept for the game session only, and set nowhere but the console.</summary>
+    /// <summary>The console's <c>ai mp on</c>: runs of more than one player are served until the game closes. With it
+    /// and <see cref="Settings.Multiplayer"/> (<c>ai mp always</c>) off, the mod sits out such a run.</summary>
     public static bool Multiplayer { get; set; }
 
     // ---- the decisions asked ----
@@ -166,7 +166,7 @@ internal sealed partial class Assist
         yield return $"SL clone   {(NodeRecord.Checkpoint == null ? "no checkpoint" : NodeRecord.Broken ?? $"checkpoint {NodeRecord.Node} + {NodeRecord.Steps.Count} steps")}";
         yield return $"auto       {_goal}{(_until != null ? $" until {_until}" : "")}{(_stopped != null ? $" · stopped: {_stopped}" : "")} · speed {s.Speed}";
         yield return $"decision   {(_asked != null ? $"{_asked.Id} thinking {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s" : _answer != null ? $"{_answer.Id} answered: {_answer.Answer.Action}" : "none")}";
-        yield return $"mp         {(Multiplayer ? "on" : "off")}";
+        yield return $"mp         {AiConsoleCmd.MpState}";
         yield return $"quiz       {(_quiz ? "on" : "off")} · journal {_journal.Count} decisions · questions open {_pending.Count}";
     }
 

@@ -236,7 +236,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         var settings = Settings.Current;
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
-        // A run of more than one player is served only after the console's `ai mp on`; it is NoSL's (no clone holds the
+        // A run of more than one player is served only after the console's `ai mp on` or `ai mp always`; it is NoSL's (no clone holds the
         // others' choices), and the AI only advises in it.
         _coop = run is { Players.Count: > 1 };
         panel.Coop = _coop;
@@ -247,7 +247,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
 
         string? id = run != null ? RunHeader.IdOf(run.Rng.StringSeed) : null;
-        bool served = !_coop || Multiplayer;
+        bool served = !_coop || Multiplayer || settings.Multiplayer;
         if (_run != null && _run != id) End(_last.Over ? _last.Won ? "won" : "lost" : "aborted");
         else if (_run != null && (!settings.Assist || !served)) End("aborted");
         bool inRun = served && run != null && me != null && id != null;
