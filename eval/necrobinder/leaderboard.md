@@ -10,7 +10,9 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
+| combat pimc c0-nosl-2 8x300, combat prompts first, macro l0 v0-nosl-2, macro prompts l0 v0-nosl-2 | 2026-11-21 | `3016ff1` | 91.0 % (91/100, 83.8 %–95.2 %) | 46.97 | 99 | 346.2 |
 | combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 85.0 % (85/100, 76.7 %–90.7 %) | 46.39 | 100 | 251.5 |
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-21 | `3016ff1` | 79.0 % (79/100, 70.0 %–85.8 %) | 45.91 | 99 | 248.3 |
 | combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 65.0 % (65/100, 55.3 %–73.6 %) | 41.24 | 94 | 298.8 |
 
 ### SL
@@ -40,7 +42,9 @@ The two environments are never ranked together, nor two characters, ascensions o
 
 | champion | date | commit | win rate | floor mean | act 1 boss | s per run |
 |---|---|---|---|---|---|---|
-| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 **(champion)** | 2026-11-19 | `62f2bef` | 11.0 % (11/100, 6.3 %–18.6 %) | 31.38 | 87 | 90.1 |
+| combat pimc c0-nosl-2 8x300, combat prompts first, macro l0 v0-nosl-2, macro prompts l0 v0-nosl-2 **(champion)** | 2026-11-21 | `3016ff1` | 18.0 % (18/100, 11.7 %–26.7 %) | 31.83 | 84 | 172.4 |
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-21 | `3016ff1` | 13.0 % (13/100, 7.8 %–21.0 %) | 32.05 | 88 | 133.5 |
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-19 | `62f2bef` | 11.0 % (11/100, 6.3 %–18.6 %) | 31.38 | 87 | 90.1 |
 | combat pimc c-sl-12-1-d2 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2, macro prompts l0 v-sl-td4-12-1-d2 | 2026-11-19 | `62f2bef` | 7.0 % (7/100, 3.4 %–13.7 %) | 24.83 | 75 | 80.3 |
 
 ## NECROBINDER, ascension 10: promotion-1-200
@@ -56,6 +60,15 @@ The two environments are never ranked together, nor two characters, ascensions o
 | combat plan c12-0 beam 8x300, combat prompts first, macro l0 v12-0-td4 clone, macro prompts l0 v12-0-td4 clone | 2026-11-17 | `b34dd0a` | 51.0 % (102/200, 44.1 %–57.8 %) | 43.26 | 191 | 304.4 |
 | combat plan c10-2-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2-2 clone, macro prompts l0 v10-2-2 clone | 2026-11-15 | `4e0ec5d` | 15.5 % (31/200, 11.1 %–21.2 %) | 33.85 | 175 | 125.5 |
 | combat plan c10-2 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v10-2 clone, macro prompts l0 v10-2 clone | 2026-11-14 | `b7e8d79` | 7.0 % (14/200, 4.2 %–11.4 %) | 28.76 | 165 | 139.2 |
+
+## NECROBINDER, ascension 10, Dread: promotion-1-100
+
+### NoSL
+
+| champion | date | commit | win rate | floor mean | act 1 boss | s per run |
+|---|---|---|---|---|---|---|
+| combat pimc c0-nosl-1-2 8x300, combat prompts first, macro l0 v0-nosl-1-2, macro prompts l0 v0-nosl-1-2 | 2026-11-21 | `3016ff1` | 2.0 % (2/100, 0.6 %–7.0 %) | 21.05 | 73 | 56.1 |
+| combat pimc c0-nosl-2 8x300, combat prompts first, macro l0 v0-nosl-2, macro prompts l0 v0-nosl-2 | 2026-11-21 | `3016ff1` | 0.0 % (0/100, 0.0 %–3.7 %) | 20.14 | 73 | 54.9 |
 
 ## NECROBINDER, ascension 10, Dread: promotion-1-200
 
