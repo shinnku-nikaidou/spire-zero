@@ -4,8 +4,13 @@
 //!
 //! Its states are the turns' starts. Each is searched to the end of its turn with no limit (`UNLIMITED`): every state of
 //! the turn, every answer of every prompt, every end kept. The ends are new states, and none is dropped: the combat net
-//! only orders them, the state it values highest (by worth, as the pick compares lines) searched next, the rest waiting
-//! their turn. One table over the combat holds every state reached, by its key: the observation and the full hidden
+//! only orders them, within a layer of turns' starts (`turns`, the turns ended since the solver began), the state it
+//! values highest (by worth, as the pick compares lines) searched first, the rest waiting their turn. The layers take
+//! turns (`Layers`): a batch takes the best state of one layer, then of the next deeper one, back to the shallowest
+//! after the deepest, on from where the last batch stopped. The net's values are compared within a layer only, as the
+//! beam compares them: across layers they are not alike, the net hoping more of a turn it has not seen played (taken
+//! by worth across layers, one fight searched 751 starts of its fifth turn and none of its sixth, where its better wins
+//! were; plans/2026-11-21-1402-solver-turn-queues.md). One table over the combat holds every state reached, by its key: the observation and the full hidden
 //! state, and the record of enemy moves, which the leaf reads. A state is searched once however many lines reach it. The
 //! states that wait are most of them, so a record of enemy moves is held once, however many states share it: the ends of
 //! a turn mostly do. A state keeps its own line, or takes another line to its key only where that line's end is the same
@@ -46,7 +51,7 @@
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use super::beam::{self, ByFirst, Found, Job, Rank, Searcher, UNLIMITED};
@@ -133,7 +138,7 @@ enum Reached {
     Turn,
 }
 
-/// A state waiting in the queue: the least (-worth, order) first (C#: PriorityQueue by (-Worth, Order)).
+/// A state waiting in its layer's queue: the least (-worth, order) first (C#: PriorityQueue by (-Worth, Order)).
 struct Waiting {
     worth: f64,
     order: i64,
@@ -161,6 +166,55 @@ impl Ord for Waiting {
     }
 }
 
+/// The states waiting, a queue for each layer of turns' starts (a state's `turns`), taken in turn: the best of a layer,
+/// then of the next deeper one, back to the shallowest after the deepest.
+#[derive(Default)]
+struct Layers {
+    queues: BTreeMap<i32, BinaryHeap<Waiting>>,
+    /// The layer the next state is taken from, or the next deeper one that has a state waiting.
+    next: i32,
+    len: usize,
+}
+
+impl Layers {
+    fn push(&mut self, turns: i32, waiting: Waiting) {
+        self.queues.entry(turns).or_default().push(waiting);
+        self.len += 1;
+    }
+
+    /// The best state of the layer whose turn it is.
+    fn pop(&mut self) -> Option<Waiting> {
+        let turns = *self.queues.range(self.next..).next().or_else(|| self.queues.iter().next())?.0;
+        let queue = self.queues.get_mut(&turns).expect("a layer just found");
+        let waiting = queue.pop().expect("a layer holds a state");
+        if queue.is_empty() {
+            self.queues.remove(&turns);
+        }
+        self.next = turns + 1;
+        self.len -= 1;
+        Some(waiting)
+    }
+
+    /// The state of the best worth of every layer.
+    fn best(&self) -> Option<&Waiting> {
+        self.queues.values().filter_map(|queue| queue.peek()).max()
+    }
+
+    /// Every state waiting, the layers emptied; where the next is taken from stays.
+    fn take(&mut self) -> Vec<Waiting> {
+        self.len = 0;
+        std::mem::take(&mut self.queues).into_values().flat_map(|queue| queue.into_vec()).collect()
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 /// The root's turn while its search goes on (`Solver::run`): the bounds the states held were searched under, which the
 /// new ones are compared with once it is done (`settle`), whether the root is a prompt between a turn's end and the
 /// next turn's start, and the memo its search takes, until it begins.
@@ -178,7 +232,7 @@ pub struct Solver {
     table: HashMap<u64, usize>,
     /// The records of enemy moves the states hold, each once, by hash.
     moves: HashMap<u64, Arc<History>>,
-    queue: BinaryHeap<Waiting>,
+    queue: Layers,
     root: usize,
     order: i64,
     nodes: i64,
@@ -237,7 +291,7 @@ impl Solver {
             nodes_of: vec![Node::new(0, 0.0, 0, history, 0, 0, i32::MAX, String::new(), 0)],
             table: HashMap::new(),
             moves: HashMap::new(),
-            queue: BinaryHeap::new(),
+            queue: Layers::default(),
             root: 0,
             order: 0,
             nodes: 0,
@@ -407,11 +461,12 @@ impl Solver {
     /// C#: Purge. The waiting states below their potions' bound go, and the paused ones.
     fn purge(&mut self) {
         self.purged = self.raised;
-        let left = std::mem::take(&mut self.queue).into_vec();
+        let left = self.queue.take();
         for waiting in left {
             let node = &self.nodes_of[waiting.node];
             if !bound::below(&self.bounds, &node.potions, node.reach) {
-                self.queue.push(waiting);
+                let turns = node.turns;
+                self.queue.push(turns, waiting);
             } else {
                 self.table.remove(&node.key);
             }
@@ -557,7 +612,7 @@ impl Solver {
                 order: self.nodes_of[n].order,
                 node: n,
             })
-            .chain(self.queue.peek().map(|w| Waiting {
+            .chain(self.queue.best().map(|w| Waiting {
                 worth: w.worth,
                 order: w.order,
                 node: w.node,
@@ -705,7 +760,7 @@ impl Solver {
             let node = &self.nodes_of[n];
             self.moves.entry(node.moves).or_insert_with(|| node.history.clone());
         }
-        self.queue.clear();
+        self.queue.take();
         self.cuts = 0;
         self.best = None;
         self.by_first = ByFirst::default();
@@ -753,7 +808,8 @@ impl Solver {
                     order: self.nodes_of[n].order,
                     node: n,
                 };
-                self.queue.push(waiting);
+                let turns = self.nodes_of[n].turns;
+                self.queue.push(turns, waiting);
             }
         }
         self.purge();
@@ -812,7 +868,7 @@ impl Solver {
                 order: self.nodes_of[at].order,
                 node: at,
             };
-            self.queue.push(waiting);
+            self.queue.push(turns, waiting);
         }
     }
 

@@ -1105,6 +1105,58 @@ fn the_solvers_pick_with_every_waiting_turn_paused_is_the_state_valued_highest()
     assert_replays(&plan, HP, &[], false);
 }
 
+/// A combat of `TURNS` turns where every turn's start has `WIDTH` ends, one by each card, and every line wins on its
+/// last turn, the more the higher its last card. The net values a start lower the more turns it is in, as it hopes more
+/// of a turn it has not seen played yet (plans/2026-11-21-1402-solver-turn-queues.md, 1.3).
+fn hoping(path: &[Action]) -> TurnSearch {
+    const WIDTH: u32 = 4;
+    const TURNS: usize = 5;
+    let turns = path.iter().filter(|a| a.is_end_turn()).count();
+    let ends = (1..=WIDTH)
+        .map(|card| {
+            let play = Action::Play { card, target: None };
+            let mut end = TurnEnd {
+                history: none(),
+                ..beam::start(none())
+            };
+            if turns + 1 == TURNS {
+                (end.actions, end.status, end.value) = (vec![play], Status::Won, 0.6 + 0.01 * card as f64);
+            } else {
+                let key = format!("{} {}", text(path), card).bytes().fold(14_695_981_039_346_656_037u64, |h, b| (h ^ b as u64).wrapping_mul(1_099_511_628_211));
+                (end.actions, end.key, end.value) = (vec![play, Action::EndTurn], key, 0.5 - 0.1 * (turns + 1) as f64);
+            }
+            end.hashes = vec![end.key; end.actions.len()];
+            end
+        })
+        .collect();
+    TurnSearch {
+        ends,
+        nodes: WIDTH as i32,
+        cut: false,
+        pruned: 0,
+        start: None,
+        paused: None,
+        graph: None,
+    }
+}
+
+#[test]
+fn the_solver_takes_each_layer_of_turns_in_turn_so_a_net_hoping_more_of_earlier_turns_still_finishes_lines() {
+    // Taken by worth across turns, every start of a layer comes before any of the next, 4 + 16 + 64 + 1 turns' searches
+    // (340 nodes) before a win; one start of each layer in turn, the line reaches its last turn in a few batches.
+    let searcher = jobs(|jobs: &[Job], _, _| Ok(jobs.iter().map(|job| hoping(&job.path)).collect()));
+    let mut solver = solver(4);
+    solver.run(&searcher, 100).expect("a search");
+    assert!(solver.nodes() <= 120);
+    assert_eq!(Status::Won, result(&solver).end);
+
+    // Searched to the end, the best line, proved.
+    solver.run(&searcher, i64::MAX).expect("a search");
+    let plan = result(&solver);
+    assert!(plan.proved);
+    assert_eq!(0.64, plan.value);
+}
+
 #[test]
 fn the_solvers_root_moved_along_a_won_line_keeps_it() {
     // Searched in full, then the combat goes another way than the pick: the wins the pick's way are out of reach, and
