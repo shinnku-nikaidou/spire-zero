@@ -1,0 +1,93 @@
+# The SL self-play dataset sl-silent-g0 (plans/2026-11-22-0445-sl-silent-g0.md, from plans/2026-11-22-0310-seed-study.md):
+# SILENT's own data, to train v-sl-silent-1, Silent's first bundle of its own (the user, 2026-11-22: "這一批只訓練獵人,
+# 之後所有神經網路分開了"). Played by the bundle v-sl-silent-0 (sl-silent-g0.bundle.json beside this file): d2's V with
+# SILENT's 30 card ids reset to about a site-B card (eval/resets/2026-11-22-cards.toml), d2's combat net and f.
+# Every fight at xhigh (the user: "這個xhigh之後用於訓練用的"). A run's only draws are at card rewards, evenly over each
+# card and skipping, about 2 a run; every other decision is the bundle's own, no softmax (the user: "改成不分叉").
+# The shiv family favored on 20 % of the runs, nothing on 70 %, the poison family refused on 10 % (the user:
+# "20%的對局具有小刀傾向, 70%的對局不管, 10%的對局屏蔽掉毒"; the bonus 0.2, the user on 2026-11-20: "用 0.2").
+# A10 3,350, the Dread mode 3,350, A0-A9 3,300 (330 each): 10,000 runs.
+#
+# DRAFT, not to launch as it is (the plan's 7): no card-reward draw exists yet, so every tier says epsilon = 0 (no
+# draw at all); before launch each tier gets the new card-reward key at 0.1. The bundle names
+# weights/all/v-sl-silent-0.json, which is not in the release yet (box.py launch refuses a net it lacks).
+name = "sl-silent-g0"
+deadline = "+24h"                   # box.py deadline sl-silent-g0 UNTIL moves it; about 21 h of the pool at xhigh
+priority = 0
+seeds = 6300000                     # the ledger's block 6300000-6399999, SILENT only: rows from 6300000, the smoke from 6399000
+characters = ["SILENT"]
+champion = "eval/datasets/sl-silent-g0.bundle.json"   # v-sl-silent-0
+workers = 4
+
+# The two families of plans/2026-11-20-1231-silent-shiv-poison.md 2.1: Silent's cards whose text names a shiv, or poison.
+[families]
+shiv = ["ACCURACY", "BLADE_DANCE", "BLADE_OF_INK", "CLOAK_AND_DAGGER", "FAN_OF_KNIVES", "HIDDEN_DAGGERS", "INFINITE_BLADES",
+        "KNIFE_TRAP", "LEADING_STRIKE", "PHANTOM_BLADES", "STORM_OF_STEEL", "UP_MY_SLEEVE"]
+poison = ["ACCELERANT", "BOUNCING_FLASK", "BUBBLE_BUBBLE", "CORROSIVE_WAVE", "DEADLY_POISON", "ENVENOM", "HAZE", "MIRAGE",
+          "NOXIOUS_FUMES", "OUTBREAK", "POISONED_STAB", "SNAKEBITE"]
+
+# The whole game, every fight at xhigh (max's solver with the early stop, solve 16384 stop 1024).
+[games.full]
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+# The Dread mode, which the game plays at ascension 10 only.
+[games.dread]
+mode = "dread"
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+# Each place split 20 / 70 / 10 over its three tiers, a row each: the shiv tilt, nothing, the poison refused.
+[[runs]]
+game = "full"
+asc = 10
+n = 670
+explore = [{ epsilon = 0, favor = ["shiv"], favor_by = 0.2 }]
+
+[[runs]]
+game = "full"
+asc = 10
+n = 2345
+explore = [{ epsilon = 0 }]
+
+[[runs]]
+game = "full"
+asc = 10
+n = 335
+explore = [{ epsilon = 0, refuse = ["poison"] }]
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 670
+explore = [{ epsilon = 0, favor = ["shiv"], favor_by = 0.2 }]
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 2345
+explore = [{ epsilon = 0 }]
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 335
+explore = [{ epsilon = 0, refuse = ["poison"] }]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [66, 66, 66, 66, 66, 66, 66, 66, 66, 66]
+explore = [{ epsilon = 0, favor = ["shiv"], favor_by = 0.2 }]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [231, 231, 231, 231, 231, 231, 231, 231, 231, 231]
+explore = [{ epsilon = 0 }]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [33, 33, 33, 33, 33, 33, 33, 33, 33, 33]
+explore = [{ epsilon = 0, refuse = ["poison"] }]
