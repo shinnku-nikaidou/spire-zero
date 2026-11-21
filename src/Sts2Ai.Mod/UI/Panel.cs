@@ -28,10 +28,12 @@ internal enum Command
 /// <param name="Win">V's chance to win the run at the latest macro decision; null before one.</param>
 /// <param name="Delta">Its change from the macro decision before.</param>
 /// <param name="Recent">What the AI played last, newest first.</param>
-internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pill, Tone PillTone, double? Win, double? Delta, IReadOnlyList<string> Recent)
+/// <param name="Coop">A run of more than one player: the AI only advises (no buttons that play) and the run is NoSL's.</param>
+internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pill, Tone PillTone, double? Win, double? Delta, IReadOnlyList<string> Recent,
+    bool Coop = false)
 {
     /// <summary>Records are compared by reference for lists: this compares what is shown.</summary>
-    public string Key => $"{Auto}|{Pill}|{PillTone}|{Win}|{Delta}|{string.Join("\n", Recent)}";
+    public string Key => $"{Auto}|{Pill}|{PillTone}|{Win}|{Delta}|{Coop}|{string.Join("\n", Recent)}";
 }
 
 /// <summary>
@@ -295,7 +297,7 @@ internal sealed class Panel
         });
         Marks(route, plan);
         var settings = Settings.Current;
-        _details.Show(table, !_hidden && settings.Panel && settings.Details, new Rect2(_card.Position, _card.Size), settings.Opacity);
+        _details.Show(table, !_hidden && settings.Panel && settings.Details, new Rect2(_card.Position, _card.Size), settings.Opacity, drive is { Coop: true });
     }
 
     private void Head(string champion, string status, Drive? drive)
@@ -321,13 +323,17 @@ internal sealed class Panel
         Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
         _champion.Text = champion;
         _status.Text = status;
-        if (settings.Env != _envStyled)
+        // A run of more than one player is NoSL's whatever the setting says, and the switch is held there.
+        var env = drive is { Coop: true } ? PlayEnvironment.NoSL : settings.Env;
+        if (env != _envStyled)
         {
-            _envStyled = settings.Env;
-            foreach (var (button, which) in _switch) Restyle(button, which == settings.Env);
+            _envStyled = env;
+            foreach (var (button, which) in _switch) Restyle(button, which == env);
         }
+        foreach (var (button, _) in _switch) button.Disabled = drive is { Coop: true };
         _drive = drive;
-        _toolbar.Visible = _effortRow.Visible = drive != null && _pressed != null;
+        _toolbar.Visible = drive is { Coop: false } && _pressed != null;
+        _effortRow.Visible = drive != null && _pressed != null;
         _options.Visible = drive is { Auto: true };
         if (drive == null) return;
         Set(_auto, drive.Auto ? L10n.T("Pause") : L10n.T("Auto"), drive.Auto ? Icons.Pause : Icons.Play, true);

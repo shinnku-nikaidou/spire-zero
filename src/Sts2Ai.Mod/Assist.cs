@@ -108,7 +108,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     {
         _written = null;
         NodeRecord.FightBegins();
-        if (schemaPath == null || RunManager.Instance.DebugOnlyGetState() is not { } run || !Served(run) || LocalContext.GetMe(run) is not { } me) return;
+        if (schemaPath == null || RunManager.Instance.DebugOnlyGetState() is not { } run || LocalContext.GetMe(run) is not { } me) return;
         _written = (Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes), true,
             Observe.Run(run, me).WithoutPreviews(), 0);
     }
@@ -128,6 +128,9 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
 
     // The AI's play: what it was asked to do, what it did, and why it stopped.
     private Goal _goal;
+
+    /// <summary>The run has more than one player: NoSL, and the AI only advises (plans/2026-11-21-1733-coop-advice.md).</summary>
+    private bool _coop;
     private int _acts;
     private string? _lastSurface;
     private (string Key, long At)? _acted;
@@ -188,7 +191,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     /// <summary>A toolbar button or its key.</summary>
     public void Press(Command command)
     {
-        if (_run == null) return;
+        if (_run == null || _coop) return;
         _stopped = null;
         switch (command)
         {
@@ -228,8 +231,10 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         var settings = Settings.Current;
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
-        // A run of more than one player is NoSL's: no clone holds the others' choices.
-        var env = run is { Players.Count: > 1 } ? PlayEnvironment.NoSL : settings.Env;
+        // A run of more than one player is NoSL's (no clone holds the others' choices), and the AI only advises in it.
+        _coop = run is { Players.Count: > 1 };
+        if (_coop && _goal != Goal.Off) Stop(L10n.T("advice only in multiplayer"));
+        var env = _coop ? PlayEnvironment.NoSL : settings.Env;
         if (env != _env) Switch(env);
         if (settings.Effort != _effort) Switch(settings.Effort);
         if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
@@ -237,10 +242,10 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         string? id = run != null ? RunHeader.IdOf(run.Rng.StringSeed) : null;
         if (_run != null && _run != id) End(_last.Over ? _last.Won ? "won" : "lost" : "aborted");
         else if (_run != null && !settings.Assist) End("aborted");
-        bool single = run != null && Served(run) && me != null && id != null;
+        bool inRun = run != null && me != null && id != null;
         // Read with assist off and without a brain too: the SL record needs the screen the player answers.
         string note = "";
-        var asking = single ? _screens.Read(run!, me!, out note) : null;
+        var asking = inRun ? _screens.Read(run!, me!, out note) : null;
         if (asking != null) NodeRecord.Seen(asking);
         Screen(asking, note);
         // The player acted (a step the AI did not take, or going back): the AI hands over.
@@ -266,12 +271,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         }
         if (run == null || me == null || id == null)
         {
-            panel.Show(champion, L10n.T("ready"), L10n.T("Start or continue a run"), L10n.T("single-player only"));
-            return;
-        }
-        if (!single)
-        {
-            panel.Show(champion, L10n.T("off"), L10n.T("Off in multiplayer"));
+            panel.Show(champion, L10n.T("ready"), L10n.T("Start or continue a run"));
             return;
         }
         // A run that started without Neow (a new profile's first, before the timeline reveals Neow's epoch) is one
@@ -375,7 +375,11 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         string? export = asking.Surface == Surfaces.Combat
             ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)
             : null;
-        if (export != null) _written = (export, false, asking.Obs.Run.WithoutPreviews(), NodeRecord.Fight?.Count ?? 0);
+        if (export != null)
+        {
+            NodeRecord.Rearm();
+            _written = (export, false, asking.Obs.Run.WithoutPreviews(), NodeRecord.Fight?.Count ?? 0);
+        }
         var trace = sl ? NodeRecord.Steps : null;
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs, Environment.TickCount64), key);
         var request = new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace, Prompted(asking));
@@ -513,11 +517,12 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         bool fight = Fights(_surface);
         string step = fight ? L10n.T("Play one") : _surface == Surfaces.Map ? L10n.T("Step") : L10n.T("Pick for me");
         string finish = fight ? L10n.T("Finish turn") : _surface == Surfaces.Map ? L10n.T("Next room") : L10n.T("Finish room");
-        var (pill, tone) = _stopped != null ? (L10n.T("AI stopped: {0}", _stopped), Tone.Warn)
+        var (pill, tone) = _coop ? (L10n.T("advice only in multiplayer"), Tone.Plain)
+            : _stopped != null ? (L10n.T("AI stopped: {0}", _stopped), Tone.Warn)
             : _goal == Goal.Auto ? (L10n.T("Auto on"), Tone.Plain)
             : _goal != Goal.Off ? (L10n.T("Acting"), Tone.Plain)
             : (L10n.T("Your move"), Tone.Plain);
-        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent]);
+        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent], _coop);
     }
 
     /// <summary>The line under the next action: V's chance to win after it, or how the fight is expected to end.</summary>

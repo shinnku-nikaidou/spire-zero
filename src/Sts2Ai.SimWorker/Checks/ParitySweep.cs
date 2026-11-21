@@ -130,7 +130,7 @@ internal static class GameIds
 internal sealed record SweepCombat(int Index, CombatSetup Setup, string Deck, int PolicySeed)
 {
     public SweptCombat Info => new(Index, Setup.Character, Setup.Ascension, Setup.Encounter.Id.Entry, Setup.ActIndex, Setup.Seed, Deck,
-        Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, PolicySeed);
+        Setup.Loadout is { } loadout ? RandomLoadout.Text(loadout) : null, PolicySeed, Teammates: Setup.Teammates);
 }
 
 /// <summary>What a checked combat is, as its line and its dump say it: a combat of a sweep, or one of a whole run.</summary>
@@ -139,8 +139,9 @@ internal sealed record SweepCombat(int Index, CombatSetup Setup, string Deck, in
 /// <param name="Deck">"starting", "random" or "given"; "run" for a combat of a whole run.</param>
 /// <param name="Loadout">The loadout the combat, or the run, was started with instead of the character's own.</param>
 /// <param name="Floor">For a combat of a whole run: the floor it is on.</param>
+/// <param name="Teammates">A co-op combat's other players (<see cref="CombatSetup.Teammates"/>).</param>
 internal sealed record SweptCombat(int Index, string Character, int Ascension, string Encounter, int Act, string Seed, string Deck, string? Loadout, int PolicySeed,
-    int? Floor = null);
+    int? Floor = null, IReadOnlyList<string>? Teammates = null);
 
 /// <summary>One whole run of a sweep of runs.</summary>
 internal sealed record SweepRun(int Index, RunSetup Setup, int PolicySeed);
@@ -168,8 +169,10 @@ internal sealed class RunSweep(IReadOnlyList<CharacterModel> characters, IReadOn
 /// ascensions, then the encounters, then the loadouts, so a part of the sweep is spread over all of them.
 /// </summary>
 /// <param name="cards">The cards a drawn deck holds, of those its character can draw; null: any of them.</param>
+/// <param name="players">The players of each combat: past 1, the local player's teammates are the characters after
+/// its own in the game's order, with their starting loadouts.</param>
 internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyList<int> ascensions, IReadOnlyList<(EncounterModel Encounter, int Act)> encounters,
-    int decks, int seed, Loadout? given, IReadOnlySet<string>? cards = null)
+    int decks, int seed, Loadout? given, IReadOnlySet<string>? cards = null, int players = 1)
 {
     public int Count => characters.Count * ascensions.Count * encounters.Count * decks;
 
@@ -184,7 +187,10 @@ internal sealed class Sweep(IReadOnlyList<CharacterModel> characters, IReadOnlyL
             var (loadout, kind) = given != null ? (given, "given")
                 : deck == 0 ? (null, "starting")
                 : (RandomLoadout.Draw(character, new Random(unchecked(seed * 7_919 + i)), cards), "random");
-            return new(i, new CombatSetup(character.Id.Entry, encounter, act, GameSeeds.MakeSeed(seed, i), ascension, loadout), kind, unchecked(seed * 1_000_003 + i));
+            var all = ModelDb.AllCharacters.ToList();
+            var teammates = players > 1 ? Enumerable.Range(1, players - 1).Select(k => all[(all.IndexOf(character) + k) % all.Count].Id.Entry).ToList() : null;
+            return new(i, new CombatSetup(character.Id.Entry, encounter, act, GameSeeds.MakeSeed(seed, i), ascension, loadout, Teammates: teammates), kind,
+                unchecked(seed * 1_000_003 + i));
         }
     }
 

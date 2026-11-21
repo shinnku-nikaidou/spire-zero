@@ -29,10 +29,12 @@ internal enum CombatOutcome { InProgress, Win, Loss, Truncated }
 /// How a combat starts: a fresh run of <see cref="Character"/> with the loadout, entering the encounter. With
 /// <see cref="From"/>, the combat is then made to show that observation (see <see cref="CombatBuilder"/>), and the
 /// seed also picks what the observation hides; <see cref="History"/>, the enemies' intents in the rounds so far (the
-/// record the player saw), gives each monster the moves it made before.
+/// record the player saw), gives each monster the moves it made before. <see cref="Teammates"/>: the characters of the
+/// other players of a co-op combat, each with its starting loadout and a net id of its own after the local player's;
+/// they never act, and the local player's end of turn ends theirs (the run is the game's singleplayer one).
 /// </summary>
 internal sealed record CombatSetup(string Character, EncounterModel Encounter, int ActIndex, string Seed, int Ascension = 0, Loadout? Loadout = null,
-    CombatObservation? From = null, IReadOnlyList<EnemyTurns>? History = null);
+    CombatObservation? From = null, IReadOnlyList<EnemyTurns>? History = null, IReadOnlyList<string>? Teammates = null);
 
 internal enum TraceKind { Action, Choice, Determinize }
 
@@ -140,12 +142,16 @@ internal sealed class CombatSession : IDisposable
         var character = ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(setup.Character, StringComparison.OrdinalIgnoreCase));
         var player = Player.CreateForNewRun(character, UnlockState.all, LocalContext.NetId!.Value);
         setup.Loadout?.ApplyTo(player, setup.Ascension);
+        var players = new List<Player> { player };
+        foreach (var (id, i) in (setup.Teammates ?? []).Select((id, i) => (id, i)))
+            players.Add(Player.CreateForNewRun(ModelDb.AllCharacters.First(c => c.Id.Entry.Equals(id, StringComparison.OrdinalIgnoreCase)), UnlockState.all,
+                LocalContext.NetId!.Value + 1 + (ulong)i));
 
         var acts = ActModel.GetDefaultList().ToList();
         var encounterAct = ModelDb.ActsByIndex[setup.ActIndex].FirstOrDefault(a => a.AllEncounters.Contains(setup.Encounter));
         if (encounterAct != null) acts[setup.ActIndex] = encounterAct;
 
-        var run = RunState.CreateForTest([player], acts, null, GameMode.Standard, isCustomGame: false, setup.Ascension, setup.Seed);
+        var run = RunState.CreateForTest(players, acts, null, GameMode.Standard, isCustomGame: false, setup.Ascension, setup.Seed);
         run.CurrentActIndex = setup.ActIndex;
         run.Map = new MockSinglePointActMap();
         try

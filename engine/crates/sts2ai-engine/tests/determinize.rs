@@ -18,6 +18,9 @@
 //!    world stood there from the export before it (or the combat's opening) and drawn where the prompt takes its
 //!    answer: drawn twice from one seed it is one world; given the game's answer, no random stream is the real one's,
 //!    and the draw pile is not the real one in every world.
+//!  - `deals_the_teammates`: in a co-op combat (`sim parity --players N`), every world deals each other player's hand
+//!    and draw pile again from the two together: the same cards, each pile its size, and not the real deal in every
+//!    one of 8 worlds where the cards differ.
 
 mod support;
 
@@ -147,6 +150,77 @@ fn forgets_the_first_draw() {
         tally
     })
     .finish("forgets_the_first_draw");
+}
+
+/// Each other player's hand and draw pile, as the card keys of their cards in order.
+fn teammates(c: &mut Combat) -> Vec<(Vec<String>, Vec<String>)> {
+    let manager = g::combat::combat_manager::instance(c);
+    let st = g::combat::combat_manager::debug_only_get_state(manager, c);
+    let me = g::context::local_context::get_me__i_combat_state(st, c);
+    let keys = |pile: CardPile, c: &mut Combat| -> Vec<String> {
+        g::entities_cards::card_pile::cards(pile, c)
+            .into_iter()
+            .map(|card| String::from_utf8(sts2ai_engine::protocol::card_key(&sts2ai_engine::observe::card(card, false, c))).unwrap())
+            .collect()
+    };
+    let mut all = Vec::new();
+    for player in g::combat::combat_state::players(st, c) {
+        if player == me {
+            continue;
+        }
+        let pcs: PlayerCombatState = g::entities_players::player::player_combat_state(player, c);
+        let hand = g::entities_players::player_combat_state::hand(pcs, c);
+        let draw = g::entities_players::player_combat_state::draw_pile(pcs, c);
+        all.push((keys(hand, c), keys(draw, c)));
+    }
+    all
+}
+
+#[test]
+fn deals_the_teammates() {
+    sweep(|fixture| {
+        let mut tally = Tally::default();
+        for k in 0..fixture.records.len() {
+            if !fixture.has_export(k) {
+                tally.skipped += 1;
+                continue;
+            }
+            let mut real = import(fixture, k);
+            let shown = teammates(&mut real);
+            if shown.is_empty() {
+                tally.skipped += 1;
+                continue;
+            }
+            let mut moved = vec![false; shown.len()];
+            let mut failed = None;
+            for seed in 1..=8u64 {
+                let mut world = real.clone();
+                if let Err(e) = sts2ai_engine::determinize::determinize(&mut world, seed + 13 * k as u64) {
+                    failed = Some(e);
+                    break;
+                }
+                for (i, ((hand, draw), (real_hand, real_draw))) in teammates(&mut world).into_iter().zip(&shown).enumerate() {
+                    let (mut a, mut b): (Vec<&String>, Vec<&String>) = (hand.iter().chain(&draw).collect(), real_hand.iter().chain(real_draw).collect());
+                    a.sort();
+                    b.sort();
+                    if hand.len() != real_hand.len() || draw.len() != real_draw.len() || a != b {
+                        failed = Some(format!("player {i}: {} + {} cards against {} + {}, or other cards", hand.len(), draw.len(), real_hand.len(), real_draw.len()));
+                    }
+                    moved[i] |= (&hand, &draw) != (real_hand, real_draw);
+                }
+            }
+            let same = shown.iter().zip(&moved).position(|((hand, draw), moved)| {
+                !moved && hand.iter().chain(draw).collect::<HashSet<_>>().len() > 1 && !hand.is_empty() && !draw.is_empty()
+            });
+            match (failed, same) {
+                (Some(e), _) => tally.failed.push((format!("{} record {k}", fixture.name), e)),
+                (None, Some(i)) => tally.failed.push((format!("{} record {k}", fixture.name), format!("player {i}: the real deal in all 8 worlds"))),
+                (None, None) => tally.passed += 1,
+            }
+        }
+        tally
+    })
+    .finish("deals_the_teammates");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

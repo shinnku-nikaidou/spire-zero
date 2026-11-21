@@ -32,6 +32,9 @@ internal static class ParityCommand
         "checked as a combat of the sweep is, and the run around it compared too. The player dies early at a character's own HP: --hp and --max-hp let it go on");
     private static readonly Option<string?> Mode = Opt.Maybe<string?>("--mode",
         "the game mode of --runs: dread, which the game plays at ascension 10 only (--asc 10); the standard game if not given");
+    private static readonly Option<int> Players = Opt.Of("--players", 1,
+        "players in each combat of the sweep, 1 to 4: the others are the characters after the local one's in the game's order, with their starting " +
+        "loadouts, and never act (the local player's end of turn ends theirs), as the mod's co-op advice takes them");
     private static readonly Option<string> Character = Opt.Of("--character", "all", "the characters, such as SILENT,FOOL, or all");
     private static readonly Option<string> Asc = Opt.Of("--asc", "0,10", "the ascension levels");
     private static readonly Option<string> Encounter = Opt.Of("--encounter", "all", "the encounters, such as A,B, or all: every encounter of the game, the ones list shows and the events' besides");
@@ -61,7 +64,7 @@ internal static class ParityCommand
     };
 
     /// <summary>The options a part of the sweep takes from the whole: all but where the output goes and who shares it.</summary>
-    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Mode, Character, Asc, Encounter, Decks, Cards, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
+    private static readonly Option[] Shared = [World, Dump, Delegates, Runs, Mode, Players, Character, Asc, Encounter, Decks, Cards, Deck, Relics, Potions, Hp, MaxHp, Seed, Start, N, Continue, Full];
 
     public static Command Command()
     {
@@ -95,7 +98,9 @@ internal static class ParityCommand
         var loadout = given == new Loadout() ? null : given;
         var cards = r.GetValue(Cards)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(id => Models.Find<CardModel>(id).Id.Entry).ToHashSet();
         if (cards != null && loadout?.Deck != null) throw new CliException("--cards is for drawn decks: not with --deck");
-        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout, cards);
+        int players = r.GetValue(Players);
+        if (players is < 1 or > 4) throw new CliException("--players is 1 to 4");
+        var sweep = new Sweep(characters, ascensions, encounters, decks, r.GetValue(Seed), loadout, cards, players);
         RunSweep? runs = null;
         if (r.GetValue(Mode) != null && r.GetValue(Runs) == null) throw new CliException("--mode is for whole runs: with --runs");
         if (r.GetValue(Runs) is { } each)
@@ -103,6 +108,7 @@ internal static class ParityCommand
             if (each < 1) throw new CliException("--runs is at least 1");
             if (r.GetValue(Encounter) is not "all" || r.GetResult(Decks) is { Implicit: false }) throw new CliException("--runs plays whole runs: not with --encounter or --decks");
             if (cards != null) throw new CliException("--runs plays whole runs: not with --cards");
+            if (players > 1) throw new CliException("--players is for the sweep's combats: not with --runs");
             var mode = ascensions.Select(a => RunCommand.GameModeOf(r.GetValue(Mode), a)).Distinct().Single();
             runs = new RunSweep(characters, ascensions, each, r.GetValue(Seed), loadout, mode);
         }

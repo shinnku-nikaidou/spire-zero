@@ -478,7 +478,7 @@ fn start(action: &str, c: &mut Combat) -> Result<(), String> {
 /// (FightCap in the simulator), so that a player who can no longer hurt the enemies does not play forever.
 const MAX_ROUNDS: i32 = 80;
 
-/// The fight round cap: when the player can act again and the fight is past its last round, the player is killed the
+/// The fight round cap: when the player can act again and the fight is past its last round, the (local) player is killed the
 /// way the game's own kill command does, forced so that nothing revives them, and the win condition is checked.
 fn cap(c: &mut Combat) -> R<()> {
     let manager = c.s.combat_manager__instance;
@@ -489,7 +489,7 @@ fn cap(c: &mut Combat) -> R<()> {
     if is_null(&state) || g::combat::combat_state::round_number(state, c) <= MAX_ROUNDS {
         return Ok(());
     }
-    let player = g::combat::combat_state::players(state, c)[0];
+    let (_, player) = crate::ffi::live(c);
     let creature = g::entities_players::player::creature(player, c);
     if g::entities_creatures::creature::is_dead(creature, c) {
         return Ok(());

@@ -59,8 +59,8 @@ internal sealed class Screens
         var top = ActiveScreenContext.Instance.GetCurrentScreen();
         // Prompts wait inside an action or a reward; every other screen waits with the action queue empty.
         bool settled = RunManager.Instance.ActionQueueSet.IsEmpty;
-        // A run of several players (the console's switch): the others' turns between a fight's export and its prompts
-        // are in no record, so a prompt in a fight is the player's; and a vote cast waits on the others.
+        // A run of several players: a card prompt in a fight after a teammate acted is the player's, and a vote cast
+        // waits on the others.
         if (run.Players.Count > 1 && Waits(run, me, top) is { } waiting)
         {
             note = waiting;
@@ -130,11 +130,12 @@ internal sealed class Screens
     }
 
     /// <summary>In a run of several players, what the screen waits on that no decision of this player's answers; null when
-    /// it asks one.</summary>
+    /// it asks one. A card prompt in a fight is searched where the fight's steps since the combat was last written out
+    /// are all the local player's (<see cref="NodeRecord.Fight"/>): a teammate's in between are in no record.</summary>
     private static string? Waits(RunState run, Player me, object? top)
     {
-        if (CombatManager.Instance.IsInProgress && top is not NCombatRoom) return "answer the card prompt yourself";
-        if (top is NCombatRoom && NPlayerHand.Instance is { IsInCardSelection: true }) return "answer the card prompt yourself";
+        bool prompt = CombatManager.Instance.IsInProgress && top is not NCombatRoom || top is NCombatRoom && NPlayerHand.Instance is { IsInCardSelection: true };
+        if (prompt && NodeRecord.Fight == null) return "answer the card prompt yourself";
         var rm = RunManager.Instance;
         if (top is NMapScreen && rm.MapSelectionSynchronizer.GetVote(me) != null) return "waiting for teammates";
         if (run.CurrentRoom is EventRoom && top is NEventRoom && rm.EventSynchronizer.IsShared && rm.EventSynchronizer.GetPlayerVote(me) != null)

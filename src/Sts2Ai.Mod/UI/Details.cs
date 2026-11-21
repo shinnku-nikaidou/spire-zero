@@ -34,14 +34,15 @@ internal sealed class Details
     }
 
     /// <summary>The card beside <paramref name="beside"/> (the panel's card): on its right, or on its left where the
-    /// window has no room; hidden with no table.</summary>
-    public void Show(FightTable? table, bool visible, Rect2 beside, float opacity)
+    /// window has no room; hidden with no table. <paramref name="coop"/>: a run of more than one player, whose search
+    /// takes the teammates to play nothing more this turn.</summary>
+    public void Show(FightTable? table, bool visible, Rect2 beside, float opacity, bool coop = false)
     {
         _card.Visible = visible && table != null;
         if (!_card.Visible) return;
         if (_card.Theme != Fonts.Theme) _card.Theme = Fonts.Theme;
         if (_card.Modulate.A != opacity) _card.Modulate = Colors.White with { A = opacity };
-        var key = (table, Settings.Current.Env, L10n.T("Turn"));
+        var key = (table, Settings.Current.Env, coop, L10n.T("Turn"));
         if (!Equals(key, _built))
         {
             _built = key;
@@ -50,7 +51,7 @@ internal sealed class Details
                 _body.RemoveChild(child);
                 child.QueueFree();
             }
-            Build(table!);
+            Build(table!, coop);
             _card.CallDeferred(Control.MethodName.ResetSize);
         }
         var window = _card.GetViewportRect().Size;
@@ -60,7 +61,7 @@ internal sealed class Details
         _card.Position = new Vector2(Math.Max(x, 0), y);
     }
 
-    private void Build(FightTable table)
+    private void Build(FightTable table, bool coop)
     {
         var head = Panel.Row(10);
         var title = Panel.Text(L10n.T("Best line · by turn"), 15, Panel.Fg);
@@ -74,6 +75,7 @@ internal sealed class Details
         _body.AddChild(Legend(table));
         _body.AddChild(Chart(table));
         string foot = table.Status != CombatStatus.InProgress ? "Played out to the fight's end."
+            : coop ? "This turn played out in one sampled world, your teammates playing nothing more, to the end of the enemies' turn; after it, the combat net's guess."
             : Settings.Current.Env == PlayEnvironment.SL ? "Played out to the end of the plan; after it, the combat net's guess."
             : "This turn played out in one sampled world, to the end of the enemies' turn; after it, the combat net's guess.";
         var note = Panel.Wrapped(Panel.Text(L10n.T(foot), 11, Panel.Muted));

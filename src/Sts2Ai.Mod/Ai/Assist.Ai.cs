@@ -24,13 +24,6 @@ internal sealed partial class Assist
     /// <summary>The mod's assist, for the console; null when the mod is off.</summary>
     public static Assist? Current { get; set; }
 
-    /// <summary>The console's switch for runs of more than one player (NoSL, the local player's decisions). Kept for the
-    /// game session only, and set nowhere but the console.</summary>
-    public static bool Multiplayer { get; set; }
-
-    /// <summary>Whether the mod serves this run: one player's, or several players' with the console's switch on.</summary>
-    private static bool Served(RunState run) => run.Players.Count == 1 || Multiplayer;
-
     // ---- the decisions asked ----
 
     /// <summary>A decision asked of the brain, with what a query needs to ask it again.</summary>
@@ -760,6 +753,7 @@ internal sealed partial class Assist
     {
         if (_run == null) throw new AiError("no run sent to the brain yet");
         if (_quiz) throw new AiError("the quiz is on: ai quiz off first");
+        if (_coop) throw new AiError("a run of more than one player: the AI only advises");
         UntilStop stop = what switch
         {
             "boss" => new("boss", 0),
@@ -797,6 +791,7 @@ internal sealed partial class Assist
     public string Drive(Command command, bool? on = null)
     {
         if (_run == null) throw new AiError("no run sent to the brain yet");
+        if (_coop) throw new AiError("a run of more than one player: the AI only advises");
         if (command == Command.Auto && on is { } want && want == (_goal == Goal.Auto)) return want ? "auto-play is already on" : "auto-play is already off";
         if (_quiz) throw new AiError("the quiz is on: ai quiz off first");
         Press(command);

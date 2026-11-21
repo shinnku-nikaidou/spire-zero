@@ -108,8 +108,25 @@ internal static class NodeRecord
 
     private static List<string>? _fight;
 
-    /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole.</summary>
-    public static void FightBegins() => _fight = Checkpoint != null && Broken == null ? [] : null;
+    /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole, or in a run of more than
+    /// one player (which has no record) until a teammate acts.</summary>
+    public static void FightBegins() => _fight = Checkpoint != null && Broken == null || Coop ? [] : null;
+
+    /// <summary>In a run of more than one player, the combat was written out again at a decision of the local player's:
+    /// its steps are recorded from here, until a teammate acts.</summary>
+    public static void Rearm()
+    {
+        if (Coop && CombatManager.Instance.IsInProgress) _fight = [];
+    }
+
+    private static bool Coop => RunManager.Instance.DebugOnlyGetState() is { Players.Count: > 1 };
+
+    /// <summary>A teammate acted in the fight: the fight's steps since the combat was last written out are not all in the
+    /// record, so no card prompt stands on them.</summary>
+    private static void Teammate()
+    {
+        if (Coop) _fight = null;
+    }
 
     /// <summary>Each step as it is taken, the record on or off: its surface, its action and whether the AI took it (the
     /// console's review reads the player's answers off it).</summary>
@@ -323,13 +340,18 @@ internal static class NodeRecord
         var entries = (IReadOnlyList<CombatHistoryEntry>)CombatManager.Instance.History.Entries;
         if (entries.Count < _historyRead) _historyRead = 0;
         for (int i = _historyRead; i < entries.Count; i++)
-            if (CombatActions.PlayStarted(entries[i], RunningAction) is { } play && Mine(RunningAction!)) Add(Surfaces.Combat, play.ToString());
+            if (CombatActions.PlayStarted(entries[i], RunningAction) is { } play)
+            {
+                if (Mine(RunningAction!)) Add(Surfaces.Combat, play.ToString());
+                else Teammate();
+            }
         _historyRead = entries.Count;
     });
 
     /// <summary>A potion drunk: its action found it and its target.</summary>
     private static void Used() => Guard(() =>
     {
+        if (RunningAction is UsePotionAction { WasEnqueuedInCombat: true } other && !Mine(other)) Teammate();
         if (RunningAction is not UsePotionAction use || !Mine(use) || _run is not { } run || LocalContext.GetMe(run) is not { } me) return;
         if (use.WasEnqueuedInCombat) Add(Surfaces.Combat, CombatActions.PotionOf(me, (int)use.PotionIndex, use.TargetId).ToString());
         else Belt(MacroAction.Of(MacroAction.Potion, (int)use.PotionIndex));
@@ -338,6 +360,7 @@ internal static class NodeRecord
     /// <summary>A potion thrown away by the player (events throw some away too, outside any action).</summary>
     private static void Discarded() => Guard(() =>
     {
+        if (RunningAction is DiscardPotionGameAction { WasEnqueuedInCombat: true } other && !Mine(other)) Teammate();
         if (RunningAction is not DiscardPotionGameAction discard || !Mine(discard)) return;
         var action = MacroAction.Of(MacroAction.DiscardPotion, (int)DiscardedSlot(discard));
         // In combat the simulator never decides one; the clone replays it all the same (RunSession).
@@ -348,6 +371,7 @@ internal static class NodeRecord
     /// <summary>The player's turn end, once: cards and effects that end the turn are no decision.</summary>
     private static void TurnEnded(Player player) => Guard(() =>
     {
+        if (RunningAction is EndPlayerTurnAction && !Mine(player.NetId)) Teammate();
         if (RunningAction is EndPlayerTurnAction && Mine(player.NetId) && !CombatManager.Instance.IsPlayerReadyToEndTurn(player)) Add(Surfaces.Combat, CombatAction.EndTurn.ToString());
     });
 
@@ -494,7 +518,8 @@ internal static class NodeRecord
         else PlayerActs++;
         if (Checkpoint == null || Broken != null)
         {
-            _fight = null;
+            if (Coop && _fight != null && surface is Surfaces.Combat or Surfaces.CardChoice) _fight.Add($"{surface} {action}");
+            else _fight = null;
             return false;
         }
         _steps.Insert(at, new($"{surface} {action}", ai, SaveManager.Instance.CurrentRunSaveTask is { IsCompleted: false }));
@@ -507,8 +532,8 @@ internal static class NodeRecord
         return true;
     }
 
-    /// <summary>Whether a player's action is the local player's: in a run of several players (the console's switch) the
-    /// others' steps are no answer of this player's.</summary>
+    /// <summary>Whether a player's action is the local player's: in a run of several players the others' steps are no
+    /// answer of this player's.</summary>
     private static bool Mine(GameAction action) => Mine(action.OwnerId);
 
     private static bool Mine(ulong owner) => LocalContext.NetId is not { } me || owner == me;
