@@ -6,8 +6,10 @@
 # test-turn-dominance's rule-on side at c65af642, the Dread mode (played at A10) from test-turn-dominance-dread at
 # 9b4b4b74 (nothing between the two changes a medium SL run), all on promotion-1-200, 200 runs of each but the failed
 # ones left out (the Defect's Dread 198: the engine's exceptions on two seeds that failed in test v12-1 too); shown with
-# the run counts, as the user chose. NoSL's are its champion v0-nosl-1-2 + c0-nosl-1-2's (PIMC 8 worlds x 300 nodes, which no
-# effort changes; test test-v0-nosl-1-2 at 62f2befd on promotion-1-100: A0 and A10, 100 runs of each, none failed).
+# the run counts, as the user chose. NoSL's are its champion v0-nosl-2 + c0-nosl-2's (PIMC 8 worlds x 300 nodes, which no
+# effort changes; test test-v0-nosl-2 at 3016ff12 on promotion-1-100: A0, A10 and the Dread mode, 100 runs of each but the
+# failed ones left out, the Fool's 4, 4 and 2 at Ki Chant's prompt, fixed after the test). Its parentheses are the user's
+# words (2026-11-21: 括號裡面寫上完全0作弊, 禁止回檔).
 import json
 import pathlib
 
@@ -22,13 +24,13 @@ WINS = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
     "NECROBINDER": (198, 200, 138, 200, 40, 200),
     "FOOL": (192, 200, 88, 200, 17, 200),
 }
-WINS_NOSL = {  # (A0 won, A0 runs, A10 won, A10 runs)
-    "IRONCLAD": (86, 100, 10, 100),
-    "SILENT": (94, 100, 29, 100),
-    "DEFECT": (90, 100, 19, 100),
-    "REGENT": (72, 100, 11, 100),
-    "NECROBINDER": (85, 100, 11, 100),
-    "FOOL": (66, 100, 9, 100),
+WINS_NOSL = {  # (A0 won, A0 runs, A10 won, A10 runs, Dread won, Dread runs)
+    "IRONCLAD": (93, 100, 20, 100, 2, 100),
+    "SILENT": (95, 100, 33, 100, 1, 100),
+    "DEFECT": (97, 100, 24, 100, 3, 100),
+    "REGENT": (82, 100, 18, 100, 2, 100),
+    "NECROBINDER": (91, 100, 18, 100, 0, 100),
+    "FOOL": (79, 96, 7, 96, 1, 98),
 }
 REPO = "https://github.com/shinnku-nikaidou/spire-zero"
 DOCS = "https://sts2-docs.shinnkunikaidou.workers.dev/"
@@ -62,7 +64,7 @@ T["eng"] = dict(
     nosl="[b]NoSL[/b]: only what a player can see. No peeking.",
     how_h="How well it plays",
     how_intro="In SL, with Search effort set to Medium, on test seeds, the share of runs it won:",
-    how_nosl="In NoSL (the same at any Search effort), on test seeds, the share of runs it won:",
+    how_nosl="In NoSL (zero cheating, no save-loading), on test seeds, the share of runs it won:",
     req_h="Requirements",
     req_version="The game at exactly [b]v0.113.1[/b], Steam's [b]public-beta[/b] branch (the game's Properties, then Betas). On another version the mod turns itself off and says why.",
     req_platforms="Windows (x64), Linux (x64) or macOS (Apple silicon).",
@@ -87,7 +89,7 @@ T["zht"] = dict(
     nosl="[b]NoSL[/b]：只用玩家看得到的資訊，不偷看。",
     how_h="它打得多好",
     how_intro="在 SL、思考深度設為「中」、測試種子上，它贏下的局數比例：",
-    how_nosl="在 NoSL（不受思考深度影響）、測試種子上，它贏下的局數比例：",
+    how_nosl="在 NoSL（完全0作弊，禁止回檔）、測試種子上，它贏下的局數比例：",
     req_h="需求",
     req_version="遊戲版本必須剛好是 [b]v0.113.1[/b]，也就是 Steam 的 [b]public-beta[/b] 測試分支。版本不同時，mod 會自己停用並告訴你原因。",
     req_platforms="Windows（x64）、Linux（x64）或 macOS（Apple 晶片）。",
@@ -112,7 +114,7 @@ T["zhs"] = dict(
     nosl="[b]NoSL[/b]：只用玩家看得到的信息，不偷看。",
     how_h="它打得多好",
     how_intro="在 SL、思考深度设为“中”、测试种子上，它赢下的局数比例：",
-    how_nosl="在 NoSL（不受思考深度影响）、测试种子上，它赢下的局数比例：",
+    how_nosl="在 NoSL（完全0作弊，禁止回档）、测试种子上，它赢下的局数比例：",
     req_h="需求",
     req_version="游戏版本必须正好是 [b]v0.113.1[/b]，也就是 Steam 的 [b]public-beta[/b] 测试分支。版本不同时，mod 会自己停用并告诉你原因。",
     req_platforms="Windows（x64）、Linux（x64）或 macOS（Apple 芯片）。",
@@ -137,7 +139,7 @@ T["deu"] = dict(
     nosl="[b]NoSL[/b]: nur das, was ein Spieler sehen kann. Kein Spicken.",
     how_h="Wie gut sie spielt",
     how_intro="In SL, mit Search effort auf Medium, auf Test-Seeds, der Anteil gewonnener Runs:",
-    how_nosl="In NoSL (bei jedem Search effort gleich), auf Test-Seeds, der Anteil gewonnener Runs:",
+    how_nosl="In NoSL (null Schummeln, kein Neuladen von Spielständen), auf Test-Seeds, der Anteil gewonnener Runs:",
     req_h="Voraussetzungen",
     req_version="Das Spiel in genau [b]v0.113.1[/b], dem [b]public-beta[/b]-Branch auf Steam (in den Eigenschaften des Spiels auf Steam). Bei einer anderen Version schaltet sich die Mod selbst ab und sagt, warum.",
     req_platforms="Windows (x64), Linux (x64) oder macOS (Apple Silicon).",
@@ -162,7 +164,7 @@ T["fra"] = dict(
     nosl="[b]NoSL[/b] : seulement ce qu'un joueur peut voir. Aucune triche.",
     how_h="Son niveau",
     how_intro="En SL, avec l'effort de recherche sur « Moyen », sur des seeds de test, la part des parties gagnées :",
-    how_nosl="En NoSL (identique quel que soit l'effort de recherche), sur des seeds de test, la part des parties gagnées :",
+    how_nosl="En NoSL (zéro triche, aucun rechargement de sauvegarde), sur des seeds de test, la part des parties gagnées :",
     req_h="Configuration requise",
     req_version="Le jeu en version [b]v0.113.1[/b] exactement, la branche [b]public-beta[/b] de Steam (dans les propriétés du jeu sur Steam). Avec une autre version, le mod se désactive et explique pourquoi.",
     req_platforms="Windows (x64), Linux (x64) ou macOS (puce Apple).",
@@ -186,7 +188,7 @@ spa = dict(
     nosl="[b]NoSL[/b]: solo lo que un jugador puede ver. Sin espiar.",
     how_h="Su nivel de juego",
     how_intro="En SL, con el esfuerzo de búsqueda en «Medio», con semillas de prueba, la proporción de partidas ganadas:",
-    how_nosl="En NoSL (igual con cualquier esfuerzo de búsqueda), con semillas de prueba, la proporción de partidas ganadas:",
+    how_nosl="En NoSL (cero trampas, sin recargar partidas guardadas), con semillas de prueba, la proporción de partidas ganadas:",
     req_h="Requisitos",
     req_version="El juego exactamente en la [b]v0.113.1[/b], la rama [b]public-beta[/b] de Steam (en las propiedades del juego en Steam). Con otra versión, el mod se desactiva solo y explica por qué.",
     req_platforms="Windows (x64), Linux (x64) o macOS (Apple silicon).",
@@ -214,7 +216,7 @@ T["ita"] = dict(
     nosl="[b]NoSL[/b]: solo ciò che un giocatore può vedere. Niente sbirciate.",
     how_h="Quanto è forte",
     how_intro="In SL, con Search effort su Medium, su seed di prova, la quota di partite vinte:",
-    how_nosl="In NoSL (uguale con qualsiasi Search effort), su seed di prova, la quota di partite vinte:",
+    how_nosl="In NoSL (zero imbrogli, niente ricaricamenti dei salvataggi), su seed di prova, la quota di partite vinte:",
     req_h="Requisiti",
     req_version="Il gioco esattamente alla [b]v0.113.1[/b], il ramo [b]public-beta[/b] di Steam (nelle proprietà del gioco su Steam). Con un'altra versione la mod si disattiva da sola e spiega perché.",
     req_platforms="Windows (x64), Linux (x64) o macOS (Apple silicon).",
@@ -239,7 +241,7 @@ T["ptb"] = dict(
     nosl="[b]NoSL[/b]: só o que um jogador pode ver. Sem espiar.",
     how_h="O quanto ela joga bem",
     how_intro="No SL, com Search effort em Medium, em seeds de teste, a parcela de partidas vencidas:",
-    how_nosl="No NoSL (igual com qualquer Search effort), em seeds de teste, a parcela de partidas vencidas:",
+    how_nosl="No NoSL (zero trapaça, sem recarregar saves), em seeds de teste, a parcela de partidas vencidas:",
     req_h="Requisitos",
     req_version="O jogo exatamente na [b]v0.113.1[/b], o branch [b]public-beta[/b] da Steam (nas propriedades do jogo na Steam). Em outra versão, o mod se desliga sozinho e diz por quê.",
     req_platforms="Windows (x64), Linux (x64) ou macOS (Apple silicon).",
@@ -264,7 +266,7 @@ T["pol"] = dict(
     nosl="[b]NoSL[/b]: tylko to, co widzi gracz. Bez podglądania.",
     how_h="Jak dobrze gra",
     how_intro="W SL, z Search effort ustawionym na Medium, na testowych seedach, odsetek wygranych runów:",
-    how_nosl="W NoSL (tak samo przy każdym Search effort), na testowych seedach, odsetek wygranych runów:",
+    how_nosl="W NoSL (zero oszukiwania, bez wczytywania zapisów), na testowych seedach, odsetek wygranych runów:",
     req_h="Wymagania",
     req_version="Gra w wersji dokładnie [b]v0.113.1[/b], czyli gałąź [b]public-beta[/b] na Steamie (we właściwościach gry na Steamie). Przy innej wersji mod sam się wyłącza i mówi dlaczego.",
     req_platforms="Windows (x64), Linux (x64) lub macOS (Apple silicon).",
@@ -289,7 +291,7 @@ T["rus"] = dict(
     nosl="[b]NoSL[/b]: только то, что видит игрок. Без подглядывания.",
     how_h="Насколько хорошо он играет",
     how_intro="В SL, с Search effort на Medium, на тестовых сидах, доля выигранных забегов:",
-    how_nosl="В NoSL (одинаково при любом Search effort), на тестовых сидах, доля выигранных забегов:",
+    how_nosl="В NoSL (ноль читерства, без загрузки сохранений), на тестовых сидах, доля выигранных забегов:",
     req_h="Требования",
     req_version="Игра строго версии [b]v0.113.1[/b], ветка [b]public-beta[/b] в Steam (в свойствах игры в Steam). На другой версии мод сам отключается и объясняет почему.",
     req_platforms="Windows (x64), Linux (x64) или macOS (Apple Silicon).",
@@ -314,7 +316,7 @@ T["tur"] = dict(
     nosl="[b]NoSL[/b]: yalnızca bir oyuncunun görebildikleri. Gizlice bakmak yok.",
     how_h="Ne kadar iyi oynuyor",
     how_intro="SL'de, Search effort Medium iken, test seed'lerinde kazandığı oyunların oranı:",
-    how_nosl="NoSL'de (Search effort ne olursa olsun aynı), test seed'lerinde kazandığı oyunların oranı:",
+    how_nosl="NoSL'de (sıfır hile, kayıt yüklemek yok), test seed'lerinde kazandığı oyunların oranı:",
     req_h="Gereksinimler",
     req_version="Oyun tam olarak [b]v0.113.1[/b] sürümünde olmalı, yani Steam'in [b]public-beta[/b] dalı (Steam'de oyunun özelliklerinden). Başka bir sürümde mod kendini kapatır ve nedenini söyler.",
     req_platforms="Windows (x64), Linux (x64) veya macOS (Apple silicon).",
@@ -339,7 +341,7 @@ T["jpn"] = dict(
     nosl="[b]NoSL[/b]：プレイヤーに見える情報だけを使います。のぞき見はなし。",
     how_h="どれくらい強いか",
     how_intro="SL、探索の深さ「普通」、テスト用シードで勝ったランの割合：",
-    how_nosl="NoSL（探索の深さに関係なく同じ）、テスト用シードで勝ったランの割合：",
+    how_nosl="NoSL（不正は一切なし、セーブ＆ロード禁止）、テスト用シードで勝ったランの割合：",
     req_h="動作条件",
     req_version="ゲームのバージョンがちょうど [b]v0.113.1[/b]（Steam の [b]public-beta[/b] ブランチ。Steam のゲームのプロパティから選べます）であること。バージョンが違うと MOD は自動で無効になり、理由を表示します。",
     req_platforms="Windows（x64）、Linux（x64）、macOS（Apple シリコン）。",
@@ -364,7 +366,7 @@ T["kor"] = dict(
     nosl="[b]NoSL[/b]: 플레이어가 볼 수 있는 정보만 사용합니다. 엿보기 없음.",
     how_h="얼마나 잘하나요",
     how_intro="SL에서 Search effort를 Medium으로 두고, 테스트 시드에서 이긴 런의 비율:",
-    how_nosl="NoSL에서(Search effort와 상관없이 같음), 테스트 시드에서 이긴 런의 비율:",
+    how_nosl="NoSL에서(부정행위 0, 세이브 로드 금지), 테스트 시드에서 이긴 런의 비율:",
     req_h="요구 사항",
     req_version="게임 버전이 정확히 [b]v0.113.1[/b]이어야 합니다. Steam의 [b]public-beta[/b] 브랜치입니다(Steam의 게임 속성에서 선택). 다른 버전에서는 모드가 스스로 꺼지고 이유를 알려 줍니다.",
     req_platforms="Windows (x64), Linux (x64), macOS (Apple 실리콘).",
@@ -389,7 +391,7 @@ T["ind"] = dict(
     nosl="[b]NoSL[/b]: hanya yang bisa dilihat pemain. Tanpa mengintip.",
     how_h="Seberapa bagus permainannya",
     how_intro="Di SL, dengan Search effort Medium, dengan seed uji, persentase run yang dimenangkan:",
-    how_nosl="Di NoSL (sama untuk Search effort apa pun), dengan seed uji, persentase run yang dimenangkan:",
+    how_nosl="Di NoSL (nol kecurangan, tanpa memuat ulang simpanan), dengan seed uji, persentase run yang dimenangkan:",
     req_h="Persyaratan",
     req_version="Game harus tepat versi [b]v0.113.1[/b], yaitu cabang [b]public-beta[/b] di Steam (dari properti game di Steam). Di versi lain, mod akan menonaktifkan dirinya dan memberi tahu alasannya.",
     req_platforms="Windows (x64), Linux (x64), atau macOS (Apple silicon).",
@@ -414,7 +416,7 @@ T["tha"] = dict(
     nosl="[b]NoSL[/b]: ใช้เฉพาะข้อมูลที่ผู้เล่นมองเห็น ไม่แอบดู",
     how_h="เล่นเก่งแค่ไหน",
     how_intro="ในโหมด SL โดยตั้ง Search effort เป็น Medium บนซีดทดสอบ สัดส่วนรันที่ชนะ:",
-    how_nosl="ในโหมด NoSL (เหมือนกันทุกระดับ Search effort) บนซีดทดสอบ สัดส่วนรันที่ชนะ:",
+    how_nosl="ในโหมด NoSL (ไม่โกงเลย ห้ามโหลดเซฟย้อน) บนซีดทดสอบ สัดส่วนรันที่ชนะ:",
     req_h="ความต้องการของระบบ",
     req_version="เกมต้องเป็นเวอร์ชัน [b]v0.113.1[/b] พอดี คือสาขา [b]public-beta[/b] ของ Steam (เลือกได้ในคุณสมบัติของเกมบน Steam) ถ้าเป็นเวอร์ชันอื่น ม็อดจะปิดตัวเองและบอกเหตุผล",
     req_platforms="Windows (x64), Linux (x64) หรือ macOS (Apple silicon)",
@@ -439,7 +441,7 @@ T["ara"] = dict(
     nosl="[b]NoSL[/b]: ما يراه اللاعب فقط. بلا تلصص.",
     how_h="ما مدى براعته",
     how_intro="في وضع SL، مع ضبط Search effort على Medium، على بذور الاختبار، نسبة الجولات التي فاز بها:",
-    how_nosl="في وضع NoSL (نفسه مع أي Search effort)، على بذور الاختبار، نسبة الجولات التي فاز بها:",
+    how_nosl="في وضع NoSL (بلا أي غش، ولا إعادة تحميل للحفظ)، على بذور الاختبار، نسبة الجولات التي فاز بها:",
     req_h="المتطلبات",
     req_version="أن تكون اللعبة بالإصدار [b]v0.113.1[/b] تحديدًا، أي فرع [b]public-beta[/b] على Steam (من خصائص اللعبة في Steam). مع أي إصدار آخر يعطّل التعديل نفسه ويذكر السبب.",
     req_platforms="Windows (x64) أو Linux (x64) أو macOS (Apple silicon).",
@@ -477,10 +479,10 @@ for lang, t in T.items():
     for c in CHARS:
         a0w, a0n, a10w, a10n, dw, dn = WINS[c]
         rows.append(f"[tr][td]{name(lang, c)}[/td][td]{pct(a0w, a0n, lang)}[/td][td]{pct(a10w, a10n, lang)}[/td][td]{pct(dw, dn, lang)}[/td][/tr]")
-    nosl = [f"[tr][th][/th][th]{ascension(lang, 0)}[/th][th]{ascension(lang, 10)}[/th][/tr]"]
+    nosl = [rows[0]]
     for c in CHARS:
-        a0w, a0n, a10w, a10n = WINS_NOSL[c]
-        nosl.append(f"[tr][td]{name(lang, c)}[/td][td]{pct(a0w, a0n, lang)}[/td][td]{pct(a10w, a10n, lang)}[/td][/tr]")
+        a0w, a0n, a10w, a10n, dw, dn = WINS_NOSL[c]
+        nosl.append(f"[tr][td]{name(lang, c)}[/td][td]{pct(a0w, a0n, lang)}[/td][td]{pct(a10w, a10n, lang)}[/td][td]{pct(dw, dn, lang)}[/td][/tr]")
     # The title on the first line, the description after the blank line (src/Sts2Ai.Workshop reads them so).
     text = f"""{t['title']}
 
@@ -504,6 +506,8 @@ for lang, t in T.items():
 [table]
 {chr(10).join(rows)}
 [/table]
+
+
 {t['how_nosl']}
 [table]
 {chr(10).join(nosl)}
