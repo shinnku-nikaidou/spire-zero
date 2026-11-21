@@ -7,10 +7,11 @@ without it. A potion that left the belt outside a fight, or that the run still h
 stops short of is not known and left out. The loss is f's squared error in units of 100 HP, every run weighed the same;
 early stopping is on the held-out runs' loss (v/data.py's split).
 
---init is required: f goes on from a net file, a V's (its tables, state scaling and body, f's head anew; v/net.py's Body)
-or an f's. The report gives the held-out root mean squared error in HP (`rmse_held_out`) against that of each potion
-id's mean on the training decisions whatever the run (`rmse_id_mean`) and the --init net's (`init_rmse_held_out`), and
-per potion id the held-out potions, their mean saving and f's mean (`by_potion`).
+--init is required: f goes on from a net file, a V's (its tables, state scaling and body, f's head anew, at the
+training potions' mean saving; v/net.py's Body) or an f's. The report gives the held-out root mean squared error in HP
+(`rmse_held_out`) against that of each potion id's mean on the training decisions whatever the run (`rmse_id_mean`) and
+the --init net's (`init_rmse_held_out`), and per potion id the held-out potions, their mean saving and f's mean
+(`by_potion`).
 
 A run is read by the simulator's code (common.Encoder): --encoder is how to start it, the simulator's `encode` at
 the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program src/Sts2Ai.Encode.
@@ -35,7 +36,7 @@ import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
 from f import export  # noqa: E402
-from f.net import Batch, Net, loss  # noqa: E402
+from f.net import SCALE, Batch, Net, loss  # noqa: E402
 from v import data, spec  # noqa: E402
 from weights import out_path  # noqa: E402
 from workers import built  # noqa: E402
@@ -123,6 +124,13 @@ def main(
 
     model = Net({t: len(ids) for t, ids in tables.items()})
     model.load_state_dict(export.weights(start, model))
+    if "floors" in start:
+        # From a V's body f's head is new: it starts at the training potions' mean saving whatever the run, not at a
+        # random tens of HP, which the first steps would push down to where softplus learns nothing.
+        saved = max(sum(v for _, v in known(train)) / max(1, len(known(train))), 0.1)
+        with torch.no_grad():
+            model.head[-1].weight.zero_()
+            model.head[-1].bias.fill_(math.log(math.expm1(saved / SCALE)))
     model = model.to(device)
     model.eval()
     init_loss, init_rmse, _ = evaluate(model)
