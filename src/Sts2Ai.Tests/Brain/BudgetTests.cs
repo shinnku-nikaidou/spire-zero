@@ -1,4 +1,5 @@
 using Sts2Ai.Brain;
+using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Tests.Brain;
 
@@ -12,6 +13,15 @@ public class BudgetTests
         Assert.Equal("beam 16x300", new Budget(Beam: 16).ToString());
         Assert.Equal("beam 4x300 loss plans 3", new Budget(Beam: 4, LossPlans: 3).ToString());
         Assert.Equal("beam 8x300 easy 4 loss plans 3", new Budget(Beam: 8, EasyBeam: 4, LossPlans: 3).ToString());
+    }
+
+    [Fact]
+    public void ALogShowsAStopOnlyWhereThereIsOne()
+    {
+        // max's records stay as they were; xhigh's carry its stop, and read back the same.
+        Assert.DoesNotContain("stop", ProtocolJson.Serialize(Budget.Effort("max")));
+        Assert.Contains("\"stop\":1024", ProtocolJson.Serialize(Budget.Effort("xhigh")));
+        Assert.Equal(Budget.Effort("xhigh"), ProtocolJson.Deserialize<Budget>(ProtocolJson.Serialize(Budget.Effort("xhigh"))));
     }
 
     [Fact]

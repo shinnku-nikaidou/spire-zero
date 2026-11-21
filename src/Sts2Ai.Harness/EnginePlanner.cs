@@ -176,8 +176,8 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         return new(played => Observe(crossing, played),
             // Every answer crossed side by side first: the solver crosses the prompt before it searches on.
             (budget, history) => Plan(prompt, crossing, budget, history, int.MaxValue),
-            (history, decay) => new Solving(new EngineSolver(_net.Value, net.FightValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed,
-                history, decay, threads)));
+            (history, decay, stop) => new Solving(new EngineSolver(_net.Value, net.FightValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed,
+                history, decay, threads, stop: stop)));
     }
 
     /// <summary>The combat's observation after <paramref name="played"/> from the prompt the clone stands at: along its
@@ -207,7 +207,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             foreach (var action in played) at.Execute(action);
             return at.Observe();
         }, (budget, history) => Plan(root, budget, history),
-            (history, decay) => new Solving(new EngineSolver(_net.Value, net.FightValue, root, history, decay, threads)));
+            (history, decay, stop) => new Solving(new EngineSolver(_net.Value, net.FightValue, root, history, decay, threads, stop: stop)));
     }
 
     /// <summary>The engine's solver as the route plays one.</summary>

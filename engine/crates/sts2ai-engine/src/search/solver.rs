@@ -258,10 +258,13 @@ pub struct Solver {
     /// along what was played, or at the start the seed's.
     playing: Option<(TurnEnd, f64)>,
     /// The pick's first action when last looked at (`look`), and the nodes when it last changed: how soon an answer
-    /// settles, for choosing an early answer at max (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4). A record only:
-    /// nothing the search does reads it.
+    /// settles (plans/2026-11-20-1231-silent-shiv-poison.md, 2.4). Only xhigh's early stop reads it (`content`).
     first: Option<Action>,
     settled: i64,
+    /// xhigh's early stop (plans/2026-11-21-1426-xhigh-early-stop.md; the user, 2026-11-21: 「F1024 as proposed」): a run
+    /// after the solver's first ends at a batch's end once the pick is a won line, the root's turn searched, whose first
+    /// action held this many nodes of the run (`content`); 0, never (max).
+    stop: i64,
 }
 
 /// How many expanded states' worlds the solver keeps, the latest. On max's route over 45 fights of whole runs (8
@@ -311,7 +314,13 @@ impl Solver {
             playing: None,
             first: None,
             settled: 0,
+            stop: 0,
         }
+    }
+
+    /// xhigh's early stop after `stop` nodes for the runs from now on (`content`); 0, none.
+    pub fn set_stop(&mut self, stop: i64) {
+        self.stop = stop.max(0);
     }
 
     /// The solver with turns paused after `piece` nodes at the least, instead of `PIECE`; `i64::MAX`, never.
@@ -340,6 +349,16 @@ impl Solver {
             self.first = first;
             self.settled = self.nodes;
         }
+    }
+
+    /// xhigh's early stop holds for a run begun at `begun` nodes: the root's turn is searched, the pick is a won line,
+    /// and its first action has not changed for `stop` nodes of the run. `run` checks it after the solver's first run
+    /// only: stopped early there, a smaller tree leaves the combat's later decisions a worse line (the plan's 3.3).
+    fn content(&self, begun: i64) -> bool {
+        self.stop > 0
+            && self.rooting.is_none()
+            && matches!(&self.best, Some((line, _)) if line.status == Status::Won)
+            && self.nodes - self.settled.max(begun) >= self.stop
     }
 
     pub fn states(&self) -> usize {
@@ -383,9 +402,11 @@ impl Solver {
     /// its search is done, then the states it reaches. The nodes left are shared over each batch's states, at least
     /// `PIECE` each: a state's turn that has more pauses there, and goes on in the next batch, in this run or the next,
     /// before any state waiting starts. The root's turn alone pauses at the run's end, while the solver has a line to
-    /// play meanwhile (`playing`).
+    /// play meanwhile (`playing`). With xhigh's early stop, a run after the solver's first also ends at the end of a
+    /// batch, or of a piece of the root's turn, where `content` holds.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
+        let (begun, stops) = (self.nodes, self.started && self.stop > 0);
         if !self.started {
             self.playing = self.seed.clone();
             // A solver that begins at a card prompt (one crossed on the node's clone, as Gambling Chip's discard that
@@ -400,6 +421,9 @@ impl Solver {
             if self.rooting.is_some() {
                 self.root_turn(search, until)?;
                 self.look();
+                if stops && self.content(begun) {
+                    break;
+                }
                 continue;
             }
             let mut states = std::mem::take(&mut self.going);
@@ -454,6 +478,9 @@ impl Solver {
                 self.purge();
             }
             self.look();
+            if stops && self.content(begun) {
+                break;
+            }
         }
         Ok(())
     }

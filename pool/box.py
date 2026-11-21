@@ -498,7 +498,7 @@ def open_job(job: str, rev: str, until: str, purpose: str, spread: str, options:
 
 CHARACTERS = ["SILENT", "IRONCLAD", "DEFECT", "REGENT", "NECROBINDER", "FOOL"]  # the ledger's order: character k from seeds + 100000 k
 PER_CHARACTER, SMOKE_AT = 100000, 99000  # a character's block of seeds; the last 1,000 are the smoke's
-EFFORTS = ("low", "medium", "high", "max")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")  # Budget.Efforts, cheapest first (xhigh: max with an early stop)
 ROOMS = {"monster": "effort", "elite": "elite-effort", "boss": "boss-effort"}  # a game's effort by room, as run's options
 DATASET_KEYS = {"rev", "name", "deadline", "priority", "seeds", "characters", "champion", "nosl_champion", "workers", "explore", "games",
                 "runs", "families"}  # fmt: skip

@@ -7,10 +7,11 @@ namespace Sts2Ai.Brain.Combat;
 /// where the search runs (plans/2026-11-18-2132-sl-search-rust.md).</summary>
 /// <param name="Observe">The combat's observation from there after the actions given.</param>
 /// <param name="Plan">The beam's plan from there.</param>
-/// <param name="Solver">A solver from there, with the record of enemy moves there and the pick's turn decay.</param>
+/// <param name="Solver">A solver from there, with the record of enemy moves there, the pick's turn decay and xhigh's
+/// early stop (<see cref="Budget.Stop"/>).</param>
 public sealed record TakenCombat(Func<IReadOnlyList<CombatAction>, CombatObservation> Observe,
     Func<Budget, IReadOnlyList<EnemyTurns>, SlPlan> Plan,
-    Func<IReadOnlyList<EnemyTurns>, double, ICombatSolver> Solver);
+    Func<IReadOnlyList<EnemyTurns>, double, long, ICombatSolver> Solver);
 
 /// <summary>
 /// max's combat route (plans/2026-11-18-1412-max-solver.md, 2.3–2.5): one solver a combat (<see cref="ICombatSolver"/>), which
@@ -231,7 +232,7 @@ public sealed class SolverRoute(Budget budget, bool background = false)
     {
         if (start() is not { } from) return false;
         Drop();
-        var solver = from.Solver(history, budget.TurnDecay);
+        var solver = from.Solver(history, budget.TurnDecay, budget.Stop);
         var seed = from.Plan(budget.For(observation.Room) with { Solve = 0 }, history);
         solver.Seed(seed);
         nodes += seed.Nodes;

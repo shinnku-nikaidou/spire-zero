@@ -397,6 +397,18 @@ pub unsafe extern "C" fn sz_solver_new(history: *const u8, len: usize, decay: f6
     })
 }
 
+/// xhigh's early stop for the solver's runs from now on (`Solver::set_stop`; 0, none). 0 when it worked.
+///
+/// # Safety
+/// `solver` is live, used by no other thread during the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_solver_stop(solver: u64, stop: i64) -> i32 {
+    call(1, || {
+        unsafe { self::solver(solver) }?.set_stop(stop);
+        Ok(0)
+    })
+}
+
 /// Frees a solver.
 ///
 /// # Safety

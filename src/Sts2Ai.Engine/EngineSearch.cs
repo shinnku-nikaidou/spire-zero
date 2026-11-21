@@ -107,19 +107,23 @@ public sealed unsafe class EngineSolver : IDisposable
         public void Dispose() => Handle.Free();
     }
 
-    private EngineSolver(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch)
+    private EngineSolver(EngineNet net, Func<RunView, double> value, IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch,
+        long stop)
     {
         var text = Encoding.UTF8.GetBytes(ProtocolJson.Serialize(history));
         fixed (byte* bytes = text) _solver = Native.sz_solver_new(bytes, (nuint)text.Length, decay, batch);
         if (_solver.IsInvalid) throw Native.Failed("sz_solver_new");
+        // Only where it stops early: a library without the call fails here, never a max that stops.
+        if (stop > 0 && Native.sz_solver_stop(_solver, stop) != 0) throw Native.Failed("sz_solver_stop");
         (_net, _value, _threads) = (net, value, threads);
     }
 
     /// <param name="root">Where the solver begins; the solver searches from a copy of it.</param>
     /// <param name="history">The record of enemy moves there.</param>
     /// <param name="decay">The pick's turn decay.</param>
+    /// <param name="stop">xhigh's early stop (the budget's <c>Stop</c>, search/solver.rs <c>Solver::set_stop</c>); 0, none.</param>
     public EngineSolver(EngineNet net, Func<RunView, double> value, EngineWorld root, IReadOnlyList<EnemyTurns> history, double decay, int threads,
-        int batch = 16) : this(net, value, history, decay, threads, batch) => _root = root.Clone();
+        int batch = 16, long stop = 0) : this(net, value, history, decay, threads, batch, stop) => _root = root.Clone();
 
     /// <summary>A solver from the card prompt the node's clone stands at: it crosses the prompt first, every answer
     /// valued, and searches on from where they lead (search/solver.rs, <c>Solver::run</c>).</summary>
@@ -127,8 +131,8 @@ public sealed unsafe class EngineSolver : IDisposable
     /// <param name="cross">What stands after each path of answers from the prompt, asked from any of the engine's
     /// threads while the solver searches.</param>
     public EngineSolver(EngineNet net, Func<RunView, double> value, RunView run, Func<IReadOnlyList<CombatAction>, CrossedPlace> cross,
-        IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch = 16) : this(net, value, history, decay, threads, batch) =>
-        _prompt = new(cross, run);
+        IReadOnlyList<EnemyTurns> history, double decay, int threads, int batch = 16, long stop = 0) : this(net, value, history, decay, threads, batch,
+        stop) => _prompt = new(cross, run);
 
     /// <summary>A line another search found from the root, with the value of the turn start a losing line died from.</summary>
     public void Seed(TurnEnd line, double from)

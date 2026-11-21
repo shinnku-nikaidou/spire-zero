@@ -330,6 +330,27 @@ public class SlRouteTests
         Assert.Equal("beam 8x300 easy 4 loss plans 3", Budget.Effort("low").ToString());
         Assert.Equal("beam 16xall", (Budget.Effort("max") with { NodesPerWorld = SlPlanner.Unlimited }).Size);
         Assert.Throws<ArgumentException>(() => Budget.Effort("ultra"));
+        // xhigh is max with its early stop, between high and max.
+        Assert.Equal(new[] { "low", "medium", "high", "xhigh", "max" }, Budget.Efforts);
+        Assert.Equal(Budget.Effort("max") with { Stop = Budget.XhighStop }, Budget.Effort("xhigh"));
+        Assert.Equal("beam 16x300 solve 16384", Budget.Effort("max").ToString());
+        Assert.Equal("beam 16x300 solve 16384 stop 1024", Budget.Effort("xhigh").ToString());
+    }
+
+    [Fact]
+    public void TheRouteGivesEachSolverItBeginsTheBudgetsStop()
+    {
+        // xhigh's early stop is the solver's own rule (search/solver.rs): the route hands it the budget's.
+        var world = new Toy();
+        foreach (long stop in new[] { 0L, Budget.XhighStop })
+        {
+            long? given = null;
+            var taken = ToyTaken([]);
+            new SolverRoute(new Budget(NodesPerWorld: 10, Beam: 1, Solve: 20, Stop: stop)).Decide(world.Observe(), world.Legal(), [],
+                () => taken with { Solver = (history, decay, s) => { given = s; return taken.Solver(history, decay, s); } },
+                () => throw new InvalidOperationException("the toy is always taken in"));
+            Assert.Equal(stop, given);
+        }
     }
 
     [Fact]
@@ -400,7 +421,7 @@ public class SlRouteTests
     /// the beam's plan there.</summary>
     private static TakenCombat ToyTaken(IReadOnlyList<CombatAction> played, int slow = 0) =>
         new(more => After([.. played, .. more]).Observe(), (budget, _) => Planned(played, Greedy(played), budget.Replan),
-            (_, _) => new ToySolver(played, slow));
+            (_, _, _) => new ToySolver(played, slow));
 
     /// <summary>The record of enemy moves after <paramref name="played"/>, as a decision there has it: each round's
     /// intents from the second on, as the planner's lines record them from a root with none.</summary>

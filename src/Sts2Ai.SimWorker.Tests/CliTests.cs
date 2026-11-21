@@ -209,6 +209,13 @@ public sealed class CliTests : IDisposable
             new ParserConfiguration()));
         Assert.Equal(Budget.Effort("max"), played.Budget);
         Assert.True(played.Budget.Solve > 0);
+
+        // xhigh: max with its early stop, which the name shows.
+        var xhigh = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--value", value, "--effort", "xhigh"],
+            new ParserConfiguration()));
+        Assert.Equal(Budget.Effort("xhigh"), xhigh.Budget);
+        Assert.Equal(Budget.XhighStop, xhigh.Budget.Stop);
+        Assert.Contains("solve 16384 stop 1024", xhigh.Name);
     }
 
     [Fact]

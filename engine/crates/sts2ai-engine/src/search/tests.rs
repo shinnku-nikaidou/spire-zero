@@ -587,6 +587,64 @@ fn the_solver_says_when_its_picks_first_action_last_changed() {
     assert_eq!(settled, solver.settled());
 }
 
+/// max and xhigh (`Solver::set_stop`) from the same won seed, the beam's line, run by run.
+fn max_and_xhigh(stop: i64) -> (Solver, Solver) {
+    let beam = planned(&toy(24), &ToyLeaf, &budget(10, 1));
+    assert_eq!(Status::Won, beam.end);
+    let (mut max, mut xhigh) = (solver(1), solver(1));
+    xhigh.set_stop(stop);
+    for s in [&mut max, &mut xhigh] {
+        s.seed(beam.line.clone(), beam.from);
+    }
+    (max, xhigh)
+}
+
+#[test]
+fn xhigh_searches_its_first_run_as_max() {
+    // The stop holds from the start (a won seed), but a solver's first run is searched whole.
+    let (mut max, mut xhigh) = max_and_xhigh(1);
+    for s in [&mut max, &mut xhigh] {
+        s.run(&toy_searcher(&[], 24, false), 40).expect("a search");
+    }
+    assert_eq!(max.nodes(), xhigh.nodes());
+    assert_eq!(result(&max).steps(), result(&xhigh).steps());
+}
+
+#[test]
+fn xhigh_ends_a_later_run_once_its_won_picks_first_action_held() {
+    let (mut max, mut xhigh) = max_and_xhigh(4);
+    for s in [&mut max, &mut xhigh] {
+        s.run(&toy_searcher(&[], 24, false), 10).expect("a search");
+    }
+    let begun = xhigh.nodes();
+    for s in [&mut max, &mut xhigh] {
+        s.run(&toy_searcher(&[], 24, false), 100_000).expect("a search");
+    }
+    // max searches on to the proof; xhigh answers before, with a won line whose first action held its 4 nodes.
+    assert!(max.proved());
+    assert!(!xhigh.proved());
+    assert!(xhigh.nodes() - begun >= 4, "{} nodes", xhigh.nodes() - begun);
+    assert!(xhigh.nodes() < max.nodes());
+    assert!(xhigh.nodes() - xhigh.settled().max(begun) >= 4);
+    let plan = result(&xhigh);
+    assert_eq!(Status::Won, plan.end);
+    assert_replays(&plan, 24, &[], false);
+}
+
+#[test]
+fn xhigh_searches_as_max_while_no_line_wins() {
+    // The enemy beyond reach: every pick loses, so the stop never holds and the runs are max's, node for node.
+    let (mut max, mut xhigh) = (solver(1), solver(1));
+    xhigh.set_stop(1);
+    for _ in 0..4 {
+        for s in [&mut max, &mut xhigh] {
+            s.run(&toy_searcher(&[], 500, false), 20).expect("a search");
+        }
+        assert_eq!(max.nodes(), xhigh.nodes());
+    }
+    assert_eq!(result(&max).steps(), result(&xhigh).steps());
+}
+
 #[test]
 fn the_same_nodes_give_the_same_plan() {
     let plans: Vec<(Plan, i64, usize)> = (0..2)

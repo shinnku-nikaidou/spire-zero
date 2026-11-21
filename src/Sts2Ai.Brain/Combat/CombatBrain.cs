@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Combat;
@@ -19,8 +20,13 @@ namespace Sts2Ai.Brain.Combat;
 /// <param name="Solve">The combat solver's actions simulated at each decision before it answers (<see cref="SolverRoute"/>,
 /// max): one solver a combat, begun from the beam's plan that the rest of the budget makes; 0: no solver, the beam
 /// alone.</param>
+/// <param name="Stop">xhigh's early stop (plans/2026-11-21-1426-xhigh-early-stop.md): after a solver's first decision, a
+/// decision's search ends at the end of a batch once the pick is a won line, the root's turn searched, whose first action
+/// held this many nodes of the decision; 0: none, every decision searches <paramref name="Solve"/> (max). The mod's
+/// background search answers by its own wait (<see cref="SolverRoute"/>). Left out of the logs when 0.</param>
 public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 0, int Replan = 1, int LossPlans = 0, int EasyBeam = 0,
-    Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1, long Solve = 0)
+    Budget? Elite = null, Budget? Boss = null, double TurnDecay = 1, long Solve = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long Stop = 0)
 {
     /// <summary>The budget of a fight in a room of this type (<see cref="CombatObservation.Room"/>: Monster, Elite or Boss).</summary>
     public Budget For(string? room) => room switch
@@ -34,14 +40,16 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     /// easy beam, the turns of an unproved losing plan played before planning again (0: to its end), and the losing
     /// plans in a row before the last is played to its end. Since 2026-11-18 each name is the budget of the level above
     /// it before (low was medium's, medium high's, high max's); max is the combat solver (<see cref="SolverRoute"/>,
-    /// plans/2026-11-18-1412-max-solver.md), begun from high's beam, with <see cref="MaxSolve"/> nodes a decision.</summary>
+    /// plans/2026-11-18-1412-max-solver.md), begun from high's beam, with <see cref="MaxSolve"/> nodes a decision; xhigh
+    /// is max with an early stop (<see cref="XhighStop"/>), for self-play data (the user, 2026-11-21: 「這個xhigh之後用於訓練用的」).</summary>
     public static Budget Effort(string level) => level switch
     {
         "low" => new(NodesPerWorld: 300, Beam: 8, EasyBeam: 4, LossPlans: 3),
         "medium" => new(NodesPerWorld: 300, Beam: 8, Replan: 1),
         "high" => new(NodesPerWorld: 300, Beam: 16, Replan: 1),
+        "xhigh" => new(NodesPerWorld: 300, Beam: 16, Replan: 1, Solve: MaxSolve, Stop: XhighStop),
         "max" => new(NodesPerWorld: 300, Beam: 16, Replan: 1, Solve: MaxSolve),
-        _ => throw new ArgumentException($"no effort {level}: low, medium, high or max"),
+        _ => throw new ArgumentException($"no effort {level}: low, medium, high, xhigh or max"),
     };
 
     /// <summary>max's solver nodes a decision (<see cref="Solve"/>; the user, 2026-11-19: 「use 16384」). On a friend's
@@ -50,8 +58,13 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
     /// otherwise.</summary>
     public const long MaxSolve = 16_384;
 
+    /// <summary>xhigh's early stop (<see cref="Stop"/>; the user, 2026-11-21: 「F1024 as proposed」). Beside max on SILENT d2's
+    /// nine measurement runs (plans/2026-11-21-1426-xhigh-early-stop.md, 3): 71 % of max's time, 0.033 of V a run given up
+    /// where high gives up 0.153; waiting longer (8,192) gave up hardly less.</summary>
+    public const long XhighStop = 1_024;
+
     /// <summary>The effort levels, cheapest first.</summary>
-    public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "max"];
+    public static readonly IReadOnlyList<string> Efforts = ["low", "medium", "high", "xhigh", "max"];
 
     /// <summary>The search's size: pimc's worlds by their nodes (8x300), the planner's beam by its nodes per state and
     /// turn (beam 16x300; beam 16xall for <see cref="SlPlanner.Unlimited"/>).</summary>
@@ -59,10 +72,10 @@ public sealed record Budget(int Worlds = 8, int NodesPerWorld = 300, int Beam = 
         $"{(Beam > 0 ? $"beam {Beam}" : $"{Worlds}")}x{(NodesPerWorld == SlPlanner.Unlimited ? "all" : NodesPerWorld.ToString(System.Globalization.CultureInfo.InvariantCulture))}");
 
     /// <summary>As the champion's name shows it: the size (<see cref="Size"/>), then the planner's easy beam,
-    /// replan when not 1, loss plans when limited, the turn decay when not 1 and the solver's nodes a decision when it
-    /// solves; then an elite's and a boss's budget where they differ.</summary>
+    /// replan when not 1, loss plans when limited, the turn decay when not 1, the solver's nodes a decision when it
+    /// solves and its early stop when it has one; then an elite's and a boss's budget where they differ.</summary>
     public override string ToString() => FormattableString.Invariant(
-        $"{Size}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}{(Solve > 0 ? $" solve {Solve}" : "")}") +
+        $"{Size}{(Beam > 0 && EasyBeam > 0 ? $" easy {EasyBeam}" : "")}{(Beam > 0 && Replan != 1 ? $" replan {Replan}" : "")}{(Beam > 0 && LossPlans > 0 ? $" loss plans {LossPlans}" : "")}{(Beam > 0 && TurnDecay != 1 ? $" turn decay {TurnDecay}" : "")}{(Solve > 0 ? $" solve {Solve}" : "")}{(Solve > 0 && Stop > 0 ? $" stop {Stop}" : "")}") +
         (Elite != null ? $" elite ({Elite})" : "") + (Boss != null ? $" boss ({Boss})" : "");
 }
 

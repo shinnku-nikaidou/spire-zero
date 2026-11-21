@@ -24,10 +24,10 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
     沒有一條規則又便宜很多、又接近 max。
 - **為什麼比 11-20 的估計差**（3.3）：那時估 f1024 時間剩 28 %、一局 0.010。規則只能在一批的結束停；更要緊的是 max 多搜的節點
   多半在改進線的後半段，第一步不變，早停看不出來，下一個決定就從差的線開始。
-- **跟著搜尋順序走**（5）：3 的數字都會隨 turn-queues 的改動變，改完要重量；規則本身不讀順序。
+- **跟著搜尋順序和分數走**（5）：3 的數字是 turn-queues 之前的順序、V 的單位量的，兩個都改了，要重量；規則本身不讀順序和值。
 - **怎麼用**（6）：`--effort xhigh`，資料集的 game 寫 `effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }`，
   `box.py` 的 `EFFORTS` 加上 xhigh。
-- **用戶定了 F1024**（2026-11-21）。實作等 turn-queues 那個 session 的改動 commit 之後（7）；用不用 xhigh 生成 Silent 的資料，
+- **用戶定了 F1024**（2026-11-21）。實作在 turn-queues 的提交之上（7）；用不用 xhigh 生成 Silent 的資料，
   用戶另外定。
 
 ## 1. max 的時間花在哪（11-20 的 9 局）
@@ -168,11 +168,14 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
 ## 5. 哪些數字跟著搜尋順序走
 
 - 1 和 3 的數字都是今天的搜尋順序量的：所有回合開頭放在一個佇列，照戰鬥網路的估值先搜高的，跨回合比。
-  turn-queues 的計畫（plans/2026-11-21-1402-solver-turn-queues.md，那個 session 正在改 `solver.rs`）會換成每一層回合一個佇列、
+  turn-queues（plans/2026-11-21-1402-solver-turn-queues.md，已提交）換成了每一層回合一個佇列、
   輪流拿。之後選擇什麼時候第一次變成贏的線、什麼時候變好、下一個決定從多大的樹開始，都會變，3 的時間和損失都要重量。
 - 規則本身（贏的線 + 連續 K 個節點、固定 N 個節點、一個求解器的第一個決定搜滿）不讀搜尋順序，換了順序照樣能用。
 - 損失主要來自長時間的平台之後才找到的更好的贏法（3.2）。turn-queues 讓線早一點打完，可能讓這些更早找到，也可能不會；
   量了才知道。
+- **戰鬥的分數**（plans/2026-11-21-1655-fight-score-f.md）：冠軍檔帶上 f 之後，求解器的值換成 HP + 最大生命 + Σ f，
+  不再是 V。規則不讀值（只看贏的線和節點數），沒有門檻要改；可是選擇什麼時候變好會變，3 的損失也是 V 的單位，
+  所以 f 進冠軍檔之後也要重量（7 第 3 步）。
 
 ## 6. 資料集和測試怎麼用
 
@@ -190,16 +193,17 @@ repo 裡還沒有任何程式改動；量測用的是 `tmp/xhigh/` 裡的一份�
 ## 7. 步驟
 
 1. **用戶看 3 的數字**，選規則和參數，或不做 xhigh。**定了（2026-11-21）：F1024。**
-2. **實作**（用戶的話：F1024）：在 turn-queues 的改動 commit 之後，在它上面改；動 `solver.rs` 之前先問那個 session。
-   那個改動不只換搜尋順序，`SolverRoute` 也會在求解器還沒有自己打完的線時繼續搜（`ICombatSolver.Ended`、`OwnLineWait`，
-   turn-queues 的 2b），所以 xhigh 的規則要接在它上面：「選擇是贏的線」照舊看求解器的選擇。
-   - `solver.rs`：規則在 `run` 裡每一批之後檢查（和副本一樣）；規則經 `sz_solver_new` 的參數進來。
-   - C#：`Budget` 多一個欄位，`Effort("xhigh")`，`Efforts` 加上 xhigh，`EngineSolver` 把它傳給引擎。
+2. **實作**（用戶的話：F1024）：在 turn-queues 的改動 commit 之後，在它上面改。turn-queues 提交的只有新的搜尋順序
+   （每一層回合一個佇列）；它的 2b（作答等求解器自己的線）量了不划算，撤掉了，所以 `SolverRoute` 的作答照舊。
+   - `solver.rs`：規則在 `run` 裡每一批之後、根的回合每一段之後檢查（和副本一樣），只在求解器的第一次 `run` 之後；
+     規則經 `sz_solver_stop` 進來（`sz_solver_new` 不變：舊的程式庫少了這個呼叫會在 xhigh 開頭就失敗，不會默默照 max 搜）。
+   - C#：`Budget` 多一個欄位 `Stop`（0 時紀錄裡不寫，max 的紀錄照舊），`Effort("xhigh")`，`Efforts` 加上 xhigh，
+     `SolverRoute` 開求解器時把它交給 `EngineSolver`，`EngineSolver` 交給引擎。
    - `box.py` 的 `EFFORTS`；sl-selfplay skill 的思考深度那段；effort-ladder 的記憶（現在寫著「no xhigh」）。
    - 測試：引擎的玩具戰鬥（規則成立的地方，`run` 停在那一批的結束；不成立的照舊搜到 16,384）；C# 的 budget 字串和
      `Effort("xhigh")`；`box.py plan` 收 xhigh 的 game。全部引擎和 C# 測試。
-3. **重量**（turn-queues 之後的順序）：同樣的並排（`tmp/xhigh/` 的工具，pusheen），xhigh 和 max 在同樣的決定上比；
-   再讓 xhigh 自己打同樣的種子，量真的時間和記憶體。結果寫回這份計畫。
+3. **重量**（turn-queues 之後的順序；f 進冠軍檔之後再一次，5）：同樣的並排（`tmp/xhigh/` 的工具，pusheen），
+   xhigh 和 max 在同樣的決定上比；再讓 xhigh 自己打同樣的種子，量真的時間和記憶體。結果寫回這份計畫。
 4. **用戶定**要不要用 xhigh 生成 Silent 的資料（silent-shiv-poison 第 4 步）。
 
 ## 8. 不在這份計畫裡
