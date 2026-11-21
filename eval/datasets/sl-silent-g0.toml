@@ -6,12 +6,12 @@
 # 70 %, the poison family refused on 10 % (the user: "20%的對局具有小刀傾向, 70%的對局不管, 10%的對局屏蔽掉毒"; the bonus
 # 0.2, the user on 2026-11-20: "用 0.2"). The untouched runs at the last SL dataset's tiers, the tilted ones at a low
 # epsilon so that their decks take shape (plans/2026-11-20-1231-silent-shiv-poison.md 2.3).
-# A10 3,350, the Dread mode 3,350, A0-A9 3,300 (330 each): 10,000 runs.
+# A10 13,400, the Dread mode 13,400, A0-A9 13,200 (1,320 each): 40,000 runs (the user: "共40,000 局").
 #
-# A draft: the bundle names weights/all/v-sl-silent-0.json, which is not in the release yet (box.py launch refuses a net
-# it lacks); amounts and tiers are the user's to give (the plan's 11).
+# A draft: the bundle names weights/all/v-sl-silent-0.json, which box.py launch takes from this checkout (it refuses a
+# net it lacks); the untouched runs' tiers are still the user's to give (the plan's 11).
 name = "sl-silent-g0"
-deadline = "+24h"                   # box.py deadline sl-silent-g0 UNTIL moves it; about 21 h of the pool at xhigh
+deadline = "+96h"                   # box.py deadline sl-silent-g0 UNTIL moves it; about 85 h of the pool at xhigh
 priority = 0
 seeds = 6300000                     # the ledger's block 6300000-6399999, SILENT only: rows from 6300000, the smoke from 6399000
 characters = ["SILENT"]
@@ -44,50 +44,50 @@ effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
 [[runs]]
 game = "full"
 asc = 10
-n = 670
+n = 2680
 explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 
 [[runs]]
 game = "full"
 asc = 10
-n = 2345
+n = 9380
 
 [[runs]]
 game = "full"
 asc = 10
-n = 335
+n = 1340
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
 
 [[runs]]
 game = "dread"
 asc = 10
-n = 670
+n = 2680
 explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 
 [[runs]]
 game = "dread"
 asc = 10
-n = 2345
+n = 9380
 
 [[runs]]
 game = "dread"
 asc = 10
-n = 335
+n = 1340
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
 
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [66, 66, 66, 66, 66, 66, 66, 66, 66, 66]
+n = [264, 264, 264, 264, 264, 264, 264, 264, 264, 264]
 explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [231, 231, 231, 231, 231, 231, 231, 231, 231, 231]
+n = [924, 924, 924, 924, 924, 924, 924, 924, 924, 924]
 
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [33, 33, 33, 33, 33, 33, 33, 33, 33, 33]
+n = [132, 132, 132, 132, 132, 132, 132, 132, 132, 132]
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
