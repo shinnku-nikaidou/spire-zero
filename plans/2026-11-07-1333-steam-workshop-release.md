@@ -493,3 +493,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   closed here and on the Mac. The commit timed out with the content through (the public API: updated 15:27:28Z,
   435.2 MB; 1.0.5 on the changelog page); the texts unchanged, not sent again. Installed in `mods/` over 1.0.4 (moved to
   `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
+- 2026-11-21 23:5x: mod 1.0.6 built for linux-x64 only, not uploaded (asked by the bug session, where the user said Yes,
+  build it). At d1b616f8: a potion reward clicked with a full belt is no SL record step (the game refuses it, and the
+  brain could not follow the record: "這個房間沒有 SL 複本"). The packed brain answered the SL and NoSL v6 wires the same as
+  1.0.5, no errors. The game was running; it goes into `mods/` over 1.0.5 once the game closes.
