@@ -137,3 +137,25 @@ def enemy():
 @pytest.fixture
 def obs():
     return make_obs
+
+
+@functools.cache
+def combat_net_path() -> str:
+    """A combat net file with random weights, for what V's training reads f's labels by (v/saves.py)."""
+    import tempfile
+
+    import torch
+
+    import game_ids
+    from combat import data, export
+    from combat.net import Net
+
+    end = {"died": False, "hp": 30, "max_hp": 70, "potions": 0}
+    starts = [round_start(make_obs(round=r, hp=40 + r, enemies=[make_enemy(1)], potions=("FIRE", None, None))) for r in (1, 2)]
+    kept = [data.sample("a", s, end, {"potions": []}) | {"obs": s["obs"], "history": s["history"]} for s in starts]
+    tables = game_ids.combat_tables()
+    torch.manual_seed(0)
+    net = export.net_file("c-test", "SL", tables, Net({t: len(i) for t, i in tables.items()}), kept, {}, 0, {})
+    path = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False).name
+    export.write(net, __import__("pathlib").Path(path))
+    return path

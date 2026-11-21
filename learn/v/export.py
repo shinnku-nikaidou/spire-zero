@@ -34,7 +34,7 @@ def onnx_bytes(model, example: Batch) -> bytes:
     for group, names in (("relics", ("relics", "relic_mask", "relic_values", "relic_status", "relics_owned")),
                          ("potions", ("potions", "potion_mask", "potions_owned")), ("vars", ("vars", "var_mask", "var_values"))):  # fmt: skip
         axes |= {p + name: {0: "batch", 1: p + group} for name in names}
-    axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}}
+    axes |= {"state": {0: "batch"}, "hazards": {0: "batch"}, "asked": {0: "batch", 1: "asked"}, "saves": {0: "batch", 1: "asked"}}
     out = io.BytesIO()
     torch.onnx.export(
         Hazards(model),
@@ -42,7 +42,7 @@ def onnx_bytes(model, example: Batch) -> bytes:
         out,
         dynamo=False,
         input_names=spec.INPUTS,
-        output_names=["hazards"],
+        output_names=["hazards", "saves"],
         dynamic_axes=axes,
     )
     return out.getvalue()
@@ -52,7 +52,8 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
     """The file's content; its test runs are a few held-out decisions (those that kept their view, data.read_runs),
     valued on the CPU as RunNet values them: loading the file, RunNet reads each view again, in its environment, and
     must come to the same value. A few of them are event options picked and not yet played out, when the held-out
-    samples have any, so that the check covers those inputs too. `trained` says what made the net (common.trained)."""
+    samples have any, so that the check covers those inputs too. Each test run also holds f of each potion it holds
+    (`saves`, in the belt's order), which RunNet must give it too. `trained` says what made the net (common.trained)."""
     model = model.cpu().eval()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     held = [s for s in held if "view" in s]
@@ -60,9 +61,11 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
     plain = [s for s in held if not s.get("pending")]
     draw = random.Random(seed)
     picks = draw.sample(plain, min(8, len(plain))) + draw.sample(pending, min(4, len(pending)))
+    picks = [s | {"saves": [(p, None) for p in unpack(s["tokens"])["potions"]]} for s in picks]
     b = Batch(picks, index, mean, std, floors, "cpu")
     with torch.no_grad():
         valued = values(model, b)
+        saves = model.all(*b.inputs())[2]
     return {
         "name": name,
         "floors": floors,
@@ -72,8 +75,9 @@ def net_file(name, floors, tables, mean, std, model, held, report, seed, trained
         "fit": report,
         "onnx": base64.b64encode(onnx_bytes(model, b)).decode(),
         "tests": [
-            {"run": unpack(s["view"]), "value": float(v)} | ({"env": s["env"]} if s.get("env", "SL") != "SL" else {})
-            for s, v in zip(picks, valued, strict=True)
+            {"run": unpack(s["view"]), "value": float(v), "saves": [float(f) for f in saves[k, : len(s["saves"])]]}
+            | ({"env": s["env"]} if s.get("env", "SL") != "SL" else {})
+            for k, (s, v) in enumerate(zip(picks, valued, strict=True))
         ],
     }
 
@@ -108,11 +112,12 @@ def stored(net: dict) -> dict[str, torch.Tensor]:
 
 def weights(net: dict, model) -> dict[str, torch.Tensor]:
     """A net file's weights by model's parameter names (stored). The second head is not in the file and keeps model's
-    own."""
+    own, as do the buffers (the HP pieces' knots)."""
     found = stored(net)
     own = model.state_dict()
+    buffers = dict(model.named_buffers())
     for k, v in own.items():
-        if k.startswith("aux_head."):
+        if k.startswith("aux_head.") or k in buffers:
             found[k] = v
         elif k not in found or found[k].shape != v.shape:
             raise LearnError(f"the net file has no weight {k} of shape {tuple(v.shape)}")

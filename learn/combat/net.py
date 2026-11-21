@@ -2,6 +2,12 @@
 intent slots) and the allies, bags of ids for the rest, then a body and two heads (combat/data.py): the chance of each ending and,
 after a win in each group of buckets (data.POTION_GROUPS), each potion's of being gone, so the leaf weighs the HP lost and
 the potions drunk together.
+
+The net never reads the player's HP (plans/2026-11-21-1604-fight-score.md, 2.2). It says how much HP the fight will
+take, as a share of max HP: a bucket of it, or the whole max HP or more. Whether that is a death is the game's rule,
+which the graph applies to the HP held (`endings`): a loss of the HP share held or more is one. So with more HP every
+loss leaves more, some deaths become wins and nothing else moves, and a fight's score (HP + max HP + its potions' worth,
+0 for a death) cannot fall as the HP rises.
 """
 
 import sts2_batch
@@ -20,6 +26,7 @@ class Batch:
         inputs = sts2_batch.combat_inputs([s["tokens"] for s in samples], index)
         self.tensors = [inputs[name].to(device) for name in spec.INPUTS]
         self.target = torch.tensor([s["class"] for s in samples], dtype=torch.long, device=device)
+        self.full = torch.tensor([s.get("full", False) for s in samples], device=device)
         self.potions = self.tensors[spec.INPUTS.index("potions")]
         self.potion_mask = self.tensors[spec.INPUTS.index("potion_mask")]
         w = self.potion_mask.shape[1]
@@ -42,6 +49,7 @@ class Net(nn.Module):
     DIM, HIDDEN, BODY = 64, 128, 512
     SUM_SCALE = 1 / 8  # each pile's sum, scaled to about a mean's size
     N_PLAYER, N_EXTRA = 8, 6
+    HP = 2  # the player's first numbers, its HP share and HP / 100: the body does not read them (the module's doc)
     CLOSED = -1e4  # the logit of an ending the state rules out: no weight in float32's softmax
 
     def __init__(self, sizes: dict[str, int]):
@@ -83,9 +91,9 @@ class Net(nn.Module):
         self.enemy_phi = mlp(d + h + spec.SLOTS * d, 2 * h, 2 * h)
         self.ally_scalars = nn.Linear(4, d)
         self.ally_phi = mlp(d + h, h)
-        width = len(spec.PILES) * h + self.N_PLAYER + h + 2 * h + 4 * d + h + self.N_EXTRA
+        width = len(spec.PILES) * h + self.N_PLAYER - self.HP + h + 2 * h + 4 * d + h + self.N_EXTRA
         self.body = mlp(width, self.BODY, self.BODY)
-        self.head = nn.Linear(self.BODY, 1 + BUCKETS)
+        self.head = nn.Linear(self.BODY, 1 + BUCKETS)  # the HP lost: the whole max HP or more, then the buckets
         self.potion_head = nn.Linear(self.BODY, POTION_GROUPS * sizes["potions"])
         self.register_buffer("bottoms", LOSS_MIN + torch.arange(BUCKETS) * WIDTH)
 
@@ -98,19 +106,24 @@ class Net(nn.Module):
         return (self.power_phi(x) * mask[..., None]).sum(-2)
 
     def forward(self, *inputs):
-        """Per sample, the logits of the ending classes and, after a win in each group of buckets, of each potion id
-        being gone, as (sample, group, potion) (inputs as spec.INPUTS)."""
+        """Per sample, the log-chances of the ending classes and, after a win in each group of buckets, the logits of
+        each potion id being gone, as (sample, group, potion) (inputs as spec.INPUTS)."""
         z = self.encode(*inputs)
         potions = self.potion_head(z).view(z.shape[0], POTION_GROUPS, -1)
-        return self.reachable(self.head(z), inputs[spec.INPUTS.index("player")]), potions
+        return self.endings(self.head(z), inputs[spec.INPUTS.index("player")]), potions
 
-    def reachable(self, logits, player):
-        """The ending classes with the buckets the HP held rules out closed: a win ends with an HP share in (0, 1], so
-        with less lost than the share held and no more healed than it lacks."""
+    def endings(self, lost, player):
+        """The ending classes' log-chances (0 a death, then a win's bucket of the HP share lost) from the chances of the
+        HP lost (`lost`: the whole max HP or more, then the buckets), by the game's rule on the HP share held: a bucket
+        whose bottom reaches it is a death, the rest are wins. A heal past the max HP stays a win's bucket; the leaf
+        caps the HP it ends with at the max HP."""
         share = player[:, 0:1]
-        open_ = (self.bottoms < share) & (self.bottoms + WIDTH > share - 1 - 1e-6)
-        wins = logits[:, 1:]
-        return torch.cat([logits[:, :1], torch.where(open_, wins, torch.full_like(wins, self.CLOSED))], 1)
+        log = torch.log_softmax(lost, 1)
+        buckets = log[:, 1:]
+        dead = self.bottoms >= share
+        closed = torch.full_like(buckets, self.CLOSED)
+        death = torch.logsumexp(torch.cat([log[:, :1], torch.where(dead, buckets, closed)], 1), 1, keepdim=True)
+        return torch.cat([death, torch.where(dead, closed, buckets)], 1)
 
     def encode(
         self, cards, ups, piles, mods, mod_mask, powers, power_amounts, power_mask, player,
@@ -168,7 +181,7 @@ class Net(nn.Module):
             + relic_values[..., 2:3] * self.melted
             + self.relic_status(relic_status)
         )
-        parts = [per_pile, player, mine, foes, (held * relic_mask[..., None]).sum(1)]
+        parts = [per_pile, player[:, self.HP :], mine, foes, (held * relic_mask[..., None]).sum(1)]
         for table, ids, mask in (
             (self.potions, potions, potion_mask),
             (self.context, context, context_mask),
@@ -197,7 +210,7 @@ class Net(nn.Module):
 
 class Outcome(nn.Module):
     """The net as ONNX holds it: the chance of each ending, and after a win in each group of buckets each potion id's of
-    being gone."""
+    being gone. The leaf reads it as before the net stopped reading the HP: the death first, then the wins' buckets."""
 
     def __init__(self, net):
         super().__init__()
@@ -216,11 +229,20 @@ def won_group(potions, target):
     return potions[torch.arange(potions.shape[0], device=potions.device), potion_group(target.clamp_min(1))]
 
 
+def ending_loss(logits, target, full):
+    """Per sample, the endings' cross-entropy. A win that ended at max HP (`full`) says only that the fight took at
+    most what it shows, a heal past the max HP being cut there: its chance is that of its bucket and every one below."""
+    log = torch.log_softmax(logits, 1)
+    exact = -log.gather(1, target[:, None])[:, 0]
+    capped = -torch.logcumsumexp(log[:, 1:], 1).gather(1, (target.clamp_min(1) - 1)[:, None])[:, 0]
+    return torch.where(full, capped, exact)
+
+
 def loss(out, b: Batch):
-    """Per sample, the endings' cross-entropy plus, after a win, POTION_WEIGHT times each held potion's cross-entropy of
-    being gone, by the potion head of the win's group of buckets."""
+    """Per sample, the endings' cross-entropy (ending_loss) plus, after a win, POTION_WEIGHT times each held potion's
+    cross-entropy of being gone, by the potion head of the win's group of buckets."""
     logits, potions = out
     won = (b.target > 0).float()
     gone = nn.functional.binary_cross_entropy_with_logits(won_group(potions, b.target).gather(1, b.potions), b.potion_used, reduction="none")
     used = (gone * b.potion_mask).sum(1)
-    return nn.functional.cross_entropy(logits, b.target, reduction="none") + POTION_WEIGHT * won * used
+    return ending_loss(logits, b.target, b.full) + POTION_WEIGHT * won * used

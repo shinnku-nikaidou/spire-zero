@@ -40,7 +40,7 @@ public sealed class EnginePimc(CombatNet net, int threads)
     {
         if (PimcBrain.Forced(observation, legal) is { } only) return PimcBrain.Only(only);
         RootSearch Search(EngineWorld real) => (first, nodes) =>
-            real.Pimc(_engine.Value, net.RunValue, history, first, nodes, budget.Worlds, seed, net.Env == PlayEnvironment.NoSL, threads);
+            real.Pimc(_engine.Value, net.FightValue, history, first, nodes, budget.Worlds, seed, net.Env == PlayEnvironment.NoSL, threads);
         if (observation.Prompt is { } prompt)
         {
             using var at = Stand(prompted?.Invoke() ?? throw new InvalidOperationException("a card prompt with no combat to stand at"));

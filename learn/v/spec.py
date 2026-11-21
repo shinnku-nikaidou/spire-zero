@@ -27,8 +27,9 @@ PENDING = [
     PEND + "potions", PEND + "potion_mask", PEND + "potions_owned",
     PEND + "vars", PEND + "var_mask", PEND + "var_values",
 ]  # fmt: skip
-# The ONNX graph's inputs, in order (RunNet feeds them by these names).
+# The ONNX graph's inputs, in order (RunNet feeds them by these names); last, the potions f is asked about
+# (plans/2026-11-21-1604-fight-score.md).
 INPUTS = [
     *CARDS, *(x for bag in BAGS.items() for x in bag), "state", "relic_values", "relic_status", "held", "held_mask",
-    *PENDING,
+    *PENDING, "asked",
 ]  # fmt: skip

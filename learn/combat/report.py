@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 import torch
 
 from combat import data
-from combat.net import won_group
+from combat.net import ending_loss, won_group
 from common import unpack
 
 
@@ -91,7 +91,7 @@ def predict(model, part, part_batches):
     probs = torch.softmax(logits, 1)
     mids = data.LOSS_MIN + (torch.arange(1, data.BUCKETS + 1).double() - 0.5) * data.WIDTH
     expected = (probs[:, 1:] * mids).sum(1) / (1 - probs[:, 0]).clamp_min(1e-9)
-    ces = torch.nn.functional.cross_entropy(logits, target, reduction="none")
+    ces = ending_loss(logits, target, torch.tensor([s["full"] for s in part]))
     return ces, probs[:, 0], expected, chances
 
 

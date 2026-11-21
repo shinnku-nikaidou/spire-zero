@@ -28,7 +28,7 @@ import json
 import re
 
 from common import HEAD, LearnError, pack, runs_by_log
-from v import spec
+from v import saves, spec
 from workers import each
 
 AUX = 6  # the next combats whose HP cost the second head learns
@@ -87,9 +87,11 @@ def macro_lines(log: str, runs: dict) -> list[tuple[str, str, str]]:
         return [(m[1], m[2], line) for m, line in heads if m and m[1] in runs and '"run_view"' in line and line.endswith("\n")]
 
 
-def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[dict], list[dict]]:
-    """The samples of the I-th log of a list, each keyed (i, run), and the runs of its records that did not fail."""
+def read_log(i: int, log: str, runs: dict, floors: int, encoder, combat: str | None = None) -> tuple[list[dict], list[dict]]:
+    """The samples of the I-th log of a list, each keyed (i, run), and the runs of its records that did not fail; with
+    the combat net file COMBAT, each decision's held potions with what each saved later (`saves`, v/saves.py)."""
     runs = {k: r for k, r in runs.items() if not r.get("failure")}
+    saved = saves.labels(log, runs, encoder, combat) if combat else {}
     samples = []
     lines = macro_lines(log, runs)
     for (run, env, line), read in zip(lines, encoder.runs([line for _, _, line in lines], log), strict=True):
@@ -105,6 +107,7 @@ def read_log(i: int, log: str, runs: dict, floors: int, encoder) -> tuple[list[d
         more = [sample(run, read["entered"], floors, r["floor"], kind)] if "entered" in read else []
         decision = int(DECISION.match(line)[1])
         for x in [s, *more]:
+            x["saves"] = saved.get((run, decision), [])
             # own: the decision's own view, which a multi-step target may start from (v/bootstrap.py)
             samples.append(x | {"key": (i, run), "floor": r["floor"], "next": nxt, "decision": decision, "own": x is s, "env": env})
         for option, answer in zip(logged.get("event", []) if logged else [], read.get("event", []), strict=True):
@@ -139,8 +142,9 @@ def event_samples(run: str, env: str, option: dict, answer: dict, floors: int, r
     return out
 
 
-def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -> tuple[list[dict], list[dict]]:
-    """The logged decisions as samples, and the run records; WORKERS processes read the logs (workers.each).
+def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0, combat: str | None = None) -> tuple[list[dict], list[dict]]:
+    """The logged decisions as samples, and the run records; WORKERS processes read the logs (workers.each); with the
+    combat net file COMBAT, f's labels too (read_log).
 
     A sample keeps its tokens and state, not its view: as Python objects a view is ~54 KB, ten times those (2026-10-30:
     plan v6 generation 3's 2.16M decisions took ~117 GB a training, now 21 GB); a held-out decision keeps its view,
@@ -148,7 +152,7 @@ def read_runs(logs: str, records: str, floors: int, encoder, workers: int = 0) -
     the held-out views' JSON, now packed too (2026-11-14, 100 runs of v9 g2)."""
     samples, runs_seen = [], []
     pairs = ((i, log, runs) for i, (log, runs) in enumerate(runs_by_log(logs, records)))
-    for got, seen in each(functools.partial(read_log, floors=floors), pairs, encoder, workers):
+    for got, seen in each(functools.partial(read_log, floors=floors, combat=combat), pairs, encoder, workers):
         samples += got
         runs_seen += seen
     per_run = {}

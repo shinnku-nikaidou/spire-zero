@@ -85,6 +85,46 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public double RunValue(RunView run) => _value.Value(run);
 
     /// <summary>
+    /// A fight's end as the engine's searches price it (plans/2026-11-21-1604-fight-score.md, 2.1), in this net's
+    /// environment: what the player carries out of the fight, the HP plus the max HP plus f of each potion kept (the HP
+    /// V says it will save in the fight where it is drunk); a death is 0, which the leaf gives. V is no judge of a fight's
+    /// HP: it learned from its games that a low HP after a boss goes with runs that fought for later, and valued less HP
+    /// higher, so a search that asked it kept the line that lost the most. With a V of before the fight score, which says
+    /// no f, V of the run, until the champion is one of after; then that goes. A run's f is the same at any HP, so it is
+    /// kept by the run without its HP and max HP (<see cref="Saved"/>): each new belt a search meets costs one graph.
+    /// </summary>
+    public double FightValue(RunView run) =>
+        _says != false && Saved(run) is { } saved ? run.Hp + run.MaxHp + saved : _value.Value(run);
+
+    /// <summary>The f of a run's potions, summed, by the run without its HP and max HP; none from a V that says no f.</summary>
+    private double? Saved(RunView run)
+    {
+        if (_lastSaved.Value is var (last, known) && run with { Hp = last.Hp, MaxHp = last.MaxHp } == last) return known;
+        ulong key = ProtocolJson.Hash(run with { Hp = 0, MaxHp = 0 });
+        if (!_saved.TryGetValue(key, out double saved))
+        {
+            if (_value.Saves(run) is not { } each)
+            {
+                _says = false;
+                return null;
+            }
+            _says = true;
+            if (_saved.Count >= Kept) _saved.Clear();
+            saved = _saved[key] = each.Sum();
+        }
+        _lastSaved.Value = (run, saved);
+        return saved;
+    }
+
+    /// <summary>Whether V says f, known from the first fight's end asked about: a V of before says none, and is then
+    /// asked straight away.</summary>
+    private bool? _says;
+
+    /// <summary>The f of the runs' potions, summed (<see cref="Saved"/>), and the run a thread last asked about.</summary>
+    private readonly ConcurrentDictionary<ulong, double> _saved = new();
+    private readonly ThreadLocal<(RunView Run, double Saved)?> _lastSaved = new();
+
+    /// <summary>
     /// This leaf reading every state in <paramref name="env"/> (<see cref="CombatTokens.EnvTokens"/>), its endings priced
     /// by V in it too: the same graph, which this net keeps. A net loaded is SL's.
     /// </summary>
@@ -215,6 +255,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     {
         if (_root == this) _session.Dispose();
         _keyed.Dispose();
+        _lastSaved.Dispose();
     }
 
     /// <summary>The graph's outputs on a batch of one state.</summary>

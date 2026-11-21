@@ -5,13 +5,16 @@ using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Macro;
 
-/// <summary>A run and the value the trainer computed for it, which loading checks, in its environment (null: SL).</summary>
-public sealed record NetTest(RunView Run, double Value, string? Env = null);
+/// <summary>A run and the value the trainer computed for it, which loading checks, in its environment (null: SL); and
+/// each potion it holds, in the belt's order, with the HP the net says it will save (<see cref="RunNet.Saves(RunView, PlayEnvironment)"/>),
+/// none for a net of before the fight score.</summary>
+public sealed record NetTest(RunView Run, double Value, string? Env = null, IReadOnlyList<double>? Saves = null);
 
 /// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
-/// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
+/// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, outputs the hazards
+/// and, since the fight score (plans/2026-11-21-1604-fight-score.md), each asked potion's f.</param>
 /// <param name="State">The run's numbers the net reads, by name, with the mean and std that standardize them.</param>
 public sealed record NetFile(
     string Name, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
@@ -156,6 +159,10 @@ public sealed class RunNet : IRunValue, IDisposable
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
 
+    /// <summary>Whether the graph gives each asked potion's f (<see cref="Saves(RunView, PlayEnvironment)"/>): a net of
+    /// the fight score. One of before is still read until the champion is one of after; then this goes.</summary>
+    private readonly bool _saves;
+
     private RunNet(NetFile file)
     {
         _file = file;
@@ -163,6 +170,7 @@ public sealed class RunNet : IRunValue, IDisposable
         // One thread per call: the sim runs many processes, and a macro decision values a handful of small inputs.
         using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
         _session = new InferenceSession(Convert.FromBase64String(file.Onnx), options);
+        _saves = _session.InputMetadata.ContainsKey("asked");
     }
 
     public string Name => _file.Name;
@@ -183,12 +191,22 @@ public sealed class RunNet : IRunValue, IDisposable
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} gives {value} for a test run the trainer valued at {test.Value}");
             }
+            var saves = net.Saves(test.Run, test.Env is { } e ? Enum.Parse<PlayEnvironment>(e) : Plain);
+            if ((saves == null) != (test.Saves == null) || saves != null && (saves.Count != test.Saves!.Count
+                || saves.Zip(test.Saves).Any(p => Math.Abs(p.First - p.Second) > Math.Max(1e-3 * Math.Abs(p.Second), 1e-3))))
+            {
+                net.Dispose();
+                throw new InvalidDataException($"net {file.Name} does not give a test run's potions the HP the trainer said they save");
+            }
         }
         return net;
     }
 
     /// <summary>V of a run in SL (<see cref="In"/> for another environment).</summary>
     public double Value(RunView run) => Value(run, Plain);
+
+    /// <summary>Each potion the run holds, in the belt's order, with f in SL: the HP the net says it will save.</summary>
+    public IReadOnlyList<double>? Saves(RunView run) => Saves(run, Plain);
 
     /// <summary>This V reading every run in <paramref name="env"/>: NoSL's runs carry its mark (<see cref="CombatTokens.EnvTokens"/>).</summary>
     public IRunValue In(PlayEnvironment env) => env == Plain ? this : new Bound(this, env);
@@ -199,17 +217,26 @@ public sealed class RunNet : IRunValue, IDisposable
 
         public double Value(RunView run) => net.Value(run, env);
 
+        public IReadOnlyList<double>? Saves(RunView run) => net.Saves(run, env);
+
         public IRunValue In(PlayEnvironment other) => net.In(other);
     }
 
     public double Value(RunView run, PlayEnvironment env)
     {
-        var hazards = Hazards(run, env);
+        var hazards = Graph(run, env, false).Hazards;
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
         double alive = 1;
         for (int g = from; g < _file.Floors; g++) alive *= 1 - hazards[g];
         return alive;
     }
+
+    /// <summary>
+    /// Each potion <paramref name="run"/> holds, in the belt's order, with f in <paramref name="env"/>: the HP the net
+    /// says it will save in the fight where it is drunk (plans/2026-11-21-1604-fight-score.md, 2.3). The net reads no HP
+    /// for it, so a run's f is the same at any HP. None from a net of before the fight score.
+    /// </summary>
+    public IReadOnlyList<double>? Saves(RunView run, PlayEnvironment env) => _saves ? [.. Graph(run, env, true).Saves] : null;
 
     public void Dispose() => _session.Dispose();
 
@@ -349,8 +376,9 @@ public sealed class RunNet : IRunValue, IDisposable
         json.WriteEndObject();
     }
 
-    /// <summary>Per floor, the chance to die there if still alive there: the graph on a batch of one run.</summary>
-    private float[] Hazards(RunView run, PlayEnvironment env)
+    /// <summary>Per floor, the chance to die there if still alive there, and with <paramref name="asked"/> each held
+    /// potion's f: the graph on a batch of one run.</summary>
+    private (float[] Hazards, float[] Saves) Graph(RunView run, PlayEnvironment env, bool asked)
     {
         var tokens = Tokens(run, env);
         var inputs = new List<NamedOnnxValue>(CardInputs("", tokens.Cards));
@@ -365,8 +393,10 @@ public sealed class RunNet : IRunValue, IDisposable
         inputs.AddRange(CombatNet.RelicInputs(tokens.RelicValues, tokens.RelicStatus, status => Index("relic_status", status)));
         inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
         inputs.AddRange(PendingInputs(tokens.Pending));
+        if (_saves) inputs.Add(Bag("potions", "asked", "asked_mask", asked ? tokens.Potions : [])[0]);
         using var results = _session.Run(inputs);
-        return [.. results[0].AsEnumerable<float>()];
+        float[] hazards = [.. results[0].AsEnumerable<float>()];
+        return (hazards, asked ? [.. results[1].AsEnumerable<float>().Take(tokens.Potions.Count)] : []);
     }
 
     /// <summary>Cards as the graph takes them, by the input names with <paramref name="prefix"/>: their ids, upgrade

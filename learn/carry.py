@@ -12,6 +12,13 @@ reads more numbers than before (the new numbers come last), so that V's event-op
 Their own tables and rows (FRESH) start as a new net's, random: with both sides zero, neither would ever learn.
 Everything else is copied. The file's test states are the old file's, valued again; they must come to the old values,
 and the brain checks the same on load.
+
+A net of before the fight score (plans/2026-11-21-1604-fight-score.md) read the player's HP in its body. Carried here,
+those columns of the body's first layer go (DROPPED): V's read the standardized HP and max HP, whose mean is 0, so it
+reads them at their mean; the combat net's read the HP share and HP / 100, whose contribution at the old file's test
+states' mean goes into the layer's bias. The combat net's old death becomes its loss of the whole max HP or more. V's
+HP-shaped heads and f's head start as a new net's (FRESH_HEADS). Such a net cannot keep its values, which the training
+from it then moves: the carry says how far its test states moved instead of refusing.
 """
 
 import json
@@ -66,13 +73,30 @@ FRESH = {"pending.weight", "event_vars.weight", "pend_card_owned", "pend_relic_o
 # The ids whose rows start at zero when new: tokens a state of before never had (CombatTokens.ModeTokens, EnvTokens).
 ZERO = ("mode:", "dominion:", "env:")
 WIDER = {"enemy_scalars.weight", "body.0.weight"}
+FRESH_HEADS = ("hp_weights.", "hp_scales.", "save_phi.")  # V's heads of the fight score, new in a net of before
+# The body's first layer's columns a net of before the fight score read the HP through: the combat net's HP share and
+# HP / 100 (after the piles), V's standardized HP and max HP (after the deck and bags, in the state's order).
+COMBAT_DROPPED = [len(combat_spec.PILES) * combat_net.Net.HIDDEN + k for k in range(combat_net.Net.HP)]
+V_DROPPED = [2 * v_net.Net.HIDDEN + len(v_spec.BAGS) * v_net.Net.DIM + v_spec.STATE.index(n) for n in ("hp", "max_hp")]
+
+
+def dropped(old: dict[str, torch.Tensor], own: dict[str, torch.Tensor], columns: list[int], held=None) -> bool:
+    """A net of before the fight score (the module's doc): its body's first layer without the HP's COLUMNS, their part
+    at the inputs HELD (one per column; none: 0) put in the bias. False, and OLD as it was, for a net of after."""
+    w = old["body.0.weight"]
+    if w.shape[1] != own["body.0.weight"].shape[1] + len(columns):
+        return False
+    if held is not None:
+        old["body.0.bias"] = old["body.0.bias"] + w[:, columns] @ torch.tensor(held, dtype=w.dtype)
+    old["body.0.weight"] = w[:, [k for k in range(w.shape[1]) if k not in columns]]
+    return True
 
 
 def carried(old: dict[str, torch.Tensor], own: dict[str, torch.Tensor], rows, was: dict, now: dict, keep=()) -> dict:
     """The weights of a net of this checkout (`own`, by name) from an older net's (`old`), whose tables were `was`."""
     out = {}
     for name, mine in own.items():
-        if any(name.startswith(k) for k in keep):
+        if any(name.startswith(k) for k in keep) or (name.startswith(FRESH_HEADS) and name not in old):
             out[name] = mine
             continue
         theirs = old.get(name)
@@ -121,9 +145,11 @@ def combat(
     out_file = out_path(name, out)
     model = combat_net.Net({t: len(ids) for t, ids in tables.items()})
     buffers = [k for k, _ in model.named_buffers()]
-    model.load_state_dict(
-        carried(combat_export.stored(old), model.state_dict(), COMBAT_ROWS, old["vocab"], tables, buffers)
-    )
+    weights = combat_export.stored(old)
+    players = [t["obs"]["player"] for t in old["tests"]]
+    held = [sum(min(1.0, p["hp"] / max(1, p["max_hp"])) for p in players) / len(players), sum(min(10.0, p["hp"] / 100) for p in players) / len(players)]
+    restructured = dropped(weights, model.state_dict(), COMBAT_DROPPED, held)
+    model.load_state_dict(carried(weights, model.state_dict(), COMBAT_ROWS, old["vocab"], tables, buffers))
     model.eval()
 
     reader = common.Encoder(common.checkout_encoder())
@@ -153,7 +179,7 @@ def combat(
         ]
         pairs = zip(t["outcome"] + gone, new["outcome"] + new["potion_used"], strict=True)
         worst = max(worst, max(abs(a - b) for a, b in pairs))
-    if worst > 1e-4:
+    if worst > 1e-4 and not restructured:
         raise LearnError(f"the carried net is {worst} off the old net on its test states")
     combat_export.write(net, out_file)
     logger.info("wrote {}: {} carried, {} off its test states at most", out_file, old["name"], worst)
@@ -170,9 +196,10 @@ def v(
     out_file = out_path(name, out)
     torch.manual_seed(0)  # the weights that start as a new net's (FRESH): the same each carry
     model = v_net.Net({t: len(ids) for t, ids in tables.items()}, old["floors"])
-    model.load_state_dict(
-        carried(v_export.stored(old), model.state_dict(), V_ROWS, old["vocab"], tables, ["aux_head."])
-    )
+    weights = v_export.stored(old)
+    restructured = dropped(weights, model.state_dict(), V_DROPPED)
+    buffers = [k for k, _ in model.named_buffers()]
+    model.load_state_dict(carried(weights, model.state_dict(), V_ROWS, old["vocab"], tables, ["aux_head.", *buffers]))
     model.eval()
 
     reader = common.Encoder(common.checkout_encoder())
@@ -203,7 +230,7 @@ def v(
     net = v_export.net_file(name, old["floors"], tables, mean, std, model, samples, old["fit"], 0, from_(old))
     was = {json.dumps(t["run"], sort_keys=True): t["value"] for t in old["tests"]}
     worst = max(abs(t["value"] - was[json.dumps(t["run"], sort_keys=True)]) for t in net["tests"])
-    if worst > 1e-4:
+    if worst > 1e-4 and not restructured:
         raise LearnError(f"the carried net is {worst} off the old net on its test runs")
     v_export.write(net, out_file)
     logger.info("wrote {}: {} carried, {} off its test runs at most", out_file, old["name"], worst)

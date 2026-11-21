@@ -33,6 +33,27 @@ public class RunNetTests
         Assert.Equal(noSl.Value, net.In(PlayEnvironment.NoSL).Value(noSl.Run), 4);
     }
 
+    /// <summary>
+    /// pure-v-tiny-win carried into the fight score's structure (plans/2026-11-21-1604-fight-score.md; learn/carry.py),
+    /// its new heads random: loading checks RunNet gives each test run the trainer's value and each potion it holds the
+    /// trainer's f, so a change to how RunNet asks the graph about potions fails here. f reads no HP, and a net of
+    /// before says none.
+    /// </summary>
+    [Fact]
+    public void SaysWhatEachPotionWillSaveAsItsTrainerDid()
+    {
+        var file = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "fight-v-tiny.json")));
+        using var net = RunNet.Load(file);
+        var holding = file.Tests.First(t => t.Run.Potions.Any(p => p != null) && t.Env == null);
+        var saves = net.Saves(holding.Run)!;
+        Assert.Equal(holding.Run.Potions.Count(p => p != null), saves.Count);
+        Assert.All(saves, f => Assert.True(f > 0));
+        Assert.Equal(saves, net.Saves(holding.Run with { Hp = holding.Run.Hp / 2 }));
+        var before = ProtocolJson.Deserialize<NetFile>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json")));
+        using var old = RunNet.Load(before);
+        Assert.Null(old.Saves(holding.Run));
+    }
+
     /// <summary>The champion's own file: loading checks RunNet gives its test runs the trainer's values.</summary>
     [Fact]
     public void ReadsTheChampionsTestRunsAsItsTrainerDid()

@@ -42,7 +42,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     /// <summary>The engine's beam from where <paramref name="root"/> stands (<see cref="EngineWorld.Plan"/>).</summary>
     private SlPlan Plan(EngineWorld root, Budget budget, IReadOnlyList<EnemyTurns> history)
     {
-        var found = root.Plan(_net.Value, net.RunValue, history, budget.NodesPerWorld, budget.Beam, budget.EasyBeam, budget.TurnDecay, threads);
+        var found = root.Plan(_net.Value, net.FightValue, history, budget.NodesPerWorld, budget.Beam, budget.EasyBeam, budget.TurnDecay, threads);
         return PlanOf.Found(found.Pick, found.From, found.ByFirst, found.Proved, budget.Replan, found.Nodes, found.Turns);
     }
 
@@ -66,7 +66,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     /// clone stands at.</summary>
     public SlPlan Plan(PromptRoot.Crossing crossing, Budget budget, IReadOnlyList<EnemyTurns> history)
     {
-        var found = EngineCrossing.Plan(_net.Value, net.RunValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed, history,
+        var found = EngineCrossing.Plan(_net.Value, net.FightValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed, history,
             budget.NodesPerWorld, budget.Beam, budget.EasyBeam, budget.TurnDecay, threads);
         return PlanOf.Found(found.Pick, found.From, found.ByFirst, found.Proved, budget.Replan, found.Nodes, found.Turns);
     }
@@ -176,7 +176,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         return new(played => Observe(crossing, played),
             // Every answer crossed side by side first: the solver crosses the prompt before it searches on.
             (budget, history) => Plan(prompt, crossing, budget, history, int.MaxValue),
-            (history, decay) => new Solving(new EngineSolver(_net.Value, net.RunValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed,
+            (history, decay) => new Solving(new EngineSolver(_net.Value, net.FightValue, crossing.At([]).Step.Run, path => crossing.At(path).Crossed,
                 history, decay, threads)));
     }
 
@@ -207,7 +207,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             foreach (var action in played) at.Execute(action);
             return at.Observe();
         }, (budget, history) => Plan(root, budget, history),
-            (history, decay) => new Solving(new EngineSolver(_net.Value, net.RunValue, root, history, decay, threads)));
+            (history, decay) => new Solving(new EngineSolver(_net.Value, net.FightValue, root, history, decay, threads)));
     }
 
     /// <summary>The engine's solver as the route plays one.</summary>
