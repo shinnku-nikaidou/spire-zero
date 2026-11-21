@@ -104,7 +104,7 @@ internal static partial class Describe
     }
 
     /// <param name="line">Outside combat, the answers the brain would give after the action (<see cref="Candidate.Plan"/>).</param>
-    private static string Action(string text, Observation obs, IReadOnlyList<string>? line = null)
+    public static string Action(string text, Observation obs, IReadOnlyList<string>? line = null)
     {
         // A combat potion action carries its target too ("potion:SLOT:TARGET"); the combat names it.
         if (obs.Screen is CombatScreen { Combat: var combat }) return Combat(text, combat);
@@ -234,8 +234,8 @@ internal static partial class Describe
     private static string Potion(Observation obs, int slot) => obs.Run.Potions.ElementAtOrDefault(slot) is { } id ? Potion(id) : $"potion {slot}";
 
     private static string Card(CardView card) => (Text("cards", card.Id + ".title") ?? card.Id) + (card.Up is > 0 ? "+" : "");
-    private static string Relic(string id) => Text("relics", id + ".title") ?? id;
-    private static string Potion(string id) => Text("potions", id + ".title") ?? id;
+    public static string Relic(string id) => Text("relics", id + ".title") ?? id;
+    public static string Potion(string id) => Text("potions", id + ".title") ?? id;
     /// <summary>A card of a fight table (<see cref="TurnRow.Cards"/>): its id, "+" after it when upgraded.</summary>
     public static string TableCard(string card) => card.EndsWith('+') ? (Text("cards", card[..^1] + ".title") ?? card[..^1]) + "+" : Text("cards", card + ".title") ?? card;
 

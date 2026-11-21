@@ -210,6 +210,14 @@ internal static class L10n
         ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",
             "SL ve el resultado real de la sala actual; NoSL nunca mira", "SL 能看到当前房间的真实结果；NoSL 从不偷看", "SL 能看到目前房間的真實結果；NoSL 從不偷看",
             "SLは今いる部屋の本当の結果を見る。NoSLは一切覗かない"],
+        // The console's quiz and the screens of a run of several players.
+        ["Quiz: your move"] = ["Quiz : à vous", "Quiz: tu turno", "测验：轮到你", "測驗：輪到你", "クイズ：あなたの番"],
+        ["the AI has answered; make your choice"] = ["l'IA a répondu ; faites votre choix", "la IA ya respondió; elige tú", "AI 已经想好了，你来选", "AI 已經想好了，你來選", "AIは答えを出した。あなたが選んで"],
+        ["last: the AI's own answer"] = ["dernier : la réponse de l'IA", "último: la respuesta de la IA", "上一步：和 AI 一样", "上一步：和 AI 一樣", "前回：AIと同じ答え"],
+        ["last: the AI would"] = ["dernier : l'IA aurait joué", "último: la IA habría elegido", "上一步：AI 会选", "上一步：AI 會選", "前回：AIなら"],
+        ["quiz on"] = ["quiz activé", "quiz activado", "测验开启", "測驗開啟", "クイズ中"],
+        ["waiting for teammates"] = ["en attente des coéquipiers", "esperando a los compañeros", "等待队友", "等待隊友", "仲間を待っています"],
+        ["answer the card prompt yourself"] = ["choisissez vous-même les cartes", "elige tú las cartas", "这个选牌请自己选", "這個選牌請自己選", "このカード選択は自分で"],
     };
 
     /// <summary>The line in the game's language, with <paramref name="args"/> in its holes.</summary>

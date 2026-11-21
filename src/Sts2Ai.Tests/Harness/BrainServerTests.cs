@@ -99,6 +99,59 @@ public class BrainServerTests
         Assert.Equal([1, 2, 3], logged);
     }
 
+    [Fact]
+    public void AQueryIsAskedOnARunOfItsOwnAndLeavesTheHostsRunAsItWas()
+    {
+        // Each decision answered with its last legal action, scored; the harnesses made, by hello.
+        var combat = new CombatRoute("test", (decision, _, _, _) => new(decision.Legal[^1], [], []));
+        var macro = new Fixed();
+        var made = new List<string>();
+        var server = new BrainServer(hello =>
+        {
+            made.Add(hello.Effort ?? "none");
+            return (new Dispatcher(hello.Run.RunId, PlayEnvironment.NoSL, combat, new("l0", macro), new("l0", macro), log: true), "test");
+        }, values: env => run => env == "NoSL" ? run.Hp / 100.0 : throw new NotSupportedException("no SL here"));
+
+        using var toBrain = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var brainIn = new AnonymousPipeClientStream(PipeDirection.In, toBrain.ClientSafePipeHandle);
+        using var toHost = new AnonymousPipeServerStream(PipeDirection.Out);
+        using var hostIn = new AnonymousPipeClientStream(PipeDirection.In, toHost.ClientSafePipeHandle);
+        var serving = new Thread(() => server.Serve(new WireStream(brainIn, toHost)));
+        serving.Start();
+        var host = new WireStream(hostIn, toBrain);
+
+        var obs = new Observation { Run = Fixtures.Floor1(), Screen = new CombatScreen { Combat = Fixtures.Slugs() } };
+        string hash = DecisionRequest.HashOf(obs);
+        string end = CombatAction.EndTurn.ToString(), potion = CombatAction.Potion(0, null).ToString();
+        var hello = new Hello("v-test", "NoSL", "mod", new RunHeader("run-1", "SILENT", 0), "medium");
+        host.Send(hello);
+        host.Expect<Ready>();
+        var decision = new DecisionRequest(0, hash, Surfaces.Combat, obs, [end, potion]);
+        host.Send(decision);
+        Assert.Equal(potion, host.Expect<Recommendation>().Action);
+        // The same decision with fewer options, on a run of its own at another effort.
+        host.Send(new Query(1, hello with { Effort = "max" }, null, decision with { Legal = [end] }));
+        var answer = host.Expect<QueryAnswer>();
+        Assert.Equal(1, answer.Id);
+        Assert.Equal(end, answer.Answer!.Action);
+        // A query that fails is answered with its error, and the host's run goes on.
+        host.Send(new Query(2, hello, null, decision with { ObsHash = "not the hash" }));
+        var failed = host.Expect<QueryAnswer>();
+        Assert.Null(failed.Answer);
+        Assert.NotNull(failed.Error);
+        host.Send(new DecisionRequest(1, hash, Surfaces.Combat, obs, [end, potion]));
+        Assert.Equal(potion, host.Expect<Recommendation>().Action);
+        // V of runs, one value each, in their order; an environment without V answers with its error.
+        host.Send(new ValueQuery(3, "NoSL", [obs.Run, obs.Run with { Hp = 7 }]));
+        Assert.Equal([obs.Run.Hp / 100.0, 0.07], host.Expect<ValueAnswer>().Values!);
+        host.Send(new ValueQuery(4, "SL", [obs.Run]));
+        Assert.Null(host.Expect<ValueAnswer>().Values);
+        toBrain.Dispose();
+        serving.Join();
+
+        Assert.Equal(["medium", "max", "medium"], made);
+    }
+
     /// <summary>Answers each decision with its first legal action, at a state numbered in order from 1, and keeps the
     /// states it hears were played.</summary>
     private sealed class Numbered : IMacroPolicy, IChoicePolicy

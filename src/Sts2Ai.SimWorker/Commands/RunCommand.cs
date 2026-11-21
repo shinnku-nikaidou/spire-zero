@@ -39,13 +39,15 @@ internal static class RunCommand
         "(the game's win command) with their rewards, so only elites and bosses are fought there; for self-play, as no report or gate takes such a run");
     private static readonly Option<string?> Mode = Opt.Maybe<string?>("--mode",
         "the game mode: dread, which the game plays at ascension 10 only (--asc 10); the standard game if not given");
+    private static readonly Option<bool> Progress = Opt.Of("--progress", false,
+        "prints a line each time the run reaches a new floor (progress FLOOR HP MAXHP): what the mod's race shows as it goes");
     private static readonly ChampionArgs Champion = new(file: true);
     private static readonly LoadoutArgs Loadout = new();
 
     public static Command Command()
     {
         var command = Opt.Command("run", "whole runs through Harness",
-            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, EventLines, AutoWin, Mode], Champion.Options, Loadout.Options);
+            [Seeds, N, Start, Seed, Asc, Env, MaxDecisions, Check, Trace, Obs, Log, Records, EventLines, AutoWin, Mode, Progress], Champion.Options, Loadout.Options);
         command.SetAction(Cli.Game(Run));
         return command;
     }
@@ -62,6 +64,7 @@ internal static class RunCommand
         var autoWin = Acts(r.GetValue(AutoWin));
         var mode = GameModeOf(r.GetValue(Mode), asc);
         int maxDecisions = r.GetValue(MaxDecisions);
+        _progress = r.GetValue(Progress);
         var env = r.GetValue(Env);
         bool check = r.GetValue(Check);
         bool trace = r.GetValue(Trace);
@@ -273,9 +276,14 @@ internal static class RunCommand
             session = RunSession.Start(pump, setup, player, player, player, observed);
             if (export != null) export.Session = session;
             if (observe) session.RoomSaved = (save, at, kind) => roomSaves.Add((save, at, kind));
-            int printed = 0;
+            int printed = 0, floor = -1;
             while (!session.IsOver && session.Trace.Count < maxDecisions)
             {
+                if (_progress && session.Run.TotalFloor != floor)
+                {
+                    floor = session.Run.TotalFloor;
+                    Console.WriteLine($"progress {floor} {session.Player.Creature.CurrentHp} {session.Player.Creature.MaxHp}");
+                }
                 if (observe && (nodes.Count == 0 || nodes[^1].Start != session.NodeStart)) nodes.Add((session.Clone().Save, session.NodeStart));
                 session.Step();
                 if (!trace) continue;
@@ -309,6 +317,9 @@ internal static class RunCommand
                 HeadlessGame.TakeErrors(), record, nodes, roomSaves, brain?.Replans ?? 0);
         }
     }
+
+    /// <summary>--progress: a line at each new floor.</summary>
+    private static bool _progress;
 
     /// <summary>--auto-win's acts as the run's rule: indexes from 0, in order, each once; null for none.</summary>
     private static IReadOnlyList<int>? Acts(string? text)

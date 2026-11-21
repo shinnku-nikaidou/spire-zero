@@ -18,10 +18,15 @@ namespace Sts2Ai.Protocol;
 [JsonDerivedType(typeof(RunEnd), "run_end")]
 [JsonDerivedType(typeof(WireError), "error")]
 [JsonDerivedType(typeof(NodeCheckpoint), "node_checkpoint")]
+[JsonDerivedType(typeof(Query), "query")]
+[JsonDerivedType(typeof(QueryAnswer), "query_answer")]
+[JsonDerivedType(typeof(CancelQuery), "cancel_query")]
+[JsonDerivedType(typeof(ValueQuery), "value_query")]
+[JsonDerivedType(typeof(ValueAnswer), "value_answer")]
 public abstract record WireMessage
 {
     /// <summary>Bumped on any breaking change.</summary>
-    public const int Version = 5;
+    public const int Version = 6;
 
     [JsonPropertyOrder(-1)]
     public int V { get; init; } = Version;
@@ -151,6 +156,27 @@ public sealed record WireError(string Message) : WireMessage;
 /// </summary>
 public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint, IReadOnlyList<int>? AutoWin = null) : WireMessage;
 
+/// <summary>
+/// Host → brain, a question on the side (the mod's console): <paramref name="Decision"/> asked of a run of its own,
+/// opened at <paramref name="Hello"/> (with SL's checkpoint <paramref name="Node"/>) and dropped once answered, so the
+/// host's own run is left as it was. Answered by <see cref="QueryAnswer"/>, whatever happens; never by an error that ends
+/// the host's run.
+/// </summary>
+public sealed record Query(long Id, Hello Hello, NodeCheckpoint? Node, DecisionRequest Decision) : WireMessage;
+
+/// <summary>Brain → host, the answer to a <see cref="Query"/>: a recommendation as a decision's (its picks so far, while a
+/// brain that searches on searches, with <see cref="Recommendation.Searching"/>), or why there is none.</summary>
+public sealed record QueryAnswer(long Id, Recommendation? Answer, string? Error = null) : WireMessage;
+
+/// <summary>Host → brain: answer the query at once, with the pick so far.</summary>
+public sealed record CancelQuery(long Id) : WireMessage;
+
+/// <summary>Host → brain: V's chance to win for each run, in the environment <paramref name="Env"/> ("SL" or "NoSL"): the
+/// runs are the host's, as they are or as a player asks about them (a card fewer, a relic more).</summary>
+public sealed record ValueQuery(long Id, string Env, IReadOnlyList<RunView> Runs) : WireMessage;
+
+/// <summary>Brain → host, the answer to a <see cref="ValueQuery"/>: one value a run, in its order; or why there is none.</summary>
+public sealed record ValueAnswer(long Id, IReadOnlyList<double>? Values, string? Error = null) : WireMessage;
 
 /// <summary>One end of a connection: messages as JSON lines, read from <paramref name="input"/> and written to <paramref name="output"/>.</summary>
 public sealed class WireStream(Stream input, Stream output)

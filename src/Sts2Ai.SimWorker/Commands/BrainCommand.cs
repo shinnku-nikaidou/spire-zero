@@ -77,6 +77,13 @@ internal static class BrainCommand
             },
             received: wireFile == null ? null : message => wireFile.WriteLine(ProtocolJson.Serialize(message)),
             answered: WriteLog,
+            // V of each environment's champion, read in that environment, for the console's questions (ValueQuery).
+            values: env =>
+            {
+                if (!Enum.TryParse<PlayEnvironment>(env, out var e)) throw new NotSupportedException($"no environment {env}");
+                var value = ((e == PlayEnvironment.SL ? sl : champion).Value ?? throw new NotSupportedException($"{env}'s champion has no V")).In(e);
+                return value.Value;
+            },
             ended: (hello, harness, end) =>
         {
             WriteLog(harness);

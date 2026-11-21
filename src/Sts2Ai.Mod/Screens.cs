@@ -59,6 +59,13 @@ internal sealed class Screens
         var top = ActiveScreenContext.Instance.GetCurrentScreen();
         // Prompts wait inside an action or a reward; every other screen waits with the action queue empty.
         bool settled = RunManager.Instance.ActionQueueSet.IsEmpty;
+        // A run of several players (the console's switch): the others' turns between a fight's export and its prompts
+        // are in no record, so a prompt in a fight is the player's; and a vote cast waits on the others.
+        if (run.Players.Count > 1 && Waits(run, me, top) is { } waiting)
+        {
+            note = waiting;
+            return null;
+        }
         switch (top)
         {
             case NCombatRoom when NPlayerHand.Instance is { IsInCardSelection: true } hand:
@@ -106,7 +113,10 @@ internal sealed class Screens
             case NRestSiteRoom rest when settled:
             {
                 var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
-                return Ask(run, me, Surfaces.Rest, RestActions.Screen(options, me), RestActions.Legal(options, rest.ProceedButton.IsEnabled));
+                // Mend picks a teammate, which no decision of the simulator's asks.
+                var legal = RestActions.Legal(options, rest.ProceedButton.IsEnabled);
+                if (run.Players.Count > 1) legal.RemoveAll(a => options.Any(o => o.OptionId == "MEND" && RestActions.Of(o) == a));
+                return Ask(run, me, Surfaces.Rest, RestActions.Screen(options, me), legal);
             }
             case NTreasureRoom treasure when settled:
                 if (Field<bool>(treasure, "_isRelicCollectionOpen") && RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics is { Count: > 0 } relics)
@@ -117,6 +127,21 @@ internal sealed class Screens
             default:
                 return null;
         }
+    }
+
+    /// <summary>In a run of several players, what the screen waits on that no decision of this player's answers; null when
+    /// it asks one.</summary>
+    private static string? Waits(RunState run, Player me, object? top)
+    {
+        if (CombatManager.Instance.IsInProgress && top is not NCombatRoom) return "answer the card prompt yourself";
+        if (top is NCombatRoom && NPlayerHand.Instance is { IsInCardSelection: true }) return "answer the card prompt yourself";
+        var rm = RunManager.Instance;
+        if (top is NMapScreen && rm.MapSelectionSynchronizer.GetVote(me) != null) return "waiting for teammates";
+        if (run.CurrentRoom is EventRoom && top is NEventRoom && rm.EventSynchronizer.IsShared && rm.EventSynchronizer.GetPlayerVote(me) != null)
+            return "waiting for teammates";
+        if (top is NTreasureRoom && rm.TreasureRoomRelicSynchronizer.CurrentRelics is { Count: > 0 } && rm.TreasureRoomRelicSynchronizer.GetPlayerVote(me) != null)
+            return "waiting for teammates";
+        return null;
     }
 
     /// <summary>The combat, when the player can act and nothing is still moving.</summary>

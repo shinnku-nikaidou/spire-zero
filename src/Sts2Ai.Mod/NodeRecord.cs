@@ -111,6 +111,10 @@ internal static class NodeRecord
     /// <summary>A fight begins: its steps are recorded from here, if the record is on and whole.</summary>
     public static void FightBegins() => _fight = Checkpoint != null && Broken == null ? [] : null;
 
+    /// <summary>Each step as it is taken, the record on or off: its surface, its action and whether the AI took it (the
+    /// console's review reads the player's answers off it).</summary>
+    public static event Action<string, string, bool>? Taken;
+
     /// <summary>How many times the player acted: took a step the AI did not, or went back. Auto-play stops on a change.</summary>
     public static int PlayerActs { get; private set; }
 
@@ -319,14 +323,14 @@ internal static class NodeRecord
         var entries = (IReadOnlyList<CombatHistoryEntry>)CombatManager.Instance.History.Entries;
         if (entries.Count < _historyRead) _historyRead = 0;
         for (int i = _historyRead; i < entries.Count; i++)
-            if (CombatActions.PlayStarted(entries[i], RunningAction) is { } play) Add(Surfaces.Combat, play.ToString());
+            if (CombatActions.PlayStarted(entries[i], RunningAction) is { } play && Mine(RunningAction!)) Add(Surfaces.Combat, play.ToString());
         _historyRead = entries.Count;
     });
 
     /// <summary>A potion drunk: its action found it and its target.</summary>
     private static void Used() => Guard(() =>
     {
-        if (RunningAction is not UsePotionAction use || _run is not { } run || LocalContext.GetMe(run) is not { } me) return;
+        if (RunningAction is not UsePotionAction use || !Mine(use) || _run is not { } run || LocalContext.GetMe(run) is not { } me) return;
         if (use.WasEnqueuedInCombat) Add(Surfaces.Combat, CombatActions.PotionOf(me, (int)use.PotionIndex, use.TargetId).ToString());
         else Belt(MacroAction.Of(MacroAction.Potion, (int)use.PotionIndex));
     });
@@ -334,7 +338,7 @@ internal static class NodeRecord
     /// <summary>A potion thrown away by the player (events throw some away too, outside any action).</summary>
     private static void Discarded() => Guard(() =>
     {
-        if (RunningAction is not DiscardPotionGameAction discard) return;
+        if (RunningAction is not DiscardPotionGameAction discard || !Mine(discard)) return;
         var action = MacroAction.Of(MacroAction.DiscardPotion, (int)DiscardedSlot(discard));
         // In combat the simulator never decides one; the clone replays it all the same (RunSession).
         if (discard.WasEnqueuedInCombat) Add(Surfaces.Combat, action.ToString());
@@ -344,13 +348,13 @@ internal static class NodeRecord
     /// <summary>The player's turn end, once: cards and effects that end the turn are no decision.</summary>
     private static void TurnEnded(Player player) => Guard(() =>
     {
-        if (RunningAction is EndPlayerTurnAction && !CombatManager.Instance.IsPlayerReadyToEndTurn(player)) Add(Surfaces.Combat, CombatAction.EndTurn.ToString());
+        if (RunningAction is EndPlayerTurnAction && Mine(player.NetId) && !CombatManager.Instance.IsPlayerReadyToEndTurn(player)) Add(Surfaces.Combat, CombatAction.EndTurn.ToString());
     });
 
     /// <summary>The travel, the node's last step: leaving the room is final now.</summary>
     private static void Travelled(VoteForMapCoordAction vote)
     {
-        if (Destination(vote) is not { } to || _run is not { } run) return;
+        if (Destination(vote) is not { } to || !Mine(vote) || _run is not { } run) return;
         if (_screen?.Surface != Surfaces.Map) Leave();
         _leave = null;
         var travel = MapActions.Of(to.coord);
@@ -485,6 +489,7 @@ internal static class NodeRecord
     private static bool Insert(int at, string surface, string action)
     {
         bool ai = action == _expected;
+        Taken?.Invoke(surface, action, ai);
         if (ai) _expected = null;
         else PlayerActs++;
         if (Checkpoint == null || Broken != null)
@@ -501,6 +506,12 @@ internal static class NodeRecord
         ModLog.Write("record", $"step {at} of checkpoint {Node}: {surface} {action} ({(ai ? "AI" : "player")})");
         return true;
     }
+
+    /// <summary>Whether a player's action is the local player's: in a run of several players (the console's switch) the
+    /// others' steps are no answer of this player's.</summary>
+    private static bool Mine(GameAction action) => Mine(action.OwnerId);
+
+    private static bool Mine(ulong owner) => LocalContext.NetId is not { } me || owner == me;
 
     /// <summary>A hook runs inside the game's own call: whatever goes wrong in it must not reach the game.</summary>
     private static void Guard(Action hook)

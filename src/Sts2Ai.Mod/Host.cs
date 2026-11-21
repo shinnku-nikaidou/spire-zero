@@ -68,6 +68,8 @@ internal static class Host
             var bundled = BundledBrain.Find(modDir, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!, version, ModLog.Folder!);
             var link = BrainLink.Start(bundled);
             _assist = new Assist(link, version, bundled?.SchemaPath);
+            Assist.Current = _assist;
+            NodeRecord.Taken += _assist.Took;
             CombatOpening.Starting = _assist.Opening;
             ModLog.Info("start", $"assist mode, {Settings.Current.Env}, brain: {link.Where}");
         }
@@ -103,6 +105,7 @@ internal static class Host
         try
         {
             var assist = _assist;
+            Jobs.Drain();
             _panel ??= new UI.Panel((SceneTree)Engine.GetMainLoop(), assist == null ? null : assist.Press);
             _panel.Poll();
             // Once, in the game's language, which loads after the mods.

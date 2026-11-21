@@ -31,7 +31,7 @@ internal static class Cli
         Command[] commands =
         [
             ListCommand.Command(), TablesCommand.Command(), CombatCommand.Command(), BenchCommand.Command(), SelfTest.Command(), ParityCommand.Command(),
-            RunCommand.Command(), BrainCommand.Command(), Serve.Command(),
+            RunCommand.Command(), RolloutCommand.Command(), ScoutCommand.Command(), BrainCommand.Command(), Serve.Command(),
             ReportCommand.Command(), GateCommand.Command(), PromoteCommand.Command(), LeaderboardCommand.Command(), SeedsCommand.Command(), ClonesCommand.Command(),
             EncodeCommand.Command(), HashedCommand.Command(), SameDecisionsCommand.Command(),
         ];

@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.CardRewardAlternatives;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.Rngs;
 using MegaCrit.Sts2.Core.Entities.TreasureRelicPicking;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -134,6 +135,19 @@ internal sealed class RunSession : IDisposable
     /// </summary>
     public Action<string, int, string>? RoomSaved { get; set; }
 
+    /// <summary>Called as the run enters a map point, before the room is rolled and its checkpoint taken: a rollout draws
+    /// the run's chance anew there (<see cref="Redraw"/>), so the node's checkpoint and its clones hold the new streams.</summary>
+    public Action? Entering { get; set; }
+
+    /// <summary>Every seeded stream of the run and of the player drawn anew from <paramref name="sample"/>: what the rest of
+    /// the run rolls (rooms not rolled yet, rewards, shops, events, fights) is then another of its possible futures. What
+    /// the save has rolled already stays (the act's encounter and event order, the relic bag).</summary>
+    public void Redraw(Rng sample)
+    {
+        foreach (var type in Enum.GetValues<RunRngType>()) Run.Rng.GetRng(type).LoadFromSerializable(new Rng(sample.NextUnsignedLong()).ToSerializable());
+        foreach (var type in Enum.GetValues<PlayerRngType>()) Player.PlayerRng.GetRng(type).LoadFromSerializable(new Rng(sample.NextUnsignedLong()).ToSerializable());
+    }
+
     public bool IsOver => Run.IsGameOver;
 
     /// <summary>Winning ends in the victory room, where the game kills the players once the run is recorded.</summary>
@@ -162,6 +176,7 @@ internal sealed class RunSession : IDisposable
         // A clone's prompts are numbered from its node's entry, so the node's own are too.
         HeadlessPatches.NodeEntered = () =>
         {
+            Entering?.Invoke();
             (_checkpoint, NodeStart) = (Checkpoint.Take(player), _trace.Count);
             _selector.RestartPrompts();
         };
@@ -225,8 +240,9 @@ internal sealed class RunSession : IDisposable
     /// raised a card prompt stands at that prompt, and so does one whose room asks one as it is entered.
     /// </summary>
     /// <param name="opened">The clone's checkpoint already read (<see cref="Checkpoint.Open"/>), for a node loaded many times.</param>
+    /// <param name="open">Not sealed: the run plays on past its node, to its end (a rollout).</param>
     public static RunSession Load(Pump pump, NodeClone clone, IChoicePolicy choices, ICombatPolicy combat, IMacroPolicy macro,
-        Action<Observation>? observed = null, Checkpoint.Opened? opened = null)
+        Action<Observation>? observed = null, Checkpoint.Opened? opened = null, bool open = false)
     {
         opened ??= Checkpoint.Open(clone.Save);
         var read = SaveManager.FromJson<SerializableRun>(opened.Save);
@@ -235,7 +251,7 @@ internal sealed class RunSession : IDisposable
         var player = run.Players[0];
         var replay = new Replay(clone.Trace, combat, macro);
         var setup = new RunSetup(player.Character.Id.Entry, run.Rng.StringSeed, run.AscensionLevel, AutoWin: clone.AutoWin, Mode: run.GameMode);
-        var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = true, _checkpoint = clone.Save, _replay = replay };
+        var session = new RunSession(pump, setup, player, run, choices, replay, replay, observed) { _sealed = !open, _checkpoint = clone.Save, _replay = replay };
         try
         {
             // NMainMenu's Continue and NGame.LoadRun without the nodes.

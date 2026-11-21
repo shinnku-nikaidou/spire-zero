@@ -22,9 +22,13 @@ namespace Sts2Ai.Harness;
 /// messages are read on a thread of their own, and handled in order as before. One that searches on after it answers
 /// sends the plan after the answer each time it changes (<see cref="Recommendation.After"/>), from its searching thread,
 /// after the answer: every message goes out whole, one at a time.
+/// A query (<see cref="Query"/>, the mod's console) is a decision asked of a run of its own: a Harness made for its hello,
+/// given its checkpoint and steps, asked once and dropped, so the host's run is left as it was; its CancelQuery hurries it
+/// as a Cancel does a decision. <paramref name="values"/> gives V in an environment ("SL", "NoSL") for a
+/// <see cref="ValueQuery"/>; without it each is answered with an error.
 /// </summary>
 public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harness, Action<Hello, Dispatcher, RunEnd>? ended = null,
-    Action<WireMessage>? received = null, Action<Dispatcher>? answered = null)
+    Action<WireMessage>? received = null, Action<Dispatcher>? answered = null, Func<string, Func<RunView, double>>? values = null)
 {
     /// <summary>A Unix socket listening at the abstract name <paramref name="path"/> (a leading NUL: no file), for a host in the same process.</summary>
     public static Socket Bind(string path)
@@ -52,6 +56,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
             lock (sending) wire.Send(message);
         }
         (long Id, CancellationTokenSource Hurry)? deciding = null;
+        (long Id, CancellationTokenSource Hurry)? querying = null;
         Exception? lost = null;
         var reader = new Thread(() =>
         {
@@ -62,6 +67,12 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     if (message is Cancel cancel)
                         lock (gate)
                             if (deciding is { } at && at.Id == cancel.DecisionId) at.Hurry.Cancel();
+                    if (message is CancelQuery stop)
+                    {
+                        lock (gate)
+                            if (querying is { } at && at.Id == stop.Id) at.Hurry.Cancel();
+                        continue;
+                    }
                     inbox.Add(message);
                 }
             }
@@ -155,6 +166,42 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                     run?.Rest();
                     if (run != null) ended?.Invoke(hello!, run, end);
                     (hello, run) = (null, null);
+                    break;
+                case Query query:
+                    using (var hurry = new CancellationTokenSource())
+                    {
+                        lock (gate) querying = (query.Id, hurry);
+                        Dispatcher? side = null;
+                        try
+                        {
+                            (side, _) = harness(query.Hello);
+                            if (query.Node is { } node) side.Checkpoint(node);
+                            side.Steps(query.Decision.Trace);
+                            var (answer, _) = Answer(side, query.Decision, early => Send(new QueryAnswer(query.Id, early)), hurry.Token, _ => { });
+                            Send(new QueryAnswer(query.Id, answer));
+                        }
+                        catch (Exception e)
+                        {
+                            Send(new QueryAnswer(query.Id, null, Describe(e)));
+                        }
+                        finally
+                        {
+                            side?.Rest();
+                            lock (gate) querying = null;
+                        }
+                    }
+                    break;
+                case ValueQuery query:
+                    try
+                    {
+                        if (values == null) throw new NotSupportedException("this brain gives no values");
+                        var value = values(query.Env);
+                        Send(new ValueAnswer(query.Id, [.. query.Runs.Select(value)]));
+                    }
+                    catch (Exception e)
+                    {
+                        Send(new ValueAnswer(query.Id, null, Describe(e)));
+                    }
                     break;
                 case Executed { Ok: true } executed:
                     if (run != null && states.Remove(executed.DecisionId, out var played)) run.Played(played);

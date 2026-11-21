@@ -72,6 +72,7 @@ internal sealed class BundledBrain
 
         using var log = new StreamWriter(LogPath, append: true) { AutoFlush = true };
         using var process = Process.Start(start)!;
+        _process = process;
         ModLog.Write("brain", $"started the brain: pid {process.Id}, {start.FileName} {string.Join(" ", start.ArgumentList)}");
         string last = "";
         var errors = new Thread(() =>
@@ -98,6 +99,61 @@ internal sealed class BundledBrain
         return $"the brain ended (exit code {process.ExitCode}): {last} (log: {LogPath})";
     }
 
+    private volatile Process? _process;
+
+    /// <summary>Ends the brain process running now, if one is (the console's restart); true if there was one.</summary>
+    public bool Kill()
+    {
+        if (_process is not { } process) return false;
+        try
+        {
+            if (process.HasExited) return false;
+            process.Kill(entireProcessTree: true);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Starts the shipped simulator for a job of the console's (a race, a rollout, a scout) with <paramref name="args"/>,
+    /// as the brain starts: the game's own assemblies and version, in brain/, its stdout read by the caller, its stderr
+    /// to <paramref name="errors"/> in the game session's folder of the mod's log.
+    /// </summary>
+    public Process Job(IReadOnlyList<string> args, string errors)
+    {
+        var start = new ProcessStartInfo(Launcher, args)
+        {
+            WorkingDirectory = _dir,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        start.Environment["STS2_BIN_DIR"] = _gameBin;
+        start.Environment["STS2_GAME_VERSION"] = _gameVersion;
+        start.Environment["DOTNET_ReadyToRun"] = "0";
+        start.Environment.Remove("SENTRY_GODOT_LIB_PATH");
+        // A home of its own: the headless game it boots loads and cleans up runs, and must never reach the player's saves.
+        string home = Path.Combine(_logs, "job-home");
+        Directory.CreateDirectory(home);
+        foreach (var name in new[] { "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME" }) start.Environment[name] = home;
+        var process = Process.Start(start)!;
+        var log = new StreamWriter(Path.Combine(_logs, errors), append: true) { AutoFlush = true };
+        new Thread(() =>
+        {
+            using (log)
+                while (process.StandardError.ReadLine() is { } line)
+                    log.WriteLine(line);
+        }) { IsBackground = true, Name = "sts2ai job stderr" }.Start();
+        ModLog.Write("ai", $"started a job: pid {process.Id}, {start.FileName} {string.Join(" ", start.ArgumentList)}");
+        return process;
+    }
+
+    /// <summary>The game session's folder of the mod's log, where jobs keep their files.</summary>
+    public string Logs => _logs;
+
     /// <summary>The search's worker processes: half the logical processors, so the game keeps its share, and no more than the planner's 8 worlds.</summary>
-    private static int Workers => Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+    public static int Workers => Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
 }

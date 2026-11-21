@@ -48,7 +48,7 @@ internal enum Goal
 /// the live combat holding the hidden state. Screens, decisions and answers go to <see cref="ModLog"/>.
 /// </summary>
 /// <param name="schemaPath">The engine's schema (<see cref="BundledBrain.SchemaPath"/>); null with no brain shipped.</param>
-internal sealed class Assist(BrainLink link, string gameVersion, string? schemaPath)
+internal sealed partial class Assist(BrainLink link, string gameVersion, string? schemaPath)
 {
     /// <summary>How many frames in a row a state must hold before it counts as idle.</summary>
     private const int IdleFrames = 3;
@@ -108,7 +108,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     {
         _written = null;
         NodeRecord.FightBegins();
-        if (schemaPath == null || RunManager.Instance.DebugOnlyGetState() is not { Players.Count: 1 } run || LocalContext.GetMe(run) is not { } me) return;
+        if (schemaPath == null || RunManager.Instance.DebugOnlyGetState() is not { } run || !Served(run) || LocalContext.GetMe(run) is not { } me) return;
         _written = (Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes), true,
             Observe.Run(run, me).WithoutPreviews(), 0);
     }
@@ -212,30 +212,32 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     /// <summary>A new goal: a state the AI played before without effect may be played again.</summary>
     private void Begin(Goal goal)
     {
-        (_goal, _acts, _lastSurface, _waiting, _acted) = (goal, 0, null, null, null);
+        (_goal, _acts, _lastSurface, _waiting, _acted, _until) = (goal, 0, null, null, null, null);
         ModLog.Write("auto", $"AI goal {goal}");
     }
 
     private void Stop(string reason)
     {
         if (_goal != Goal.Off) ModLog.Info("auto", $"AI stopped: {reason}");
-        (_goal, _stopped) = (Goal.Off, reason);
+        (_goal, _stopped, _until) = (Goal.Off, reason, null);
     }
 
     public void Tick(Panel panel)
     {
         while (link.Inbox.TryDequeue(out var e)) Handle(e);
         var settings = Settings.Current;
-        if (settings.Env != _env) Switch(settings.Env);
+        var run = RunManager.Instance.DebugOnlyGetState();
+        var me = run != null ? LocalContext.GetMe(run) : null;
+        // A run of more than one player is NoSL's: no clone holds the others' choices.
+        var env = run is { Players.Count: > 1 } ? PlayEnvironment.NoSL : settings.Env;
+        if (env != _env) Switch(env);
         if (settings.Effort != _effort) Switch(settings.Effort);
         if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
 
-        var run = RunManager.Instance.DebugOnlyGetState();
-        var me = run != null ? LocalContext.GetMe(run) : null;
         string? id = run != null ? RunHeader.IdOf(run.Rng.StringSeed) : null;
         if (_run != null && _run != id) End(_last.Over ? _last.Won ? "won" : "lost" : "aborted");
         else if (_run != null && !settings.Assist) End("aborted");
-        bool single = run is { Players.Count: 1 } && me != null && id != null;
+        bool single = run != null && Served(run) && me != null && id != null;
         // Read with assist off and without a brain too: the SL record needs the screen the player answers.
         string note = "";
         var asking = single ? _screens.Read(run!, me!, out note) : null;
@@ -337,6 +339,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (_answer is { } answer && answer.Key == key)
         {
             if (_shown == 0) _shown = Environment.TickCount64;
+            if (Quizzing(answer, panel, champion, status)) return;
             if (!answer.Searching) Play(asking, answer, run, me);
             string foot = answer.Searching && _asked != null
                 ? $"{answer.Answer.Brain} · {L10n.T("searching")} {(Environment.TickCount64 - _asked.Sent) / 1000.0:0.0} s{Searched(answer.Answer)}"
@@ -375,7 +378,9 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
         if (export != null) _written = (export, false, asking.Obs.Run.WithoutPreviews(), NodeRecord.Fight?.Count ?? 0);
         var trace = sl ? NodeRecord.Steps : null;
         (_asked, _askedKey) = (new Asked(_next++, key, asking.Obs, Environment.TickCount64), key);
-        link.Send(new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace, Prompted(asking)));
+        var request = new DecisionRequest(_asked.Id, hash, asking.Surface, asking.Obs, asking.Legal, export, trace, Prompted(asking));
+        link.Send(request);
+        Remember(request, key, run, me, asking);
         ModLog.Write("decision", $"{_asked.Id} asked: {asking.Surface}, floor {asking.Obs.Run.Floor}, {asking.Legal.Count} legal" +
                                  (trace != null ? $", checkpoint {NodeRecord.Node} + {trace.Count} steps" : "") + (export != null ? $", live combat {export.Length} chars" : ""));
     }
@@ -468,6 +473,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
     private string? Stops(Asking asking, Answered answer)
     {
         var settings = Settings.Current;
+        if (_until != null) return Until(asking, answer);
         if (settings.StopAtElites && asking.Surface == Surfaces.Map)
         {
             string? type = Describe.Point(answer.Answer.Action, asking.Obs.Run.Map);
@@ -554,6 +560,7 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                 // A new connection starts again from hello.
                 if (_connected || _down != down.Reason) ModLog.Info("brain", $"no brain: {down.Reason}");
                 (_connected, _down, _run) = (false, down.Reason, null);
+                Unanswered(down.Reason);
                 // The toolbar is gone without a brain: the AI stops, and starts again only when the player asks.
                 Reset();
                 Forget();
@@ -602,9 +609,13 @@ internal sealed class Assist(BrainLink link, string gameVersion, string? schemaP
                                          (answer.Candidates is { Count: > 0 } c ? $"; best {string.Join(", ", c.Take(3).Select(Candidate))}" : ""));
                 var shown = Describe.Recommendation(answer, asked.Obs);
                 Note(shown, answer);
+                Journal(asked.Id, asked.Obs, answer, shown);
                 _answer = new(asked.Id, asked.Key, asked.Obs, asked.Sent, answer, shown,
                     $"{answer.Brain} · {(Environment.TickCount64 - asked.Sent) / 1000.0:0.0} s{Searched(answer)}", MapRoute.Of(answer, asked.Obs),
                     CombatPlan.Of(answer, asked.Obs));
+                break;
+            case Received { Message: QueryAnswer or ValueAnswer } side:
+                SideAnswer(side.Message);
                 break;
             case Received { Message: WireError error }:
                 ModLog.Warn("brain", $"brain: {error.Message}");

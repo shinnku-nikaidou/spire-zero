@@ -32,14 +32,28 @@ internal sealed class BrainLink
 
     public ConcurrentQueue<LinkEvent> Inbox { get; } = new();
 
+    /// <summary>The brain shipped beside the mod, whose simulator the console's jobs run; null when none ships.</summary>
+    public BundledBrain? Bundled => _bundled;
+
     /// <summary>Where the brain comes from, as the panel says it while connecting.</summary>
     public string Where => _bundled?.Launcher ?? NoBrain;
 
     private static string NoBrain => "no brain ships with this copy of the mod for this platform";
 
+    /// <summary>The mod's link, for the console; null when the mod is off.</summary>
+    public static BrainLink? Current { get; private set; }
+
+    /// <summary>The console's restart: the brain process ends, and the link starts it again as after any end.</summary>
+    public static string Restart()
+    {
+        if (Current?._bundled is not { } bundled) return "no brain ships with this copy of the mod";
+        return bundled.Kill() ? "the brain was ended; it starts again in 2 s" : "no brain process is running";
+    }
+
     public static BrainLink Start(BundledBrain? bundled)
     {
         var link = new BrainLink(bundled);
+        Current = link;
         new Thread(link.Run) { IsBackground = true, Name = "sts2ai brain link" }.Start();
         return link;
     }
