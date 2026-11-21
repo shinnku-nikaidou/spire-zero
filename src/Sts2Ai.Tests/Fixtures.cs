@@ -31,7 +31,7 @@ internal static class Fixtures
         return Path.Combine([dir.FullName, .. path]);
     }
 
-    /// <summary>The SL champion's net file of <paramref name="option"/> ("value" or "combat-net"), which weights/fetch.sh
+    /// <summary>The SL champion's net file of <paramref name="option"/> ("value", "combat-net" or "f-net"), which weights/fetch.sh
     /// brings into a checkout.</summary>
     public static string ChampionNet(string option) =>
         Repo(ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(Repo("eval", "champions", "sl.json"))).Options[option]);

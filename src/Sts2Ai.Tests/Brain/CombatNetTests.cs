@@ -40,7 +40,7 @@ public class CombatNetTests
 
     /// <summary>
     /// The engine's searches price a fight's end by its score (plans/2026-11-21-1655-fight-score-f.md): with f, the HP
-    /// plus max HP plus each potion's f, the same f at any HP; without f, V.
+    /// plus max HP plus each potion's f, the same f at any HP; a net loaded without f is asked about none.
     /// </summary>
     [Fact]
     public void AFightsEndIsItsHpAndMaxHpAndItsPotionsFWithF()
@@ -57,7 +57,7 @@ public class CombatNetTests
         Assert.Equal(20 + 70 + f.Saves(one, PlayEnvironment.SL).Sum(), net.FightValue(one), 9);
         Assert.Equal(f.Saves(run, PlayEnvironment.NoSL).Sum(), ((CombatNet)net.In(PlayEnvironment.NoSL)).FightValue(run) - 90, 9);
         using var plain = CombatNet.Load(file, new Linear());
-        Assert.Equal(new Linear().Value(run), plain.FightValue(run));
+        Assert.Throws<InvalidOperationException>(() => plain.FightValue(run));
     }
 
     /// <summary>The champion's own file: loading checks CombatNet gives its test states the trainer's endings.</summary>

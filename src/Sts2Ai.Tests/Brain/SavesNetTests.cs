@@ -13,6 +13,15 @@ public class SavesNetTests
     /// </summary>
     public static string Fixture => Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
 
+    /// <summary>The SL champion's own f: loading checks SavesNet gives its test runs' potions the trainer's f.</summary>
+    [Fact]
+    public void ReadsTheChampionsTestRunsAsItsTrainerDid()
+    {
+        var file = ProtocolJson.Deserialize<SavesFile>(File.ReadAllText(Fixtures.ChampionNet("f-net")));
+        using var net = SavesNet.Load(file);
+        Assert.NotEmpty(file.Tests);
+    }
+
     [Fact]
     public void GivesEachPotionHeldItsFAsTheTrainerDidAtAnyHp()
     {

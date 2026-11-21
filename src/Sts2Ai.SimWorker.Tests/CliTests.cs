@@ -87,17 +87,18 @@ public sealed class CliTests : IDisposable
     {
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
         var file = ChampionFile(new()
         {
-            ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net, ["afterstates"] = afterstates,
+            ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net, ["f-net"] = fNet, ["afterstates"] = afterstates,
         });
         var (noSl, sl) = BrainCommand.Champions(Cli.Parse(["brain", "--champion", file]));
 
         Assert.False(noSl.OnClone);
         Assert.True(sl.OnClone);
-        Assert.Equal("combat pimc combat-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
+        Assert.Equal("combat pimc combat-tiny + f-tiny 8x300, combat prompts first, macro l0 pure-v-tiny-win, macro prompts l0 pure-v-tiny-win", noSl.Name);
         Assert.EndsWith(", combat prompts first, macro l0 pure-v-tiny-win clone, macro prompts l0 pure-v-tiny-win clone", sl.Name);
-        Assert.StartsWith("combat plan combat-tiny ", sl.Name);
+        Assert.StartsWith("combat plan combat-tiny + f-tiny ", sl.Name);
     }
 
     [Fact]
@@ -105,14 +106,15 @@ public sealed class CliTests : IDisposable
     {
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
         var slValue = Path.Combine(_dir, "v-sl.json");
         File.Copy(value, slValue);
         var slFile = Path.Combine(_dir, "sl.json");
         File.Move(ChampionFile(new()
         {
-            ["env"] = "SL", ["policy"] = "plan", ["macro"] = "l0", ["effort"] = "medium", ["value"] = slValue, ["combat-net"] = net, ["afterstates"] = "clone",
+            ["env"] = "SL", ["policy"] = "plan", ["macro"] = "l0", ["effort"] = "medium", ["value"] = slValue, ["combat-net"] = net, ["f-net"] = fNet, ["afterstates"] = "clone",
         }), slFile);
-        var noSlFile = ChampionFile(new() { ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net });
+        var noSlFile = ChampionFile(new() { ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net, ["f-net"] = fNet });
 
         var (noSl, sl) = BrainCommand.Champions(Cli.Parse(["brain", "--champion", noSlFile, "--sl-champion", slFile, "--workers", "3"]));
 
@@ -146,13 +148,14 @@ public sealed class CliTests : IDisposable
     public void ACombatNetGoesWithASearchAndNamesIt()
     {
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var champion = new ChampionArgs(file: false);
         var command = Opt.Command("test", "", champion.Options);
-        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--value", value, "--policy", "play"])));
+        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--f-net", fNet, "--value", value, "--policy", "play"])));
         // V prices the combat's endings, so the net needs it.
-        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--policy", "pimc"])));
-        Assert.StartsWith("combat pimc combat-tiny 8x300,", champion.Read(command.Parse(["--combat-net", net, "--value", value, "--policy", "pimc"])).Name);
+        Assert.Throws<CliException>(() => champion.Read(command.Parse(["--combat-net", net, "--f-net", fNet, "--policy", "pimc"])));
+        Assert.StartsWith("combat pimc combat-tiny + f-tiny 8x300,", champion.Read(command.Parse(["--combat-net", net, "--f-net", fNet, "--value", value, "--policy", "pimc"])).Name);
     }
 
     [Fact]
@@ -165,16 +168,17 @@ public sealed class CliTests : IDisposable
 
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
-        var played = champion.Read(Parse(["test", "--policy", "pimc", "--combat-net", net, "--macro", "l0", "--value", value, "--worlds", "4", "--nodes", "100",
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
+        var played = champion.Read(Parse(["test", "--policy", "pimc", "--combat-net", net, "--f-net", fNet, "--macro", "l0", "--value", value, "--worlds", "4", "--nodes", "100",
             "--explore", "0.1"]));
         var file = ChampionFile(new()
         {
-            ["env"] = "NoSL", ["policy"] = "pimc", ["combat-net"] = net, ["macro"] = "l0", ["value"] = value, ["worlds"] = "4", ["nodes"] = "100",
+            ["env"] = "NoSL", ["policy"] = "pimc", ["combat-net"] = net, ["f-net"] = fNet, ["macro"] = "l0", ["value"] = value, ["worlds"] = "4", ["nodes"] = "100",
             ["explore"] = "0.1",
         });
         var again = champion.Read(Parse(["test", "--champion", file]));
 
-        Assert.Equal("combat pimc combat-tiny 4x100, combat prompts first, macro l0 pure-v-tiny-win eps 0.1, macro prompts l0 pure-v-tiny-win eps 0.1", played.Name);
+        Assert.Equal("combat pimc combat-tiny + f-tiny 4x100, combat prompts first, macro l0 pure-v-tiny-win eps 0.1, macro prompts l0 pure-v-tiny-win eps 0.1", played.Name);
         Assert.Equal(played.Name, again.Name);
         Assert.Equal(4, again.Workers);
         // As promote reads a champion file with new nets: the file's champion, the options given over its own.
@@ -205,13 +209,14 @@ public sealed class CliTests : IDisposable
         var root = new RootCommand { Opt.Command("test", "", champion.Options) };
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
-        var played = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--value", value, "--effort", "max"],
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
+        var played = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--f-net", fNet, "--value", value, "--effort", "max"],
             new ParserConfiguration()));
         Assert.Equal(Budget.Effort("max"), played.Budget);
         Assert.True(played.Budget.Solve > 0);
 
         // xhigh: max with its early stop, which the name shows.
-        var xhigh = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--value", value, "--effort", "xhigh"],
+        var xhigh = champion.Read(root.Parse(["test", "--policy", "plan", "--combat-net", net, "--f-net", fNet, "--value", value, "--effort", "xhigh"],
             new ParserConfiguration()));
         Assert.Equal(Budget.Effort("xhigh"), xhigh.Budget);
         Assert.Equal(Budget.XhighStop, xhigh.Budget.Stop);
@@ -228,18 +233,19 @@ public sealed class CliTests : IDisposable
 
         var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
         var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
-        var played = champion.Read(Parse(["test", "--policy", "plan", "--combat-net", net, "--macro", "l0", "--value", value,
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
+        var played = champion.Read(Parse(["test", "--policy", "plan", "--combat-net", net, "--f-net", fNet, "--macro", "l0", "--value", value,
             "--elite-effort", "low", "--boss-effort", "medium", "--explore", "0.1", "--macro-explore", "0.05"]));
         // An elite at low is every other fight's budget, so only the boss's shows.
         Assert.Null(played.Budget.Elite);
         Assert.Equal(Budget.Effort("medium"), played.Budget.Boss);
-        Assert.Equal("combat plan combat-tiny beam 8x300 easy 4 loss plans 3 boss (beam 8x300), combat prompts first, " +
+        Assert.Equal("combat plan combat-tiny + f-tiny beam 8x300 easy 4 loss plans 3 boss (beam 8x300), combat prompts first, " +
             "macro l0 pure-v-tiny-win explore 0.05 eps 0.1, macro prompts l0 pure-v-tiny-win explore 0.05 eps 0.1", played.Name);
         Assert.True(played.Explores);
 
         var file = ChampionFile(new()
         {
-            ["env"] = "SL", ["policy"] = "plan", ["combat-net"] = net, ["macro"] = "l0", ["value"] = value, ["effort"] = "low",
+            ["env"] = "SL", ["policy"] = "plan", ["combat-net"] = net, ["f-net"] = fNet, ["macro"] = "l0", ["value"] = value, ["effort"] = "low",
             ["boss-effort"] = "medium", ["explore"] = "0.1", ["macro-explore"] = "0.05",
         });
         var again = champion.Read(Parse(["test", "--champion", file]));

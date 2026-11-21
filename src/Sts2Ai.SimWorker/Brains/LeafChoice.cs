@@ -14,7 +14,8 @@ internal sealed record LeafChoice(CombatNet? Net, string? NetPath, IRunValue? Va
     {
         IRunValue? value = valuePath == null ? null : RunNet.Read(valuePath);
         if (netPath != null && value == null) throw new CliException("--combat-net needs --value: V prices the combat's endings");
-        if (savesPath != null && netPath == null) throw new CliException("--f-net goes with --combat-net: f counts the potions a fight's end keeps");
+        if ((savesPath != null) != (netPath != null))
+            throw new CliException("--combat-net and --f-net go together: a fight's end is its score, HP + max HP + f of the potions it keeps");
         var saves = savesPath == null ? null : SavesNet.Read(savesPath);
         var net = netPath == null ? null : CombatNet.Load(ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(netPath)), value!, saves);
         return new(net, netPath, value, valuePath);

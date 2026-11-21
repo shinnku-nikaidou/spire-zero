@@ -46,7 +46,8 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     private readonly CombatNetFile _file;
     private readonly IRunValue _value;
 
-    /// <summary>f, which a fight's score counts the potions kept by (<see cref="FightValue"/>); none: the fight is V's.</summary>
+    /// <summary>f, which a fight's score counts the potions kept by (<see cref="FightValue"/>); none for a leaf that
+    /// only values states (the tests'), whose fights' ends are not asked about.</summary>
     private readonly SavesNet? _saves;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
@@ -93,11 +94,11 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// environment: the fight's score, what the player carries out of the fight, the HP plus the max HP plus f of each
     /// potion kept (the HP it will save in the fight where it is drunk); a death is 0, which the leaf gives. V is no judge
     /// of a fight's HP: it learned from its games that a low HP after a boss goes with runs that fought for later, and
-    /// valued less HP higher, so a search that asked it kept the line that lost the most. With no f, V of the run, until
-    /// the champions have their f; then that goes. A run's f is the same at any HP, so it is kept by the run without its HP
-    /// and max HP (<see cref="Saved"/>): each new belt a search meets costs one graph.
+    /// valued less HP higher, so a search that asked it kept the line that lost the most. A run's f is the same at any HP,
+    /// so it is kept by the run without its HP and max HP (<see cref="Saved"/>): each new belt a search meets costs one graph.
     /// </summary>
-    public double FightValue(RunView run) => _saves != null ? run.Hp + run.MaxHp + Saved(run, _saves) : _value.Value(run);
+    public double FightValue(RunView run) => run.Hp + run.MaxHp
+        + Saved(run, _saves ?? throw new InvalidOperationException($"{Name} was loaded without f: a fight's end is its score, which counts f"));
 
     /// <summary>The f of a run's potions, summed, by the run without its HP and max HP.</summary>
     private double Saved(RunView run, SavesNet saves)

@@ -169,7 +169,7 @@ internal sealed class LeafArgs
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value",
         "V, a net file: l0 values its options by it, and it prices the combat net's endings; --macro l0 and --combat-net need it");
     private readonly Option<string?> _saves = Opt.Maybe<string?>("--f-net",
-        "f, a net file: a fight's end is its score, HP + max HP + f of each potion kept, for the combat search; with --combat-net");
+        "f, a net file: a fight's end is its score, HP + max HP + f of each potion kept, for the combat search; --combat-net needs it");
 
     public IEnumerable<Option> Options => [_net, _value, _saves];
 
