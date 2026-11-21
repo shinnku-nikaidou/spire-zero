@@ -296,6 +296,9 @@ members = [
     # Who answers a player's card prompts: the engine's one selector answers where the game's screen does (the local
     # selector), and the stack holds only the game's own selector while Whispering Earring plays cards.
     "CardSelectorStack.GetSelector", "CardSelectorStack.PushSelector", "CardSelectorStack.LocalSelector",
+    # A co-op teammate's card prompt, which their own game answers, is answered by the engine's selector with a
+    # default (manual/card_select_cmd.rs, manual/i_card_selector.rs).
+    "CardSelectCmd.ShouldSelectLocalCard",
     # The id of an epoch class, which the game keeps in a table filled by reflection (manual/epoch_model.rs).
     "EpochModel.GetId",
     # The turn loop and the action queue wait on each other in the game; here they run in turn (manual/, world.rs).

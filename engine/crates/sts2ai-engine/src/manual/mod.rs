@@ -45,6 +45,9 @@ pub struct Extra {
     pub entry: Option<card_select_cmd::Entry>,
     /// How many times Whispering Earring's own selector is on the selector stack now (manual/whispering_earring.rs).
     pub vakuu: i32,
+    /// The card prompt about to be asked is a co-op teammate's (manual/card_select_cmd.rs): the selector gives it a
+    /// default (manual/i_card_selector.rs).
+    pub teammate_prompt: bool,
     /// The card prompt the running action stopped at (manual/i_card_selector.rs), for the world to take.
     pub asked: Option<crate::prompt::Asked>,
     /// How many card prompts have been asked in this world so far.

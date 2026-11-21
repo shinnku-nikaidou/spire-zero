@@ -77,3 +77,17 @@ pub fn leave(c: &mut Combat) {
         c.x.entry = None;
     }
 }
+
+/// C#: CardSelectCmd.ShouldSelectLocalCard: whether this game's selector answers `player`'s card prompt, not their
+/// own game over the network (`PlayerChoiceSynchronizer.WaitForRemoteChoice`). The engine's combat is a one-player
+/// game where a co-op teammate's game is not there, so its selector answers every player's; a teammate's gets a
+/// default there (`Extra::teammate_prompt`, manual/i_card_selector.rs), as the search takes teammates to do nothing.
+pub fn should_select_local_card(player: Player, c: &mut Combat) -> bool {
+    c.x.teammate_prompt = !g::context::local_context::is_me__player(player, c);
+    true
+}
+
+/// Whether `chooser` is a co-op teammate, not the local player.
+pub fn is_teammate(chooser: Player, c: &mut Combat) -> bool {
+    !g::context::local_context::is_me__player(chooser, c)
+}

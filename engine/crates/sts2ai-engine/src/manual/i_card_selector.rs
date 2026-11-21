@@ -16,6 +16,11 @@ pub fn get_selected_cards(
     max_select: i32,
     c: &mut Combat,
 ) -> R<Vec<CardModel>> {
+    // A co-op teammate's prompt (card_select_cmd.rs, `should_select_local_card`): the fewest cards it takes, the first
+    // ones, asked of nobody.
+    if std::mem::take(&mut c.x.teammate_prompt) {
+        return Ok(options.iter().take(min_select.max(0) as usize).copied().collect());
+    }
     // The game's own selector is on top of the stack (whispering_earring.rs): it answers, and the simulator's is not asked.
     if c.x.vakuu > 0 {
         return g::models_relics::vakuu_card_selector::get_selected_cards(

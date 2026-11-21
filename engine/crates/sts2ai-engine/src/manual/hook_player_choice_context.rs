@@ -190,6 +190,10 @@ pub fn signal_player_choice_begun(
     _options: PlayerChoiceOptions,
     c: &mut Combat,
 ) -> R<()> {
+    // A co-op teammate's choice is answered at once (card_select_cmd.rs): nothing waits for it.
+    if super::card_select_cmd::is_teammate(chooser, c) {
+        return Ok(());
+    }
     if c.x.hooks.asked.contains(&me) {
         return Ok(());
     }

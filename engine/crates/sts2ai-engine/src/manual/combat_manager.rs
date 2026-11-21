@@ -240,10 +240,16 @@ pub struct TurnStart {
     turn_state: CombatTurnState,
     creatures: Vec<Creature>,
     players: Vec<Player>,
-    /// The choice context of the setup that is running.
+    /// The choice context of the setup that is running, and its player.
     setup: HookPlayerChoiceContext,
+    player: Player,
+    /// The setups that ran to their end before it, in the players' order.
+    before: Vec<(Player, HookPlayerChoiceContext)>,
     /// Set once that setup has paused for a choice, where the rest of the turn start runs (`turn_start_rest`).
     paused: bool,
+    /// Set where that rest ran the setups of the players after it too (a co-op turn start): the turn start goes on
+    /// with the paused setup alone.
+    others_done: bool,
 }
 
 /// C#: CombatManager.StartTurn. The game starts each player's setup (`SetupPlayerTurn`: the energy, the hand, then
@@ -288,19 +294,28 @@ pub fn start_turn(
                     creatures: creatures.clone(),
                     players: players.clone(),
                     setup: context,
+                    player,
+                    before: setups.iter().map(|(p, context, _)| (*p, *context)).collect(),
                     paused: false,
+                    others_done: false,
                 });
                 context
             }
         };
         let setup = setup_player_turn(me, turn_state, player, context, c);
-        paused = c.x.turn_start.take().is_some_and(|t| t.paused);
+        let ran = c.x.turn_start.take();
+        paused = ran.as_ref().is_some_and(|t| t.paused);
+        let others_done = ran.is_some_and(|t| t.others_done);
         match &setup {
             // The rest of the turn start ended the combat, or every player was ready to end the turn: the game never
             // runs the paused setup's rest.
             Err(Stop::Dropped) => return Ok(()),
             Err(stop) => return Err(stop.clone()),
             Ok(()) => {}
+        }
+        if others_done {
+            // A co-op turn start: the other players' setups and RunAutoPrePlayPhase ran in the rest (`turn_start_rest`).
+            return turn_start_end(me, turn_state, action_during_enemy_turn, &creatures, &players, vec![(player, context, setup)], paused, c);
         }
         setups.push((player, context, setup));
     }
@@ -501,8 +516,9 @@ fn hand_drawn(turn_state: CombatTurnState, player: Player, player_choice_context
 }
 
 /// The rest of the turn start, where the running setup pauses for its first choice (`start_turn`), then the actions it
-/// queued. The engine's combats have one player; a setup that pauses with more starting the turn is not ported (the game
-/// goes on with the other players' setups first).
+/// queued. In a co-op turn start the game goes on with the other players' setups first, each to its end (a teammate's
+/// choice does not pause: card_select_cmd.rs, `should_select_local_card`), and the rest's RunAutoPrePlayPhase runs for
+/// each player in turn: the paused setup's waits for it (`turn_start_end`, after the answer), the others' run.
 pub fn turn_start_rest(c: &mut Combat) -> R<()> {
     let running =
         c.x.turn_start
@@ -514,15 +530,56 @@ pub fn turn_start_rest(c: &mut Combat) -> R<()> {
         turn_state,
         creatures,
         players,
+        player,
+        before,
         ..
     } = running.clone();
-    assert_eq!(
-        players.len(),
-        1,
-        "a turn start's setup paused with more than one player starting the turn"
-    );
+    let mut done = before;
+    if players.len() > 1 {
+        let saved = c.x.turn_start.take();
+        let at = players.iter().position(|&p| p == player).expect("the paused setup's player starts the turn");
+        for &other in &players[at + 1..] {
+            let Some(net_id) = c.s.local_context__net_id else {
+                continue;
+            };
+            let context = g::game_actions_multiplayer::hook_player_choice_context::new__player_u64_game_action_type(
+                other,
+                net_id,
+                GameActionType::CombatPlayPhaseOnly,
+                c,
+            );
+            c.x.turn_start = Some(TurnStart {
+                me,
+                turn_state,
+                creatures: creatures.clone(),
+                players: players.clone(),
+                setup: context,
+                player: other,
+                before: Vec::new(),
+                paused: false,
+                others_done: false,
+            });
+            let setup = setup_player_turn(me, turn_state, other, context, c);
+            assert!(
+                !c.x.turn_start.take().is_some_and(|t| t.paused),
+                "two players' setups paused at one turn start (not ported)"
+            );
+            setup?;
+            done.push((other, context));
+        }
+        let mut running = saved.expect("the paused setup's turn start");
+        running.others_done = true;
+        c.x.turn_start = Some(running);
+    }
     if !side_turn_started(me, turn_state, &creatures, &players, c)? {
         return Err(Stop::Dropped);
+    }
+    for &(other, context) in &done {
+        if g::entities_creatures::creature::is_dead(g::entities_players::player::creature(other, c), c) {
+            continue;
+        }
+        let task = g::combat::combat_manager::run_auto_pre_play_phase(me, turn_state, context, Ok(()), other, c);
+        m::hook_player_choice_context::assign_task_and_wait_for_pause_or_completion(context, task, c)?;
     }
     players_turn_started(me, turn_state, c)?;
     // The setup's rest is an action the game queues now (`RequestEnqueueHookAction`), behind what the rest of the turn
