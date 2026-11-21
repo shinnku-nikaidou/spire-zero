@@ -46,6 +46,36 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         return PlanOf.Found(found.Pick, found.From, found.ByFirst, found.Proved, budget.Replan, found.Nodes, found.Turns);
     }
 
+    /// <summary>
+    /// A player's question (<see cref="CombatDecision.Only"/>): each of <paramref name="first"/> played first in the
+    /// engine, and the beam's plan from there (or, where it ends the combat, the combat's end as it is); the candidates
+    /// are those first actions, best first, each with its line's value, chance to win and HP left, and the plan after it.
+    /// </summary>
+    private SlPlan Only(CombatExport live, IReadOnlyList<CombatAction> first, Budget budget, IReadOnlyList<EnemyTurns> history)
+    {
+        using var root = EngineWorld.Import(live.Bytes, live.Run);
+        var lines = new List<(CombatAction First, SlPlan? Plan, double Value, double Win, double Hp)>();
+        foreach (var action in first)
+        {
+            using var world = root.Clone();
+            world.Execute(action);
+            if (world.Status != CombatStatus.InProgress)
+            {
+                var (value, win, hp) = world.Outcome(_net.Value, net.FightValue, history);
+                lines.Add((action, null, value, win, hp));
+                continue;
+            }
+            var plan = Plan(world, budget, history);
+            var top = plan.Result.Candidates.FirstOrDefault();
+            lines.Add((action, plan, plan.Value, top?.Win ?? (plan.End == CombatStatus.Won ? 1 : 0), top?.Hp ?? 0));
+        }
+        var best = lines.MaxBy(l => l.Value);
+        var candidates = lines.OrderByDescending(l => l.Value).Select(l => new Candidate(l.First.ToString(), l.Value, 0, 1, [Math.Round(l.Value, 4)],
+            Math.Round(l.Win, 4), Math.Round(l.Hp, 1), l.Plan is { } p ? [p.Result.First.ToString(), .. p.Result.Plan.Select(a => a.ToString())] : null)).ToList();
+        int nodes = lines.Sum(l => l.Plan?.Nodes ?? 0);
+        return new SlPlan(new CombatDecisionResult(best.First, [], candidates, Nodes: nodes), best.Value, best.Plan?.End ?? CombatStatus.InProgress, nodes, 0, false);
+    }
+
     /// <summary>The card prompt the node's clone stands at, each path of answers from it played by the pool's workers.</summary>
     private static PromptRoot.Crossing Crossing(NodeClone? node, WorkerPool pool)
     {
@@ -100,6 +130,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             }
             long started = Stopwatch.GetTimestamp();
             var live = decision.Export ?? throw new InvalidOperationException("the host gives no live combat for the engine: plan needs a host that holds the game");
+            if (decision.Only) return meter.Count(() => Only(live, decision.Legal, b, history));
             double exportMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             return meter.Count(() => Plan(live, b, history, importMs => meter.Imported(live.Bytes.Length, exportMs, importMs)));
         }), budget, () => meter.Tally);
@@ -144,6 +175,8 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         });
         return new(name, (decision, seed, node, history) =>
         {
+            // A player's question about given first actions is the beam's (Only), whatever the effort.
+            if (decision.Only) return Route(budget with { Solve = 0 }, name, pool).Decide(decision, seed, node, history);
             CombatDecisionResult Decide()
             {
                 bool byBeam = false;

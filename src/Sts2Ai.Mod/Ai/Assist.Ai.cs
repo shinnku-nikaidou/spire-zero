@@ -79,7 +79,8 @@ internal sealed partial class Assist
     /// <summary>Asks <paramref name="request"/>'s decision again on a run of its own in <paramref name="env"/>, at
     /// <paramref name="effort"/> (the player's own for null), with <paramref name="legal"/> (all of them for null);
     /// <paramref name="done"/> gets the picks so far of a brain that searches on, then the answer.</summary>
-    private long Ask(string what, Request request, PlayEnvironment env, string? effort, IReadOnlyList<string>? legal, Action<QueryAnswer> done)
+    /// <param name="only">The legal actions given are the only first actions to search, each played first (<see cref="Query.Only"/>).</param>
+    private long Ask(string what, Request request, PlayEnvironment env, string? effort, IReadOnlyList<string>? legal, Action<QueryAnswer> done, bool only = false)
     {
         if (!_connected) throw new AiError("no brain is running");
         bool sl = env == PlayEnvironment.SL;
@@ -90,7 +91,7 @@ internal sealed partial class Assist
         var settings = Settings.Current;
         _pending[id] = new(what, done, null);
         link.Send(new Query(id, new Hello(gameVersion, env.ToString(), "mod", request.Header, effort ?? settings.EffortName, settings.TurnDecay),
-            sl ? request.Node : null, decision));
+            sl ? request.Node : null, decision, only));
         ModLog.Write("ai", $"query {id} ({what}): decision {request.Decision.DecisionId} in {env}, effort {effort ?? settings.EffortName}" +
                            (legal != null ? $", legal {string.Join(" | ", legal)}" : ""));
         return id;
@@ -280,7 +281,7 @@ internal sealed partial class Assist
         if (scored.FirstOrDefault(c => c.Action == action) is { } mine && scored.Count > 1)
             return Out.Code(Compared(obs, mine, scored.MaxBy(c => c.Value)!, from: "the answer's own scores"));
         string other = action == answer.Answer.Action ? request.Decision.Legal.First(a => a != action) : answer.Answer.Action;
-        Ask($"try {Describe.Action(action, obs)}", request, _env, null, [action, other], q =>
+        Ask($"try {Describe.Action(action, obs)}", request, _env, null, [action, other], only: true, done: q =>
         {
             if (q.Answer?.Searching == true) return;
             var c = q.Answer?.Candidates ?? [];
@@ -389,9 +390,9 @@ internal sealed partial class Assist
     {
         var run = RunNow();
         var variants = new List<(string Name, RunView Run)> { ("", run) };
-        foreach (var card in run.Deck.Distinct())
+        foreach (var card in run.Deck.DistinctBy(ProtocolJson.CardKey))
         {
-            int at = run.Deck.ToList().IndexOf(card);
+            int at = run.Deck.ToList().FindIndex(c => ProtocolJson.CardKey(c) == ProtocolJson.CardKey(card));
             variants.Add(($"card   {Describe.TableCard(card.Id + (card.Up > 0 ? "+" : ""))}", run with { Deck = [.. run.Deck.Where((_, i) => i != at)] }));
         }
         foreach (var relic in run.Relics)
@@ -493,6 +494,8 @@ internal sealed partial class Assist
             Id = id, Surface = request.Decision.Surface, Floor = obs.Run.Floor, Act = obs.Run.Act, Fight = fight ? _fights : 0, Round = request.Round,
             Kind = shown.Kind, Candidates = answer.Candidates ?? [], Action = answer.Action, Table = answer.Table, Obs = obs,
         };
+        // A decision the state left unanswered keeps nothing to name.
+        if (_open is { Played: null } left) left.Obs = null;
         _journal.Add(entry);
         _open = entry;
     }
@@ -546,7 +549,7 @@ internal sealed partial class Assist
         var e = list[at];
         try
         {
-            Ask($"review {e.Id}", e.Request!, _env, null, [e.Played!, e.Action], q =>
+            Ask($"review {e.Id}", e.Request!, _env, null, [e.Played!, e.Action], only: true, done: q =>
             {
                 if (q.Answer?.Searching == true) return;
                 var c = q.Answer?.Candidates ?? [];
@@ -756,6 +759,7 @@ internal sealed partial class Assist
     public string Auto(string what, string? arg)
     {
         if (_run == null) throw new AiError("no run sent to the brain yet");
+        if (_quiz) throw new AiError("the quiz is on: ai quiz off first");
         UntilStop stop = what switch
         {
             "boss" => new("boss", 0),

@@ -177,7 +177,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
                             (side, _) = harness(query.Hello);
                             if (query.Node is { } node) side.Checkpoint(node);
                             side.Steps(query.Decision.Trace);
-                            var (answer, _) = Answer(side, query.Decision, early => Send(new QueryAnswer(query.Id, early)), hurry.Token, _ => { });
+                            var (answer, _) = Answer(side, query.Decision, early => Send(new QueryAnswer(query.Id, early)), hurry.Token, _ => { }, query.Only);
                             Send(new QueryAnswer(query.Id, answer));
                         }
                         catch (Exception e)
@@ -224,8 +224,9 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
     /// <param name="hurry">Cancelled when the host cancels the decision (<see cref="CombatDecision.Hurry"/>).</param>
     /// <param name="later">Sends the answer again with each plan after it of a combat brain that searches on after it
     /// answers (<see cref="CombatDecision.After"/>).</param>
+    /// <param name="only">The legal actions are the only first actions to search (<see cref="Query.Only"/>).</param>
     private static (Recommendation Answer, ulong? State) Answer(Dispatcher harness, DecisionRequest request, Action<Recommendation> send,
-        CancellationToken hurry, Action<Recommendation> later)
+        CancellationToken hurry, Action<Recommendation> later, bool only = false)
     {
         var obs = request.Obs;
         // A field this build does not know is dropped on reading, so a mod built from newer wire types fails here.
@@ -248,7 +249,7 @@ public sealed class BrainServer(Func<Hello, (Dispatcher Run, string Shown)> harn
         var (action, note, state) = (request.Surface, obs.Screen) switch
         {
             (Surfaces.Combat, CombatScreen screen) => Text(harness.Decide(new CombatDecision([.. request.Legal.Select(CombatAction.Parse)], () => screen.Combat, _ => obs,
-                export, r => Early(r, r.First.ToString(), plan: true), hurry, r => After(r, r.First.ToString(), plan: true)))),
+                export, r => Early(r, r.First.ToString(), plan: true), hurry, r => After(r, r.First.ToString(), plan: true), only: only))),
             // A card prompt's plan goes on with plays of the combat, which the prompt's screen has no cards to name.
             (Surfaces.CardChoice, CardChoiceScreen screen) => Text(harness.Decide(new ChoiceDecision(screen.Choice, () => obs,
                 early: r => Early(r, MacroAction.Pick(r.First.Picks).ToString(), plan: false), hurry: hurry,

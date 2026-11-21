@@ -31,7 +31,7 @@ public sealed record PromptCombat(CombatExport From, bool Opening, IReadOnlyList
 /// </summary>
 public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<CombatObservation> observe, Func<CombatObservation, Observation>? inRun = null,
     Func<CombatExport>? export = null, Action<CombatDecisionResult>? early = null, CancellationToken hurry = default,
-    Action<CombatDecisionResult>? after = null, Func<PromptCombat>? prompted = null)
+    Action<CombatDecisionResult>? after = null, Func<PromptCombat>? prompted = null, bool only = false)
 {
     private CombatObservation? _observation;
     private Observation? _runObservation;
@@ -39,6 +39,11 @@ public sealed class CombatDecision(IReadOnlyList<CombatAction> legal, Func<Comba
     private PromptCombat? _prompted;
 
     public IReadOnlyList<CombatAction> Legal { get; } = legal;
+
+    /// <summary>A player's question (the mod's console, <see cref="Query.Only"/>): <see cref="Legal"/> are the only first
+    /// actions to search, each played first and searched on from there, however few; a search that keeps the first
+    /// actions it likes would leave the one asked about unscored.</summary>
+    public bool Only { get; } = only;
 
     /// <summary>Built on first use: a policy that ignores it shouldn't pay for it.</summary>
     public CombatObservation Observation => _observation ??= observe();

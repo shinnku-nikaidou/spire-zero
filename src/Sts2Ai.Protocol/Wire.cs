@@ -162,7 +162,9 @@ public sealed record NodeCheckpoint(int NodeIndex, string Checkpoint, IReadOnlyL
 /// host's own run is left as it was. Answered by <see cref="QueryAnswer"/>, whatever happens; never by an error that ends
 /// the host's run.
 /// </summary>
-public sealed record Query(long Id, Hello Hello, NodeCheckpoint? Node, DecisionRequest Decision) : WireMessage;
+/// <param name="Only">The decision's legal actions are the only first actions to search, each played first and searched
+/// on from there: a player's try of an option the brain's own search may not keep.</param>
+public sealed record Query(long Id, Hello Hello, NodeCheckpoint? Node, DecisionRequest Decision, bool Only = false) : WireMessage;
 
 /// <summary>Brain → host, the answer to a <see cref="Query"/>: a recommendation as a decision's (its picks so far, while a
 /// brain that searches on searches, with <see cref="Recommendation.Searching"/>), or why there is none.</summary>

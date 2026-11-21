@@ -173,8 +173,12 @@ internal static class Jobs
             else acts[^1].Add(step);
         string spec = Path.Combine(dir, "scout.json");
         File.WriteAllText(spec, System.Text.Json.JsonSerializer.Serialize(new { save, routes = acts }));
-        Start("scout", ["scout", "--spec", spec], (_, text) => Out.Later(Out.Code(Describe.Names(text))),
-            job => { if (job.Process.ExitCode != 0) Out.LaterError($"scout failed (exit code {job.Process.ExitCode}; log: scout.log)"); });
+        var lines = new List<string>();
+        Start("scout", ["scout", "--spec", spec], (_, text) => lines.Add(Describe.Names(text)), job =>
+        {
+            if (lines.Count > 0) Out.Later(Out.Code(lines));
+            if (job.Process.ExitCode != 0) Out.LaterError($"scout failed (exit code {job.Process.ExitCode}; log: scout.log)");
+        });
         return "scouting from this room's save…";
     }
 
