@@ -32,7 +32,8 @@
     poisonLeft: w('poison', '中毒', '中毒'),
     pick: w('Click an action to see the state before it.', '点一个动作，看它之前的局面。', '點一個動作，看它之前的局面。'),
     before: w('Before', '打出之前', '打出之前'),
-    expected: w('the plan’s value', '计划的值', '計畫的值'),
+    wins: w('the plan wins with', '计划获胜，剩', '計畫獲勝，剩'),
+    loses: w('the plan loses', '计划会输', '計畫會輸'),
   };
 
   const cardsOf = (s: Step) => new Map<number, CardRef>(s.obs.hand.map((c) => [c.uid as number, c as CardRef]));
@@ -40,6 +41,7 @@
   const amount = (powers: { id: string; amount: number }[] | undefined, id: string) => powers?.find((p) => p.id === id)?.amount ?? 0;
   const pct = (a: number, b: number) => `${Math.max(0, Math.min(100, (100 * a) / b))}%`;
   const firstMs = fight.first.elapsed_ms;
+  const planned = fight.first.candidates[0];
 </script>
 
 <div class="vfig">
@@ -49,7 +51,7 @@
   </p>
   <p class="v-ink2" style="margin-bottom: 0.75rem;">
     {say(lang, L.planned)}: {fight.first.plan.length + 1} {say(lang, L.actions)}, {rounds.length} {t('turns')},
-    {fmt(lang, firstMs / 1000, 1)} s; {say(lang, L.expected)} {fmt(lang, fight.first.candidates[0].value, 4)}.
+    {fmt(lang, firstMs / 1000, 1)} s; {planned.win ? `${say(lang, L.wins)} ${planned.hp} HP` : say(lang, L.loses)}.
   </p>
   {#if !names}
     <p class="v-muted">{t('loading')}</p>

@@ -1,16 +1,16 @@
 ---
 title: The idea
-description: 'The AI makes every decision with the same method: really try each option, then ask a learned function which result is best.'
+description: 'The AI makes every decision with the same method: really try each option, then measure which result is best, by the chance of winning the run outside combat and by what the player carries out of a fight in combat.'
 ---
 
-The AI makes every decision with the same method. It really tries each option in a copy of the game, looks at the position after the try, asks a learned function what chance that position has of winning the whole run, and picks the option with the highest chance. No person wrote a single rule of the kind "in this situation, play this card".
+The AI makes every decision with the same method. It really tries each option in a copy of the game, looks at the position after the try, asks how good that position is, and picks the best. Outside combat a learned function answers with the chance of winning the whole run; in combat the answer is what the player carries out of the fight. No person wrote a single rule of the kind "in this situation, play this card".
 
 ```mermaid
 flowchart LR
   D["The decision at hand"] --> T["Try each<br/>option"]
   T --> S["The position after the try"]
-  S --> V["V: the chance to win<br/>the whole run"]
-  V --> B["Pick the highest"]
+  S --> V["How good it is:<br/>V, or the fight's score"]
+  V --> B["Pick the best"]
 ```
 
 ## Try: let the game give the result
@@ -19,13 +19,15 @@ The AI does not need to understand what each card does. It has the game itself: 
 
 In combat, one turn has more than ten thousand lines, too many to try them all. So the AI needs **search**: it tries in an organised way, remembers the positions it has reached, and goes deeper only where things look promising. Outside combat there are usually only a few options, and it can afford to try each one.
 
-## Ask: one ruler measures everything
+## Ask: one ruler for the run, one for a fight
 
 **V** answers how good the position after a try is. V reads the current state of a run: the deck, relics, potions, HP, gold and the map ahead. It answers with a single number: the chance that this run ends in a win.
 
-Every decision uses this one ruler. Losing 5 more HP, taking one more card, having one potion fewer, taking the path with an elite: all of these turn into the same kind of number and can be compared directly. Nobody sets how many HP a relic is worth. V learned that exchange by itself.
+Every decision outside combat uses this one ruler. Losing 5 HP at an event, taking one more card, having one potion fewer, taking the path with an elite: all of these turn into the same kind of number and can be compared directly. Nobody sets how many HP a relic is worth. V learned that exchange by itself.
 
-In the middle of a combat a second network helps. The **combat net** reads the current state of a combat and predicts its ending: death, or a win and how much HP it costs. V then prices each ending.
+A combat is measured by a plainer ruler, its **score**: what the player carries out of it. That is HP + max HP, plus for each potion kept the HP it will save in a later combat, which a small network, **f**, estimates. A death scores 0. V is not asked here: it learned from whole runs, where the HP left after a fight also says how the run was built, so it can rate less HP higher.
+
+In the middle of a combat one more network helps. The **combat net** reads the current state of a combat and predicts its ending: death, or a win and how much HP it costs. Each ending is then scored the same way.
 
 ## Learn: from its own runs
 
@@ -43,6 +45,6 @@ So the AI tries what is near and learns what is far.
 
 ## Three rules it does not bend
 
-- **Strategy is not written as rules.** Whether to take a card or fight an elite is for the networks to learn from results. People write how to talk to the game and what the learning aims at. The only exceptions are a few rules about potions, which make up for V rating them too low, and one about chests: the relic in a treasure chest is always taken.
-- **No language model is asked.** Only the search and the two networks decide, so every move can be reproduced and traced.
+- **Strategy is not written as rules.** Whether to take a card or fight an elite is for the networks to learn from results. People write how to talk to the game, what the learning aims at and what a combat is scored by. The only exceptions are a few rules about potions, which make up for V rating them too low, and one about chests: the relic in a treasure chest is always taken.
+- **No language model is asked.** Only the search and the networks decide, so every move can be reproduced and traced.
 - **No bluffing.** When a decision comes up that no part of the AI is responsible for, the run stops with an error. It never picks at random. One random move would quietly spoil the training data and the evaluation results.

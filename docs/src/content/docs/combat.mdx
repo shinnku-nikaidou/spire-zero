@@ -24,13 +24,17 @@ So a combat is no longer a gamble but a search for a path: many lines lead from 
 
 ## What best means
 
-When a line has been played out, it leaves a run behind: how much HP remains, whether the potions are still there, whether the deck has changed. **V** says what that run is worth. V is a learned function that reads the current state of a run and estimates the chance of winning the whole run in the end. If the combat is lost, the run is over and worth 0.
+When a line has been played out, the player leaves the combat with some HP, some max HP and the potions still on the belt. The line's **score** counts exactly that: HP + max HP + f of each potion kept. **f** is a learned function that says how many HP a potion will save in the combat where it is later drunk. If the combat is lost, the run is over and the score is 0.
 
-So the best line is the one with the highest V once it is played out. It need not lose the least HP or kill the fastest: losing a few more HP to keep a potion is the better line whenever V judges the trade worth it. The plan for the boss fight above is worth 0.98, meaning that after playing it out, V gives the run a 98% chance of winning to the end.
+So the best line is the one with the highest score once it is played out. It need not lose the least HP or kill the fastest: losing a few HP to keep a potion is the better line whenever the potion's f is larger than the HP it costs. The plan for the boss fight above drinks its one potion on the first turn and ends at 52/70 HP, so it scores 52 + 70 = 122.
 
-**A potion kept is never worth less than none.** The game lets a potion be thrown away at any time for nothing, so a position that still holds potions is worth at least as much as the same position with some of them gone. A potion drunk for no gain therefore never beats keeping it.
+**HP is counted, not judged.** V, the learned function that estimates a run's chance of winning, is not asked here. It learned from whole runs, where the HP left after a fight also says how the run was built: a run that leaves a boss with plenty of HP has often spent less on the strength it needs later. V reads the two together and can rate less HP higher, and a search that asked V would throw HP away for nothing. Counted one for one, more HP always scores more.
 
-Positions in the middle of the search, where the combat is not over, also need a value before they can be compared. That value comes from the combat net: it predicts how the combat will end, and the same V turns that into a chance of winning the whole run.
+**f does not read HP.** It reads the run as V does: the deck, relics, potions, the map ahead. HP and max HP it reads only as their average. So a potion is worth the same at any HP, and the score can never rise as HP falls.
+
+**A potion kept never lowers the score.** f is never below 0, so a line that drinks a potion for no gain never beats the same line that keeps it.
+
+Positions in the middle of the search, where the combat is not over, also need a value before they can be compared. That value comes from the combat net: it predicts how the combat will end, and each ending is scored the same way, weighted by its chance.
 
 ## One turn: try everything that can be played
 
@@ -54,11 +58,11 @@ Some cards return to the hand or draw each other, so a turn can go on without en
 
 A turn can end in many ways, and a combat has several turns. If search went on from every one of them, the number would soon be too large to try. So at the end of each turn, search keeps only the 8 positions with the highest value, and the next turn starts from those 8 alone. This method is called beam search.
 
-**Nothing is given up early.** Search does not drop a position because it seems unable to beat the best line so far. A combat can still make the run better along the way, for example by gaining max HP or gold or by growing a card, so a value from the middle of the combat cannot serve as an upper limit. The only cut is that 8.
+**Nothing is given up early.** Search does not drop a position because it seems unable to beat the best line so far. A combat can still raise the score along the way, for example by healing or by gaining max HP, so a value from the middle of the combat cannot serve as an upper limit. The only cut is that 8.
 
 **First, one line played to the end.** Before the main search, a first pass keeps only 1 position per turn and plays straight through to the end of the combat, so there is a playable line at once. If that line already wins, all that is left is to find a line that wins better, and keeping 4 per turn is enough. If it loses, search uses the full 8 to find out whether a win is possible at all.
 
-**Choosing the plan.** Among all the lines played to the end of the combat, the one with the highest V is the plan; of lines worth exactly the same, the one that drinks fewer potions, then the one that ends fewer turns. If every line loses, search picks the one that holds out best before dying: if search has missed something, this line has the best chance of a turnaround.
+**Choosing the plan.** Among all the lines played to the end of the combat, the one with the highest score is the plan; of lines that score exactly the same, the one that drinks fewer potions, then the one that ends fewer turns. If every line loses, search picks the one that holds out best before dying: if search has missed something, this line has the best chance of a turnaround.
 
 The figure below walks through this process on a made-up combat. The dashed line is the line played to the end first, and the hollow circles are positions that were not kept.
 

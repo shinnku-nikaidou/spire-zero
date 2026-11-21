@@ -1,11 +1,11 @@
 ---
 title: The combat net
-description: 'What a position is worth when search stops in an unfinished combat: the combat net predicts how the combat ends, and V prices each ending.'
+description: 'What a position is worth when search stops in an unfinished combat: the combat net predicts how the combat ends, and each ending is scored by the HP and potions it leaves.'
 ---
 import ArchDiagram from '../../components/v/ArchDiagram.svelte';
 import OutcomeHead from '../../components/combat/OutcomeHead.svelte';
 
-Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending corresponds to one concrete run as it stands after the combat. V prices that run, and the prices are weighted by probability. The combat net says only what will happen. What it is worth is always for V to say.
+Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending is scored by what the player carries out of the combat: HP + max HP + f of each potion kept, where **f** is a small network that says how many HP a potion will save in a later combat. The scores are weighted by probability. The combat net says only what will happen; what that is worth is counted from it.
 
 The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 6 against the Waterfall Giant, the act 1 boss, the Fool has 27/77 HP left and only Strikes and Defends in hand: the net is all but sure that it dies.
 
@@ -48,9 +48,11 @@ The whole network has about 1.85 million weights. The six characters share one n
 
 ## How it becomes one number
 
-For each possible ending, the AI works out how much HP is left then and which potions remain, hands that run to V, and gets a chance of winning the whole run. It then adds these up, weighted by the probability of each ending. Death is worth 0.
+For each possible ending, the AI works out how much HP is left then and which potions remain, and scores it: HP + max HP + f of each potion kept. It then adds these up, weighted by the probability of each ending. Death scores 0.
 
-The net does not output a score directly, for three reasons. No number has to be set by a person. Each ending is priced by its own HP and potions, so a narrow win and a big win are not mixed together. And the same calculation also gives two numbers a player can understand: the chance of winning this combat and the average HP left after a win.
+The net does not output a score directly, for three reasons. No number has to be set by a person. Each ending is scored by its own HP and potions, so a narrow win and a big win are not mixed together. And the same calculation also gives two numbers a player can understand: the chance of winning this combat and the average HP left after a win.
+
+HP is counted as it is and not judged by V, the network that values a whole run. V learned from whole runs, where the HP left after a fight also says how the run was built, so it can rate less HP higher. Counted one for one, more HP always scores more.
 
 ## How it learns
 
@@ -58,9 +60,19 @@ A sample is the start of each turn in self-play, and its label is how that comba
 
 On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.94. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.71. The death rate it predicts is 6.34%, and the real one is 5.93%.
 
+## What a potion kept is worth
+
+**f** answers one question: how many HP will this potion save in the combat where it is drunk? It is built on V and reads what V reads: the deck, relics, potions, the map ahead, gold, the floor and the rest. HP and max HP it reads only as their average. So a potion is worth the same at any HP, and an ending's score can never rise as its HP falls. It also makes f cheap: the endings that keep the same potions share one answer.
+
+On top of V's layers it takes the potion asked about and passes both through one more layer. The answer is in HP and never below 0, so keeping a potion never scores less than throwing it away, and a potion is never drunk for nothing.
+
+**Its labels come from the combat net.** For each potion held at a decision outside combat, the record of the run finds the combat where it was later drunk. At that combat's first turn, the combat net predicts twice what the player carries out of it: with the potion, and with the potion taken off the belt. The difference is the label. A potion that left the belt outside a combat, or was still held when the run ended, saved nothing and is labelled 0.
+
+f starts from the champion V's layers and learned from about 125,000 runs. On the runs held back for checking, its answer is typically off by 6.64 HP, against 7.17 HP for giving each kind of potion its own average.
+
 ## What it cannot see
 
-- **It predicts only HP and potions.** Gold that will be stolen later in the combat and cards that will grow later are not in the price until they happen.
+- **Only HP, max HP and potions are scored.** Gold stolen in the combat or a card grown in it is not part of an ending's score.
 - **Cards cannot see each other.** Each card is computed by itself before the sum, so how two cards work together can be learned only by the two layers that follow.
 - **It learns SL's endings.** Every run it was trained on was played in SL, so in NoSL it estimates as if a stronger player were playing.
-- **Where V is wrong, it is wrong too.** Every price comes from V.
+- **Where it is wrong, f is wrong too.** f's labels are this net's own estimates.

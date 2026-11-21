@@ -32,7 +32,7 @@ The figure below is a real decision on turn 1 of an elite combat: 7 cards in han
 
 The search inside each world works the same way as the search of one turn when everything is known: the turn can end at any move, a position seen before is not worked out again, and the game really plays out the enemies' turn. Search tries at most 300 moves in each world, split evenly among the first moves.
 
-Search stops at the start of the next turn, and the combat net values the position there. It goes no further for two reasons. Beyond that point, every draw and every roll is a branch with an unknown result, and turn multiplied by turn, there are soon too many to try. And only the first move is played anyway, after which the AI searches again.
+Search stops at the start of the next turn, and the combat net values the position there: it predicts how the combat will end, and each ending scores the HP and max HP it leaves, plus for each potion kept a learned estimate of the HP that potion will save later. It goes no further for two reasons. Beyond that point, every draw and every roll is a branch with an unknown result, and turn multiplied by turn, there are soon too many to try. And only the first move is played anyway, after which the AI searches again.
 
 ## Averaging over each first move
 

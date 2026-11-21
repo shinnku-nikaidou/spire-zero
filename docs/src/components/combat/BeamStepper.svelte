@@ -64,7 +64,7 @@
   const CW = 560;
   const CH = 230;
   const x = $derived(scaleLinear().domain([0, turns]).range([42, CW - 12]));
-  const y = scaleLinear().domain([0, 0.75]).range([CH - 28, 10]);
+  const y = scaleLinear().domain([0, 140]).range([CH - 28, 10]);
   const path = (pts: Node[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.turn).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
 
   const L = {
@@ -77,7 +77,7 @@
     end: w('fight over', '战斗结束', '戰鬥結束'),
     diveLine: w('the line played to the end first', '先打到底的那一条', '先打到底的那一條'),
     bestLine: w('the plan', '计划', '計畫'),
-    yAxis: w('value', '估值', '估值'),
+    yAxis: w('score', '分数', '分數'),
     xAxis: w('turn', '回合', '回合'),
     result: w('Pick', '结果', '結果'),
     wins: w('wins with', '获胜，剩', '獲勝，剩'),
@@ -97,9 +97,9 @@
     <label>{say(lang, L.shown)} <input type="range" min="1" max={turns} bind:value={shown} /></label>
   </div>
   <svg viewBox="0 0 {CW} {CH}" style="width: 100%; max-width: {CW}px;" role="img" aria-label={say(lang, L.result)}>
-    {#each [0, 0.2, 0.4, 0.6] as v (v)}
+    {#each [0, 40, 80, 120] as v (v)}
       <line x1="42" x2={CW - 12} y1={y(v)} y2={y(v)} stroke="var(--v-grid)" />
-      <text x="36" y={y(v) + 4} text-anchor="end">{fmt(lang, v, 1)}</text>
+      <text x="36" y={y(v) + 4} text-anchor="end">{fmt(lang, v, 0)}</text>
     {/each}
     {#each Array.from({ length: turns + 1 }, (_, i) => i) as i (i)}
       <text x={x(i)} y={CH - 12} text-anchor="middle">{i}</text>

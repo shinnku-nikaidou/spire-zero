@@ -3,7 +3,8 @@
 export const MAX_HP = 70;
 const START = { h: 60, f: 140 };
 export const CHILDREN = 6;
-const win = (s: number) => (s >= 0 ? 0.2 + 0.6 * s : 0.2 * Math.exp((0.6 * s) / 0.2));
+// A fight's score, HP + max HP (no potions here), of an HP share s expected at the end; below 0 it fades towards a death's 0.
+const score = (s: number) => MAX_HP * (s >= 0 ? 1 + s : Math.exp(s));
 
 function rng(seed: string) {
   let h = 2166136261;
@@ -19,7 +20,7 @@ function rng(seed: string) {
 export type Node = { id: string; turn: number; h: number; f: number; status: 'going' | 'won' | 'lost'; value: number; parent: Node | null };
 const node = (id: string, turn: number, h: number, f: number, parent: Node | null): Node => {
   const status = f <= 0 ? 'won' : h <= 0 ? 'lost' : 'going';
-  const value = status === 'lost' ? 0 : status === 'won' ? win(h / MAX_HP) : win((h - (9 * f) / 17) / MAX_HP);
+  const value = status === 'lost' ? 0 : status === 'won' ? score(h / MAX_HP) : score((h - (9 * f) / 17) / MAX_HP);
   return { id, turn, h, f, status, value, parent };
 };
 

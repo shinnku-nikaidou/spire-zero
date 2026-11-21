@@ -32,8 +32,8 @@
     const hit = foe > 0 ? Math.max(0, Math.floor(ATTACK * (s.weak ? 0.75 : 1)) - s.block) : 0;
     return { hp: s.hp - hit, foe, poison: Math.max(0, s.poison - 1) };
   };
-  // A made-up leaf: the HP kept, less what the enemy still has, plus the poison still to tick.
-  const leaf = (e: { hp: number; foe: number; poison: number }) => 0.2 + 0.6 * (e.hp / 70) - 0.004 * Math.max(0, e.foe - (e.poison * (e.poison + 1)) / 2);
+  // A made-up leaf in HP: the HP and max HP kept, less a share of what the enemy still has after the poison still to tick.
+  const leaf = (e: { hp: number; foe: number; poison: number }) => 70 + e.hp - (7 / 15) * Math.max(0, e.foe - (e.poison * (e.poison + 1)) / 2);
 
   type Row = { depth: number; label: string; kind: 'open' | 'merged' | 'end' | 'dup'; detail: string; value?: number; node: number; first: number };
   let nodes = $state(24);
@@ -114,7 +114,7 @@
         <span class="num v-muted">{r.node}</span>
         <span class="act" style="border-color: var(--v-s{(r.first % 8) + 1});">{r.label}</span>
         <span class="v-ink2">{r.detail}</span>
-        {#if r.value != null}<span class="v-num val">{fmt(lang, r.value, 3)}</span>{/if}
+        {#if r.value != null}<span class="v-num val">{fmt(lang, r.value, 1)}</span>{/if}
         {#if r.kind === 'merged'}<span class="tag">{say(lang, L.merged)}</span>{/if}
         {#if r.kind === 'dup'}<span class="tag">{say(lang, L.dup)}</span>{/if}
         {#if search.kept.has(r)}<span class="tag keep">{say(lang, L.kept)}</span>{/if}
