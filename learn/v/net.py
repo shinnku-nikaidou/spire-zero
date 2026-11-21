@@ -1,17 +1,9 @@
 """V's net: a set encoder over the deck, bags of ids for the rest (each relic with its
 numbers and status), the cards the relics keep through the deck's card encoder, the raw state, and an event option
 picked and not yet played out (its key, the cards it names through the deck's card encoder, its relics and potions as
-the run's, its numbers by their rows), then a body and three heads. The main head gives, per floor, the chance to die on
+the run's, its numbers by their rows), then a body and two heads. The main head gives, per floor, the chance to die on
 it if still alive there; V's value is the chance to survive every floor. The second head learns the next combats' HP
-costs, which shapes the body only: it is not in the net file. The third gives each potion asked about the HP it will
-save in the fight where it is drunk, f, which a fight's score counts (plans/2026-11-21-1604-fight-score.md, 2.3).
-
-The body never reads the HP and max HP (plans/2026-11-21-1604-fight-score.md, 2.4): V learned from its games that a low
-HP after a boss goes with runs that fought for later, and read the HP as that, so that it valued less HP higher. Here
-the HP and max HP move each floor's hazard only through rising pieces of them (`pieces`) times weights that cannot be
-negative, which the rest of the run sets: whatever the run, more HP or max HP never makes a floor more deadly, so V
-never values them lower, while what they are worth when is still learned. f does not read them either, so that a fight's
-score cannot rise as the HP falls.
+costs, which shapes the body only: it is not in the net file.
 """
 
 import sts2_batch
@@ -20,14 +12,6 @@ from torch import nn
 
 from v import spec
 from v.data import AUX
-
-HP, MAX_HP = spec.STATE.index("hp"), spec.STATE.index("max_hp")
-BODY_STATE = [k for k in range(len(spec.STATE)) if k not in (HP, MAX_HP)]  # the run's numbers the body reads
-# The pieces' knots on the standardized HP and max HP (no real run is under -3: HP is 1 or more)
-HP_KNOTS = (-3.0, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)
-MAX_HP_KNOTS = (-3.0, -1.0, 0.0, 1.0, 2.0)
-RANKS = 4  # the HP's shapes the floors' hazards mix
-SAVE_SCALE = 100.0  # f's head gives HP / SAVE_SCALE
 
 
 class Batch:
@@ -62,14 +46,6 @@ class Batch:
         self.aux = torch.tensor([c + [0.0] * (AUX - len(c)) for c in costs], dtype=torch.float32).to(device)
         self.aux_mask = torch.tensor([[1.0] * len(c) + [0.0] * (AUX - len(c)) for c in costs]).to(device)
 
-        # f's: the potions asked about, a sample's held ones with what each saved later (v/saves.py; None: not known)
-        saves = [s.get("saves", []) for s in samples]
-        width = max(1, max(len(x) for x in saves))
-        potions = index["potions"]
-        feed["asked"] = torch.tensor([[potions.get(p, 0) for p, _ in x] + [0] * (width - len(x)) for x in saves]).to(device)
-        self.saved = torch.tensor([[v or 0.0 for _, v in x] + [0.0] * (width - len(x)) for x in saves]).to(device)
-        self.saved_mask = torch.tensor([[float(v is not None) for _, v in x] + [0.0] * (width - len(x)) for x in saves]).to(device)
-
     def inputs(self):
         """The net's inputs, in the order of spec.INPUTS."""
         return tuple(self.feed[name] for name in spec.INPUTS)
@@ -88,11 +64,13 @@ def boot_targets(start, later, hazards, floors: int) -> tuple[torch.Tensor, torc
     return target, torch.where(g >= start, alive, torch.zeros(floors))
 
 
-class Net(nn.Module):
+class Body(nn.Module):
+    """A run as V reads it, up to the body's output (`encoded`): V's heads read it, and so does f's (f/net.py)."""
+
     DIM, HIDDEN, BODY = 64, 256, 512
     SUM_SCALE = 1 / 16  # the deck's sum next to its mean, scaled to about a mean's size
 
-    def __init__(self, sizes: dict[str, int], floors: int):
+    def __init__(self, sizes: dict[str, int]):
         super().__init__()
         d, h = self.DIM, self.HIDDEN
         self.cards = nn.Embedding(sizes["cards"], d)
@@ -121,50 +99,8 @@ class Net(nn.Module):
         self.phi = nn.Sequential(nn.Linear(d, h), nn.ReLU(), nn.Linear(h, h), nn.ReLU())
         # the deck's mean and scaled sum, the bags, the state, the kept cards' sum, then the event option's key, cards'
         # sum, relics, potions and numbers
-        width = 2 * h + len(spec.BAGS) * d + len(BODY_STATE) + h + d + h + 3 * d
+        width = 2 * h + len(spec.BAGS) * d + len(spec.STATE) + h + d + h + 3 * d
         self.body = nn.Sequential(nn.Linear(width, self.BODY), nn.ReLU(), nn.Linear(self.BODY, self.BODY), nn.ReLU())
-        self.head = nn.Linear(self.BODY, floors)
-        self.aux_head = nn.Linear(self.BODY, AUX)
-        self.register_buffer("hp_knots", torch.tensor(HP_KNOTS))
-        self.register_buffer("max_hp_knots", torch.tensor(MAX_HP_KNOTS))
-        n = len(HP_KNOTS) + len(MAX_HP_KNOTS) + len(HP_KNOTS) * len(MAX_HP_KNOTS)
-        self.hp_weights = nn.Linear(self.BODY, RANKS * n)  # each shape's weight on each piece, softplus
-        self.hp_scales = nn.Linear(self.BODY, floors * RANKS)  # each floor's weight on each shape, softplus
-        self.save_phi = nn.Sequential(nn.Linear(self.BODY + d, h), nn.ReLU(), nn.Linear(h, 1))
-        with torch.no_grad():  # the HP starts out moving the hazards little
-            for layer, bias in ((self.hp_weights, -6.0), (self.hp_scales, 0.0)):
-                layer.weight.zero_()
-                layer.bias.fill_(bias)
-
-    def forward(self, *inputs):
-        """Per sample and floor, the logit of dying on that floor if alive there (inputs as spec.INPUTS)."""
-        return self.hazards(self.encoded(*inputs), inputs[spec.INPUTS.index("state")])
-
-    def both(self, *inputs):
-        """The hazards' logits and the second head's logits."""
-        z = self.encoded(*inputs)
-        return self.hazards(z, inputs[spec.INPUTS.index("state")]), self.aux_head(z)
-
-    def all(self, *inputs):
-        """The hazards' logits, the second head's logits and each asked potion's f (in HP)."""
-        z = self.encoded(*inputs)
-        x = dict(zip(spec.INPUTS, inputs, strict=True))
-        return self.hazards(z, x["state"]), self.aux_head(z), self.saves(z, x["asked"])
-
-    def hazards(self, z, state):
-        """Each floor's logit: the body's, less the HP and max HP's rising pieces weighed by what the body says
-        (softplus: never negative)."""
-        hp, top = pieces(state[:, HP], self.hp_knots), pieces(state[:, MAX_HP], self.max_hp_knots)
-        rising = torch.cat([hp, top, (hp[:, :, None] * top[:, None, :]).flatten(1)], 1)  # all >= 0 and rising
-        shapes = (nn.functional.softplus(self.hp_weights(z)).view(z.shape[0], RANKS, -1) * rising[:, None, :]).sum(2)
-        scales = nn.functional.softplus(self.hp_scales(z)).view(z.shape[0], -1, RANKS)
-        return self.head(z) - (scales * shapes[:, None, :]).sum(2)
-
-    def saves(self, z, asked):
-        """Each asked potion's f, the HP it will save in the fight where it is drunk: never below 0, never reading the
-        HP (the body does not)."""
-        x = torch.cat([z[:, None, :].expand(-1, asked.shape[1], -1), self.bags["potions"](asked)], 2)
-        return nn.functional.softplus(self.save_phi(x)[..., 0]) * SAVE_SCALE
 
     def card_x(self, cards, ups, mods, mod_mask, mod_amounts, numbers):
         """A card's reading before the card encoder: its id's row, its upgrade level, damage, block and growth times
@@ -189,7 +125,7 @@ class Net(nn.Module):
         )
 
     def encoded(self, *inputs):
-        """The body's output, which both heads read (inputs as spec.INPUTS)."""
+        """The body's output, which the heads read (inputs as spec.INPUTS)."""
         x = dict(zip(spec.INPUTS, inputs, strict=True))
         p = spec.PEND
         h = self.phi(self.card_x(*(x[k] for k in ("cards", "ups", "mods", "mod_mask", "mod_amounts", "numbers"))))
@@ -200,7 +136,7 @@ class Net(nn.Module):
             ids = x[t]
             rows = self.relic_rows(ids, x["relic_values"], x["relic_status"]) if t == "relics" else self.bags[t](ids)
             parts.append((rows * x[mask][..., None]).sum(1))
-        parts.append(x["state"][:, BODY_STATE])
+        parts.append(x["state"])
         parts.append((self.phi(self.cards(x["held"])) * x["held_mask"][..., None]).sum(1))
         # the event option picked and not yet played out: all zero for none
         parts.append((self.pending(x["pending"]) * x["pending_mask"][..., None]).sum(1))
@@ -216,23 +152,33 @@ class Net(nn.Module):
         return self.body(torch.cat(parts, 1))
 
 
-def pieces(x, knots):
-    """Rising pieces of X (n), on the knots: between each knot and the next, how far X is into it (0 to its width); past
-    the last, how far. Each is 0 or more and never falls as X rises."""
-    inner = torch.minimum((x[:, None] - knots[None, :-1]).clamp_min(0), (knots[1:] - knots[:-1])[None, :])
-    return torch.cat([inner, (x[:, None] - knots[-1:][None, :]).clamp_min(0)], 1)
+class Net(Body):
+    """V: the body, the hazards' head and the second head."""
+
+    def __init__(self, sizes: dict[str, int], floors: int):
+        super().__init__(sizes)
+        self.head = nn.Linear(self.BODY, floors)
+        self.aux_head = nn.Linear(self.BODY, AUX)
+
+    def forward(self, *inputs):
+        """Per sample and floor, the logit of dying on that floor if alive there (inputs as spec.INPUTS)."""
+        return self.head(self.encoded(*inputs))
+
+    def both(self, *inputs):
+        """The hazards' logits and the second head's logits."""
+        x = self.encoded(*inputs)
+        return self.head(x), self.aux_head(x)
 
 
 class Hazards(nn.Module):
-    """The net as ONNX holds it: the hazards themselves (RunNet.Value), and each asked potion's f (RunNet.Saves)."""
+    """The net as ONNX holds it: the hazards themselves (RunNet.Value)."""
 
     def __init__(self, net):
         super().__init__()
         self.net = net
 
     def forward(self, *inputs):
-        logits, _, saves = self.net.all(*inputs)
-        return torch.sigmoid(logits), saves
+        return torch.sigmoid(self.net(*inputs))
 
 
 def win_chance(hazards: torch.Tensor, start: torch.Tensor):
@@ -256,9 +202,4 @@ def hazard_loss(logits, b: Batch):
 def aux_loss(aux_logits, b: Batch):
     """Per sample, the squared error of the second head over the targets it has."""
     return ((torch.sigmoid(aux_logits) - b.aux) ** 2 * b.aux_mask).sum(1)
-
-
-def save_loss(saves, b: Batch):
-    """Per sample, the squared error of f over the held potions whose saving is known, in SAVE_SCALE HP."""
-    return (((saves - b.saved) / SAVE_SCALE) ** 2 * b.saved_mask).sum(1)
 

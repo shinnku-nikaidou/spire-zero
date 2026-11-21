@@ -5,8 +5,7 @@ A sample is the first combat decision of a round, with the public record of the 
 (Harness's history, as the log holds it). The state is read by the simulator's code, not here (common.Encoder): its
 tokens are what CombatNet feeds the net in play. Its targets: a death, or the share of max
 HP still to be lost in one of BUCKETS buckets spanning [LOSS_MIN, 1) (below 0: a combat that healed), and after a win, per
-potion held, whether it is gone; relative to the state, so the HP and potions it has now count in full. The net reads no
-HP: a death is a loss of the HP held or more (combat/net.py), and a win at max HP a loss of at most what it shows.
+potion held, whether it is gone; relative to the state, so the HP and potions it has now count in full.
 
 Every fifth run (by run id) is held out, for early stopping and the report.
 
@@ -114,8 +113,6 @@ def sample(run: str, start: dict, end: dict, after: dict | None) -> dict:
         "class": ending(obs, end),
         "potion_used": [0 for p in obs["potions"] if p is not None] if end["died"] else potions_used(obs, after),
         "lost": None if end["died"] else now - share(end["hp"], end["max_hp"]),
-        # a win at max HP: the fight took at most what it shows (a heal past the max is cut there; net.ending_loss)
-        "full": not end["died"] and end["hp"] >= end["max_hp"],
         "share": now,
         "room": obs.get("room") or "<none>",
         "act": obs["act"],

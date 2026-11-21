@@ -1,5 +1,6 @@
-"""f's labels (plans/2026-11-21-1604-fight-score.md, 2.3): of each macro decision, each potion it holds, the HP that
-potion saved in the fight where its run later drank it, as the combat net says at that fight's first round start.
+"""f's labels (plans/2026-11-21-1655-fight-score-f.md, 2.3; f/train.py): of each macro decision, each potion it holds,
+the HP that potion saved in the fight where its run later drank it, as the combat net says at that fight's first round
+start (the champion's, which reads the HP the player held there).
 
 A fight's result is what the player carries out of it, HP + max HP, 0 for a death: the score a fight's search ranks by,
 without its potions. A potion saved the combat net's expected result of the fight with it, less that with it taken out

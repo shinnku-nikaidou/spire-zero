@@ -6,15 +6,15 @@ import math
 import onnx
 import pytest
 import torch
-from conftest import OPTION, combat_net_path, encoder, encoder_command, make_enemy, make_obs, make_view, read_run
+from conftest import OPTION, encoder, encoder_command, make_view, read_run
 from onnx.reference import ReferenceEvaluator
 from typer.testing import CliRunner
 
 import carry
 import common
 import game_ids
-from v import bootstrap, data, export, potions, saves, spec, train
-from v.net import HP, MAX_HP, Batch, Net, boot_targets, values, win_chance
+from v import bootstrap, data, export, potions, spec, train
+from v.net import Batch, Net, boot_targets, values, win_chance
 
 
 def record(run_id, floor, outcome="lost", combats=()):
@@ -116,13 +116,10 @@ def test_the_onnx_graph_gives_the_test_runs_their_chance_to_win_as_torch_gave_it
     assert [i.name for i in graph.graph.input] == spec.INPUTS
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
     for test in net["tests"]:
-        held = [p for p in test["run"]["potions"] if p]
-        sample = data.sample("a", read_run(test["run"]), 16) | {"saves": [(p, None) for p in held]}
-        b = Batch([sample], index, torch.zeros(len(spec.STATE)), torch.full((len(spec.STATE),), 10.0), 16, "cpu")
+        b = Batch([data.sample("a", read_run(test["run"]), 16)], index, torch.zeros(len(spec.STATE)), torch.full((len(spec.STATE),), 10.0), 16, "cpu")
         feed = {name: x.numpy() for name, x in zip(spec.INPUTS, b.inputs(), strict=True)}
-        hazards, saved = ReferenceEvaluator(graph).run(None, feed)
+        [hazards] = ReferenceEvaluator(graph).run(None, feed)
         assert math.isclose(float(win_chance(torch.tensor(hazards), b.start)[0]), test["value"], rel_tol=1e-5)
-        assert len(test["saves"]) == len(held) == 1 and saved[0][:1].tolist() == pytest.approx(test["saves"], rel=1e-5)
 
 
 def test_a_net_files_weights_read_back_give_its_test_runs_their_values_and_keep_the_second_head_anew():
@@ -162,7 +159,7 @@ def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     lists = write_runs(tmp_path)
     for out, more in ((first, []), (second, ["--init", str(first)])):
-        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--encoder", encoder_command(), "--combat-net", combat_net_path(), *more]
+        args = ["--list", lists, "--name", out.stem, "--out", str(out), "--encoder", encoder_command(), *more]
         result = CliRunner().invoke(train.script, args)
         assert result.exit_code == 0, result.output
     a, b = json.loads(first.read_text()), json.loads(second.read_text())
@@ -181,7 +178,7 @@ def test_training_goes_on_from_a_net_file_with_its_tables_and_state_scaling(tmp_
 
 def test_training_writes_a_net_file_with_its_report(tmp_path):
     out = tmp_path / "net.json"
-    args = ["--list", write_runs(tmp_path), "--name", "t", "--out", str(out), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+    args = ["--list", write_runs(tmp_path), "--name", "t", "--out", str(out), "--encoder", encoder_command()]
     result = CliRunner().invoke(train.script, args)
     assert result.exit_code == 0, result.output
     net = json.loads(out.read_text())
@@ -208,11 +205,11 @@ def test_a_map_move_gives_a_sample_entering_the_point(tmp_path):
 def test_training_refuses_to_go_on_from_a_net_of_other_tables(tmp_path):
     first = tmp_path / "first.json"
     lists = write_runs(tmp_path)
-    args = ["--list", lists, "--name", "first", "--out", str(first), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+    args = ["--list", lists, "--name", "first", "--out", str(first), "--encoder", encoder_command()]
     assert CliRunner().invoke(train.script, args).exit_code == 0
     net = json.loads(first.read_text())
     first.write_text(json.dumps(net | {"vocab": net["vocab"] | {"cards": net["vocab"]["cards"][:-1]}}))
-    args = ["--list", lists, "--name", "second", "--out", str(tmp_path / "second.json"), "--init", str(first), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+    args = ["--list", lists, "--name", "second", "--out", str(tmp_path / "second.json"), "--init", str(first), "--encoder", encoder_command()]
     assert CliRunner().invoke(train.script, args).exit_code != 0
 
 
@@ -263,14 +260,14 @@ def test_a_training_on_multi_step_targets_takes_a_v_of_each_fold_and_says_so(tmp
     nets = {}
     for f in bootstrap.FOLDS:
         nets[f] = tmp_path / f"f{f}.json"
-        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--combat-net", combat_net_path(), "--fold", f]
+        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--fold", f]
         result = CliRunner().invoke(train.script, args)
         assert result.exit_code == 0, result.output
         assert json.loads(nets[f].read_text())["trained"]["fold"] == f
 
     def multi_step(frozen):
         out = tmp_path / "td.json"
-        args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+        args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command()]
         return out, CliRunner().invoke(train.script, [*args, "--bootstrap", frozen, "--horizon", "1"])
 
     out, result = multi_step(f"{nets['A']},{nets['B']}")
@@ -282,7 +279,7 @@ def test_a_training_on_multi_step_targets_takes_a_v_of_each_fold_and_says_so(tmp
     _, twice = multi_step(f"{nets['A']},{nets['A']}")
     assert isinstance(twice.exception, common.LearnError) and "both trained on fold A" in str(twice.exception)
     plain = tmp_path / "plain.json"
-    args = ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+    args = ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command()]
     assert CliRunner().invoke(train.script, args).exit_code == 0
     _, unfolded = multi_step(f"{nets['A']},{plain}")
     assert isinstance(unfolded.exception, common.LearnError) and "not trained on one fold" in str(unfolded.exception)
@@ -319,7 +316,7 @@ def test_the_onnx_graph_reads_a_pending_event_option_and_the_environment_as_torc
     for test in net["tests"]:
         b = Batch([data.sample("a", read_run(test["run"], test.get("env", "SL")), 16)], index, mean, std, 16, "cpu")
         feed = {name: x.numpy() for name, x in zip(spec.INPUTS, b.inputs(), strict=True)}
-        hazards, saved = ReferenceEvaluator(graph).run(None, feed)
+        [hazards] = ReferenceEvaluator(graph).run(None, feed)
         values_of.append(float(win_chance(torch.tensor(hazards), b.start)[0]))
         assert math.isclose(values_of[-1], test["value"], rel_tol=1e-5)
     # a fresh net reads them: the option moves the value
@@ -401,87 +398,17 @@ def test_a_line_of_an_event_is_labelled_from_where_it_left_the_room_by_the_v_tha
     nets = {}
     for f in bootstrap.FOLDS:
         nets[f] = tmp_path / f"f{f}.json"
-        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--combat-net", combat_net_path(), "--fold", f]
+        args = ["--list", lists, "--name", f"f{f}", "--out", str(nets[f]), "--encoder", encoder_command(), "--fold", f]
         result = CliRunner().invoke(train.script, args)
         assert result.exit_code == 0, result.output
     out = tmp_path / "td.json"
-    args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command(), "--combat-net", combat_net_path()]
+    args = ["--list", lists, "--name", "td", "--out", str(out), "--encoder", encoder_command()]
     result = CliRunner().invoke(train.script, [*args, "--bootstrap", f"{nets['A']},{nets['B']}", "--horizon", "1"])
     assert result.exit_code == 0, result.output
     fit = json.loads(out.read_text())["fit"]
     assert fit["event_samples"] == {"taken": 5, "left": 5, "ended": 5}
     assert fit["held_out_event_loss"] is not None and set(fit["held_out_loss_by_env"]) == {"SL", "NoSL"}
     plain = tmp_path / "plain.json"
-    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command(), "--combat-net", combat_net_path()])
+    result = CliRunner().invoke(train.script, ["--list", lists, "--name", "plain", "--out", str(plain), "--encoder", encoder_command()])
     assert result.exit_code == 0, result.output
     assert json.loads(plain.read_text())["fit"]["event_samples"] == {"taken": 5, "left": 0, "ended": 5}
-
-
-def test_more_hp_or_max_hp_never_makes_a_floor_more_deadly_nor_moves_f():
-    tables = game_ids.macro_tables()
-    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    mean, std = torch.tensor([10.0, 50, 70, 100, 5, 3, 0, 0, 0]), torch.tensor([10.0, 20, 10, 80, 3, 1, 1, 1, 1])
-    for seed in range(3):
-        torch.manual_seed(seed)
-        model = Net({t: len(ids) for t, ids in tables.items()}, 16).eval()
-        with torch.no_grad():  # heads that move with the HP, so that the check means something
-            for layer in (model.hp_weights, model.hp_scales):
-                layer.weight.normal_(0, 0.5)
-                layer.bias.normal_(0, 1)
-        for name, grid in (("hp", range(1, 71)), ("max_hp", range(40, 120, 4))):
-            views = [make_view(**{name: x}) for x in grid]
-            samples = [data.sample("a", read_run(v), 16) | {"saves": [("FIRE", None)]} for v in views]
-            b = Batch(samples, index, mean, std, 16, "cpu")
-            with torch.no_grad():
-                hazards, _, f = model.all(*b.inputs())
-            hazards = torch.sigmoid(hazards)
-            assert (hazards[1:] <= hazards[:-1] + 1e-6).all(), name
-            assert (f >= 0).all() and torch.allclose(f, f[0].expand_as(f)), name
-
-
-def write_potion_log(tmp_path):
-    """A run of one character: a decision holding FIRE and BLOCK, a fight where FIRE is drunk, a decision, a decision
-    with BLOCK gone (thrown away), then a fight that killed the run holding nothing."""
-    log = tmp_path / "log.jsonl"
-    run = "0" * 15 + "1"
-    rows = []
-
-    def macro(d, potions):
-        rows.append({"run": run, "decision_id": d, "env": "SL", "surface": "rewards", "brain": "l0",
-                     "run_view": make_view(potions=potions)})  # fmt: skip
-
-    def fight(d, potions, rnd=1):
-        o = make_obs(round=rnd, hp=40, enemies=[make_enemy(1)], potions=potions)
-        rows.append({"run": run, "decision_id": d, "env": "SL", "surface": "combat", "brain": "l0", "obs": o, "history": []})
-
-    macro(0, ["FIRE", None, "BLOCK"])
-    fight(1, ["FIRE", None, "BLOCK"])
-    fight(2, [None, None, "BLOCK"], rnd=2)
-    macro(3, [None, None, "BLOCK"])
-    macro(4, [None, None, None])
-    fight(5, [None, None, None])
-    with open(log, "w") as f:
-        f.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in rows)
-    return str(log), run, rows
-
-
-def test_a_potion_saved_what_the_combat_net_says_it_did_in_the_fight_where_it_was_drunk(tmp_path):
-    log, run, rows = write_potion_log(tmp_path)
-    got = saves.labels(log, {run: {"outcome": "lost"}}, encoder(), combat_net_path())
-    model, index = saves.combat_net(combat_net_path())
-    first = json.dumps(rows[1])
-    without = json.dumps(rows[1] | {"obs": rows[1]["obs"] | {"potions": [None, None, "BLOCK"]}})
-    tokens = [r["tokens"] for r in encoder().combats([first, without])]
-    a, b = saves.carried(model, index, tokens)
-    assert got[(run, 0)] == [("FIRE", pytest.approx(a - b)), ("BLOCK", 0.0)]  # BLOCK went outside a fight
-    assert got[(run, 3)] == [("BLOCK", 0.0)] and (run, 4) not in got
-    open_ = saves.labels(log, {run: {"outcome": None}}, encoder(), combat_net_path())
-    assert open_[(run, 0)][1] == ("BLOCK", 0.0)  # it went: the record's end does not matter
-
-
-def test_a_potion_still_held_where_its_record_stops_short_is_not_known(tmp_path):
-    log, run, rows = write_potion_log(tmp_path)
-    with open(log, "w") as f:  # the run's record stops after the first decision
-        f.write(json.dumps(rows[0], separators=(",", ":")) + "\n")
-    assert saves.labels(log, {run: {"outcome": None}}, encoder(), combat_net_path())[(run, 0)] == [("FIRE", None), ("BLOCK", None)]
-    assert saves.labels(log, {run: {"outcome": "won"}}, encoder(), combat_net_path())[(run, 0)] == [("FIRE", 0.0), ("BLOCK", 0.0)]

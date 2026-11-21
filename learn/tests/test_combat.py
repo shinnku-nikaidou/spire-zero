@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 import common
 import game_ids
 from combat import data, export, spec, train
-from combat.net import Batch, Net, ending_loss, loss, won_group
+from combat.net import Batch, Net, loss, won_group
 
 
 def obs(round=1, hp=50, **over):
@@ -39,62 +39,24 @@ def test_a_potion_used_is_one_gone_from_the_view_after_the_fight():
     assert data.potions_used(obs(), {"potions": [None, None, None]}) == [1]  # drunk after the last round's start
 
 
-def batch_at(hps, max_hp=70):
-    """Round starts alike but for the player's HP, as one batch."""
+def test_a_win_cannot_end_in_a_bucket_the_hp_held_rules_out():
     samples = [
-        data.sample("a", round_start(obs(hp=hp) | {"player": obs(hp=hp)["player"] | {"max_hp": max_hp}}), {"died": True}, None)
-        for hp in hps
+        data.sample("a", round_start(obs(hp=hp)), {"died": False, "hp": end, "max_hp": 70, "potions": 0}, {"potions": []})
+        for hp, end in ((70, 70), (70, 1), (7, 1), (7, 70), (1, 1), (1, 70), (35, 34))
     ]
     tables = game_ids.combat_tables()
     index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
-    return Batch(samples, index, "cpu"), Net({t: len(i) for t, i in tables.items()})
-
-
-def test_a_loss_of_the_hp_held_or_more_is_a_death_and_the_net_reads_no_hp():
-    torch.manual_seed(0)
-    b, net = batch_at([70, 35, 7, 1])
+    b = Batch(samples, index, "cpu")
+    net = Net({t: len(i) for t, i in tables.items()})
     logits, potions = net(*b.inputs())
-    assert potions.shape[1:] == (data.POTION_GROUPS, len(game_ids.combat_tables()["potions"]))
-    p = torch.softmax(logits, 1)
-    assert torch.allclose(p.sum(1), torch.ones(4))
-    lost = torch.softmax(net.head(net.encode(*b.inputs())), 1)  # the HP lost, the same at every HP
-    assert torch.allclose(lost[0], lost[3])
+    assert potions.shape[1:] == (data.POTION_GROUPS, len(tables["potions"]))
+    closed = logits < Net.CLOSED / 2
+    assert not closed.gather(1, b.target[:, None]).any()  # the truth stays open
+    assert not closed[:, 0].any()  # a death always can be
     low = data.LOSS_MIN + torch.arange(data.BUCKETS) * data.WIDTH
-    for k, hp in enumerate([70, 35, 7, 1]):
-        dead = low >= hp / 70
-        assert torch.allclose(p[k, 0], lost[k, 0] + lost[k, 1:][dead].sum())  # the whole max HP or more, or the HP held
-        assert torch.allclose(p[k, 1:][~dead], lost[k, 1:][~dead]) and (p[k, 1:][dead] == 0).all()
-    assert (p[0, 1:][low < 0] > 0).all()  # at full HP a heal is a win's bucket (the leaf caps it at the max HP)
-
-
-def score(p, hp, max_hp=70):
-    """A fight's score as the leaf reads the endings, with no potions: HP + max HP after a win, 0 for a death."""
-    mids = data.LOSS_MIN + (torch.arange(data.BUCKETS) + 0.5) * data.WIDTH
-    after = ((hp / max_hp - mids) * max_hp).round().clamp(1, max_hp)
-    return (p[1:] * (after + max_hp)).sum()
-
-
-def test_more_hp_never_lowers_the_chance_to_win_or_a_fights_score():
-    hps = list(range(1, 71))
-    for seed in range(3):
-        torch.manual_seed(seed)
-        b, net = batch_at(hps)
-        with torch.no_grad():
-            p = torch.softmax(net(*b.inputs())[0], 1)
-        wins = 1 - p[:, 0]
-        scores = torch.stack([score(p[k], hp) for k, hp in enumerate(hps)])
-        assert (wins[1:] >= wins[:-1] - 1e-6).all() and (scores[1:] >= scores[:-1] - 1e-4).all()
-
-
-def test_a_win_at_max_hp_counts_every_bucket_at_or_below_its_own():
-    logits = torch.log_softmax(torch.randn(2, 1 + data.BUCKETS), 1)
-    target = torch.tensor([7, 7])
-    losses = ending_loss(logits, target, torch.tensor([False, True]))
-    assert torch.isclose(losses[0], -logits[0, 7])
-    assert torch.isclose(losses[1], -torch.logsumexp(logits[1, 1:8], 0))
-    end = {"died": False, "hp": 70, "max_hp": 70, "potions": 0}
-    assert data.sample("a", round_start(obs(hp=60)), end, {"potions": []})["full"]
-    assert not data.sample("a", round_start(obs(hp=60)), end | {"hp": 69}, {"potions": []})["full"]
+    assert closed[2, 1:].tolist() == (low >= 7 / 70).tolist()  # at 10 % HP nothing above 10 % can be lost
+    assert closed[0, 1:].tolist() == (low + data.WIDTH <= -1e-6).tolist()  # at full HP nothing can heal
+    assert torch.softmax(logits, 1)[closed].max() == 0
 
 
 def test_a_cards_numbers_and_modifiers_and_the_orbs_numbers_and_order_move_the_output():
@@ -238,6 +200,22 @@ def test_training_writes_a_net_file_of_both_environments(tmp_path, monkeypatch):
     assert set(net["fit"]["held_out"]) >= {"rank_lost", "rank_lost_share", "auc_death", "auc_death_share", "potions"}
     assert net["fit"]["by_hp"] and net["fit"]["by_potion"]
     assert net["fit"]["medium"]["held_out"]["samples"] == 42  # the 14 runs' three rounds
+
+
+def test_the_champions_weights_read_back_give_its_test_states_their_endings():
+    """The SL champion's combat net, which weights/fetch.sh brings into a checkout."""
+    repo = Path(__file__).parents[2]
+    champion = json.loads((repo / "eval" / "champions" / "sl.json").read_text())
+    net = export.read(str(repo / champion["options"]["combat-net"]))
+    tables = net["vocab"]
+    model = Net({t: len(i) for t, i in tables.items()}).eval()
+    model.load_state_dict(export.weights(net, model))
+    index = {t: {i: k for k, i in enumerate(ids)} for t, ids in tables.items()}
+    for test in net["tests"][:3]:
+        b = Batch([data.sample("a", round_start(test["obs"], test["history"]), {"died": True, "potions": 0}, None)], index, "cpu")
+        with torch.no_grad():
+            outcome = torch.softmax(model(*b.inputs())[0], 1)[0]
+        assert outcome.tolist() == pytest.approx(test["outcome"], abs=1e-5)
 
 
 def test_training_goes_on_from_a_net_file_and_keeps_it_unless_an_epoch_beats_it(tmp_path, monkeypatch):

@@ -1,20 +1,15 @@
 using System.Text.Json;
-using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 using Sts2Ai.Protocol;
 
 namespace Sts2Ai.Brain.Macro;
 
-/// <summary>A run and the value the trainer computed for it, which loading checks, in its environment (null: SL); and
-/// each potion it holds, in the belt's order, with the HP the net says it will save (<see cref="RunNet.Saves(RunView, PlayEnvironment)"/>),
-/// none for a net of before the fight score.</summary>
-public sealed record NetTest(RunView Run, double Value, string? Env = null, IReadOnlyList<double>? Saves = null);
+/// <summary>A run and the value the trainer computed for it, which loading checks, in its environment (null: SL).</summary>
+public sealed record NetTest(RunView Run, double Value, string? Env = null);
 
 /// <summary>V as <c>learn/v/export.py</c> writes it.</summary>
 /// <param name="Floors">How many floors the head covers, from floor 0.</param>
 /// <param name="Vocab">Each token table's ids; an id a table does not list reads as its entry 0.</param>
-/// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, outputs the hazards
-/// and, since the fight score (plans/2026-11-21-1604-fight-score.md), each asked potion's f.</param>
+/// <param name="Onnx">The net as an ONNX graph, base64: inputs as <see cref="RunNet"/> feeds them, output the hazards.</param>
 /// <param name="State">The run's numbers the net reads, by name, with the mean and std that standardize them.</param>
 public sealed record NetFile(
     string Name, int Floors, IReadOnlyDictionary<string, IReadOnlyList<string>> Vocab, string Onnx,
@@ -156,21 +151,12 @@ public sealed class RunNet : IRunValue, IDisposable
     public const double Cap = 10;
 
     private readonly NetFile _file;
-    private readonly Dictionary<string, Dictionary<string, int>> _index;
-    private readonly InferenceSession _session;
-
-    /// <summary>Whether the graph gives each asked potion's f (<see cref="Saves(RunView, PlayEnvironment)"/>): a net of
-    /// the fight score. One of before is still read until the champion is one of after; then this goes.</summary>
-    private readonly bool _saves;
+    private readonly RunGraph _graph;
 
     private RunNet(NetFile file)
     {
         _file = file;
-        _index = file.Vocab.ToDictionary(t => t.Key, t => t.Value.Select((id, i) => (id, i)).ToDictionary(p => p.id, p => p.i));
-        // One thread per call: the sim runs many processes, and a macro decision values a handful of small inputs.
-        using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
-        _session = new InferenceSession(Convert.FromBase64String(file.Onnx), options);
-        _saves = _session.InputMetadata.ContainsKey("asked");
+        _graph = new RunGraph(file.Vocab, file.State, file.Onnx);
     }
 
     public string Name => _file.Name;
@@ -191,22 +177,12 @@ public sealed class RunNet : IRunValue, IDisposable
                 net.Dispose();
                 throw new InvalidDataException($"net {file.Name} gives {value} for a test run the trainer valued at {test.Value}");
             }
-            var saves = net.Saves(test.Run, test.Env is { } e ? Enum.Parse<PlayEnvironment>(e) : Plain);
-            if ((saves == null) != (test.Saves == null) || saves != null && (saves.Count != test.Saves!.Count
-                || saves.Zip(test.Saves).Any(p => Math.Abs(p.First - p.Second) > Math.Max(1e-3 * Math.Abs(p.Second), 1e-3))))
-            {
-                net.Dispose();
-                throw new InvalidDataException($"net {file.Name} does not give a test run's potions the HP the trainer said they save");
-            }
         }
         return net;
     }
 
     /// <summary>V of a run in SL (<see cref="In"/> for another environment).</summary>
     public double Value(RunView run) => Value(run, Plain);
-
-    /// <summary>Each potion the run holds, in the belt's order, with f in SL: the HP the net says it will save.</summary>
-    public IReadOnlyList<double>? Saves(RunView run) => Saves(run, Plain);
 
     /// <summary>This V reading every run in <paramref name="env"/>: NoSL's runs carry its mark (<see cref="CombatTokens.EnvTokens"/>).</summary>
     public IRunValue In(PlayEnvironment env) => env == Plain ? this : new Bound(this, env);
@@ -217,28 +193,19 @@ public sealed class RunNet : IRunValue, IDisposable
 
         public double Value(RunView run) => net.Value(run, env);
 
-        public IReadOnlyList<double>? Saves(RunView run) => net.Saves(run, env);
-
         public IRunValue In(PlayEnvironment other) => net.In(other);
     }
 
     public double Value(RunView run, PlayEnvironment env)
     {
-        var hazards = Graph(run, env, false).Hazards;
+        var hazards = _graph.Run(run, env).Output;
         int from = Math.Clamp(run.Floor, 0, _file.Floors - 1);
         double alive = 1;
         for (int g = from; g < _file.Floors; g++) alive *= 1 - hazards[g];
         return alive;
     }
 
-    /// <summary>
-    /// Each potion <paramref name="run"/> holds, in the belt's order, with f in <paramref name="env"/>: the HP the net
-    /// says it will save in the fight where it is drunk (plans/2026-11-21-1604-fight-score.md, 2.3). The net reads no HP
-    /// for it, so a run's f is the same at any HP. None from a net of before the fight score.
-    /// </summary>
-    public IReadOnlyList<double>? Saves(RunView run, PlayEnvironment env) => _saves ? [.. Graph(run, env, true).Saves] : null;
-
-    public void Dispose() => _session.Dispose();
+    public void Dispose() => _graph.Dispose();
 
     /// <summary>
     /// The net's tokens of a run: each card with its modifiers (enchantment, affliction, keywords, what Tinker Time made
@@ -376,117 +343,6 @@ public sealed class RunNet : IRunValue, IDisposable
         json.WriteEndObject();
     }
 
-    /// <summary>Per floor, the chance to die there if still alive there, and with <paramref name="asked"/> each held
-    /// potion's f: the graph on a batch of one run.</summary>
-    private (float[] Hazards, float[] Saves) Graph(RunView run, PlayEnvironment env, bool asked)
-    {
-        var tokens = Tokens(run, env);
-        var inputs = new List<NamedOnnxValue>(CardInputs("", tokens.Cards));
-        inputs.AddRange(Bag("relics", "relic_mask", tokens.Relics));
-        inputs.AddRange(Bag("potions", "potion_mask", tokens.Potions));
-        inputs.AddRange(Bag("context", "context_mask", tokens.Context));
-        inputs.AddRange(Bag("map", "map_mask", tokens.Map));
-        var values = new DenseTensor<float>([1, _file.State.Names.Count]);
-        for (int i = 0; i < _file.State.Names.Count; i++)
-            values[0, i] = (float)((State(run, _file.State.Names[i]) - _file.State.Mean[i]) / _file.State.Std[i]);
-        inputs.Add(NamedOnnxValue.CreateFromTensor("state", values));
-        inputs.AddRange(CombatNet.RelicInputs(tokens.RelicValues, tokens.RelicStatus, status => Index("relic_status", status)));
-        inputs.AddRange(Bag("cards", "held", "held_mask", tokens.Held));
-        inputs.AddRange(PendingInputs(tokens.Pending));
-        if (_saves) inputs.Add(Bag("potions", "asked", "asked_mask", asked ? tokens.Potions : [])[0]);
-        using var results = _session.Run(inputs);
-        float[] hazards = [.. results[0].AsEnumerable<float>()];
-        return (hazards, asked ? [.. results[1].AsEnumerable<float>().Take(tokens.Potions.Count)] : []);
-    }
-
-    /// <summary>Cards as the graph takes them, by the input names with <paramref name="prefix"/>: their ids, upgrade
-    /// levels, mask, modifiers with their mask and amounts, and numbers (damage, block, growth).</summary>
-    private List<NamedOnnxValue> CardInputs(string prefix, IReadOnlyList<CardToken> tokens)
-    {
-        // Every length is at least 1, its padding masked out, as in training.
-        int n = Math.Max(1, tokens.Count);
-        int m = Math.Max(1, tokens.Select(c => c.Modifiers.Count).DefaultIfEmpty(0).Max());
-        var cards = new DenseTensor<long>([1, n]);
-        var ups = new DenseTensor<float>([1, n]);
-        var cardMask = new DenseTensor<float>([1, n]);
-        var mods = new DenseTensor<long>([1, n, m]);
-        var modMask = new DenseTensor<float>([1, n, m]);
-        var modAmounts = new DenseTensor<float>([1, n, m]);
-        var numbers = new DenseTensor<float>([1, n, 3]);
-        for (int k = 0; k < tokens.Count; k++)
-        {
-            var card = tokens[k];
-            cards[0, k] = Index("cards", card.Id);
-            ups[0, k] = card.Up;
-            cardMask[0, k] = 1;
-            for (int j = 0; j < card.Modifiers.Count; j++)
-            {
-                mods[0, k, j] = Index("modifiers", card.Modifiers[j]);
-                modMask[0, k, j] = 1;
-            }
-            for (int j = 0; j < card.Amounts.Count; j++) modAmounts[0, k, j] = (float)card.Amounts[j];
-            numbers[0, k, 0] = (float)card.Damage;
-            numbers[0, k, 1] = (float)card.Block;
-            numbers[0, k, 2] = (float)card.Grown;
-        }
-        return
-        [
-            NamedOnnxValue.CreateFromTensor(prefix + "cards", cards), NamedOnnxValue.CreateFromTensor(prefix + "ups", ups),
-            NamedOnnxValue.CreateFromTensor(prefix + "card_mask", cardMask), NamedOnnxValue.CreateFromTensor(prefix + "mods", mods),
-            NamedOnnxValue.CreateFromTensor(prefix + "mod_mask", modMask), NamedOnnxValue.CreateFromTensor(prefix + "mod_amounts", modAmounts),
-            NamedOnnxValue.CreateFromTensor(prefix + "numbers", numbers),
-        ];
-    }
-
-    /// <summary>The inputs of an event option picked and not yet played out (<see cref="PendingTokens"/>), all empty for
-    /// none: its key (the table's entry 0 for a key it does not list, a row of zeros), its cards as the deck's with
-    /// whether each is the player's own, its relics as the run's with whether each is held, its potions with whether
-    /// each is held, and its numbers by their rows with their values.</summary>
-    private List<NamedOnnxValue> PendingInputs(PendingTokens? pending)
-    {
-        var inputs = new List<NamedOnnxValue>(Bag("pending", "pending_mask", pending != null ? [pending.Key] : []));
-        inputs.AddRange(CardInputs(Pend, pending?.Cards ?? []));
-        inputs.Add(Row(Pend + "cards_owned", pending?.CardsOwned ?? []));
-        inputs.AddRange(Bag("relics", Pend + "relics", Pend + "relic_mask", pending?.Relics ?? []));
-        inputs.AddRange(CombatNet.RelicInputs(pending?.RelicValues ?? [], pending?.RelicStatus ?? [], status => Index("relic_status", status), Pend));
-        inputs.Add(Row(Pend + "relics_owned", pending?.RelicsOwned ?? []));
-        inputs.AddRange(Bag("potions", Pend + "potions", Pend + "potion_mask", pending?.Potions ?? []));
-        inputs.Add(Row(Pend + "potions_owned", pending?.PotionsOwned ?? []));
-        inputs.AddRange(Bag("event_vars", Pend + "vars", Pend + "var_mask", pending?.Numbers ?? []));
-        inputs.Add(Row(Pend + "var_values", pending?.NumberValues ?? []));
-        return inputs;
-    }
-
-    /// <summary>The prefix of the graph's inputs of an event option picked and not yet played out.</summary>
-    private const string Pend = "pend_";
-
-    /// <summary>Numbers as the graph takes them: padded to at least 1, as their bag is.</summary>
-    private static NamedOnnxValue Row(string input, IReadOnlyList<double> numbers)
-    {
-        var row = new DenseTensor<float>([1, Math.Max(1, numbers.Count)]);
-        for (int k = 0; k < numbers.Count; k++) row[0, k] = (float)numbers[k];
-        return NamedOnnxValue.CreateFromTensor(input, row);
-    }
-
-    /// <summary>A token table's ids as the graph takes them: padded to at least 1, with their mask.</summary>
-    private NamedOnnxValue[] Bag(string table, string mask, IReadOnlyList<string> ids) => Bag(table, table, mask, ids);
-
-    /// <summary>Ids of <paramref name="table"/> as the graph's input <paramref name="input"/>, padded to at least 1, with their mask.</summary>
-    private NamedOnnxValue[] Bag(string table, string input, string mask, IReadOnlyList<string> ids)
-    {
-        int n = Math.Max(1, ids.Count);
-        var index = new DenseTensor<long>([1, n]);
-        var present = new DenseTensor<float>([1, n]);
-        for (int k = 0; k < ids.Count; k++)
-        {
-            index[0, k] = Index(table, ids[k]);
-            present[0, k] = 1;
-        }
-        return [NamedOnnxValue.CreateFromTensor(input, index), NamedOnnxValue.CreateFromTensor(mask, present)];
-    }
-
     private static double Capped(double x) => Math.Clamp(x, -Cap, Cap);
 
-    /// <summary>An id's entry in a token table; 0 for an id the table does not list.</summary>
-    private long Index(string table, string id) => _index[table].GetValueOrDefault(id);
 }

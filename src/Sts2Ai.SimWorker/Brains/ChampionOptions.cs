@@ -9,7 +9,7 @@ namespace Sts2Ai.SimWorker.Brains;
 /// <summary>The champion that --policy and --macro name, pimc's budget, and l0's V (--value).</summary>
 /// <param name="Value">l0's V; null with no l0.</param>
 /// <param name="ValueFile">Where <paramref name="Value"/> came from.</param>
-/// <param name="Leaf">pimc's and plan's combat net (--combat-net).</param>
+/// <param name="Leaf">pimc's and plan's combat net (--combat-net) and f (--f-net).</param>
 /// <param name="OnClone">Whether l0 plays each option on the node's clone (--afterstates clone; SL only).</param>
 /// <param name="Explore">For self-play only: the share ε of macro decisions whose answer l0 draws
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
@@ -106,14 +106,14 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
         }
     }
 
-    /// <summary>The champion as a player sees it on the mod's panel (<see cref="Ready.Shown"/>): its V and combat net,
+    /// <summary>The champion as a player sees it on the mod's panel (<see cref="Ready.Shown"/>): its V, combat net and f,
     /// then the size of the combat search (<see cref="Budget.Size"/>) and the solver's nodes a decision, if it solves.</summary>
     public string Shown
     {
         get
         {
             string size = Searches ? $" {Budget.Size}{(Budget.Solve > 0 ? FormattableString.Invariant($" solve {Budget.Solve}") : "")}" : "";
-            string[] nets = [.. new[] { Value?.Name, Leaf.Net?.Name }.OfType<string>()];
+            string[] nets = [.. new[] { Value?.Name, Leaf.Net?.Name, Leaf.Net?.SavesName }.OfType<string>()];
             return nets.Length > 0 ? $"net {string.Join(" + ", nets)}{size}" : $"{Combat}{size}";
         }
     }

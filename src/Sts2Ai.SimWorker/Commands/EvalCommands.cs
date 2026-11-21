@@ -113,7 +113,7 @@ internal static class GateCommand
 /// promote: the gate of a pair of nets and their promotion. The nets are every character's,
 /// so each character has two reports of one gate, the champion's nets and the new ones on the same seed set at the same
 /// commit; the reports are paired by seed and judged together (<see cref="NetGate"/>). The challenger is the champion
-/// file's champion with the nets given (--value, --combat-net), and must be what played its reports. On a pass the
+/// file's champion with the nets given (--value, --combat-net, --f-net), and must be what played its reports. On a pass the
 /// champion file names the challenger: its options with the new nets where they are in weights/all, the challenger's
 /// reports and the gate, and the characters' leaderboards are written again. Each environment has its own nets
 /// (plans/2026-11-18-1340-nosl-v0.md), so no other champion file changes. --look prints the
@@ -124,6 +124,7 @@ internal static class PromoteCommand
     private static readonly Option<string> ChampionPath = Opt.Required<string>("--champion", "the champion file to beat and, on a pass, to rewrite, such as eval/champions/sl.json");
     private static readonly Option<string?> Value = Opt.Maybe<string?>("--value", "the challenger's V, weights/all/NAME.json (default: the champion's)");
     private static readonly Option<string?> CombatNet = Opt.Maybe<string?>("--combat-net", "the challenger's combat net, weights/all/NAME.json (default: the champion's)");
+    private static readonly Option<string?> Saves = Opt.Maybe<string?>("--f-net", "the challenger's f, weights/all/NAME.json (default: the champion's)");
     private static readonly Option<string> Reports = Opt.Required<string>("--reports",
         "the challenger's reports, one per character, comma-separated: eval/CHARACTER/reports/NAME.json");
     private static readonly Option<string> Against = Opt.Required<string>("--against",
@@ -133,7 +134,7 @@ internal static class PromoteCommand
     public static Command Command()
     {
         var command = Opt.Command("promote", "judges new nets by every character's two reports of one gate, paired by seed, and on a pass makes them the champion's",
-            [ChampionPath, Value, CombatNet, Reports, Against, Look]);
+            [ChampionPath, Value, CombatNet, Saves, Reports, Against, Look]);
         command.SetAction(Run);
         return command;
     }
@@ -145,7 +146,7 @@ internal static class PromoteCommand
         bool look = r.GetValue(Look);
         // The new nets, by the champion file's keys, each where a champion's weights files are.
         var nets = new Dictionary<string, string>();
-        foreach (var (key, given) in new[] { ("value", r.GetValue(Value)), ("combat-net", r.GetValue(CombatNet)) })
+        foreach (var (key, given) in new[] { ("value", r.GetValue(Value)), ("combat-net", r.GetValue(CombatNet)), ("f-net", r.GetValue(Saves)) })
         {
             if (given == null) continue;
             if (Path.GetDirectoryName(Path.GetFullPath(given)) != Path.GetFullPath(Layout.Weights))

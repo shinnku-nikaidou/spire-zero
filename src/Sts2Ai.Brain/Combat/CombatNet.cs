@@ -45,6 +45,9 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     private readonly CombatNetFile _file;
     private readonly IRunValue _value;
+
+    /// <summary>f, which a fight's score counts the potions kept by (<see cref="FightValue"/>); none: the fight is V's.</summary>
+    private readonly SavesNet? _saves;
     private readonly Dictionary<string, Dictionary<string, int>> _index;
     private readonly InferenceSession _session;
 
@@ -56,10 +59,11 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// <summary>V's values of the runs the leaf priced, by the run without its HP and potions (<see cref="Key"/>), the HP and the potions.</summary>
     private readonly ConcurrentDictionary<(ulong Run, int Hp, string Potions), double> _prices = new();
 
-    private CombatNet(CombatNetFile file, IRunValue value)
+    private CombatNet(CombatNetFile file, IRunValue value, SavesNet? saves)
     {
         _file = file;
         _value = value;
+        _saves = saves;
         _index = file.Vocab.ToDictionary(t => t.Key, t => t.Value.Select((id, i) => (id, i)).ToDictionary(p => p.id, p => p.i));
         // One thread per call: search workers run side by side, and a leaf is one small input.
         using var options = new SessionOptions { IntraOpNumThreads = 1, InterOpNumThreads = 1 };
@@ -69,7 +73,7 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
 
     private CombatNet(CombatNet root, PlayEnvironment env)
     {
-        (_file, _index, _session, _env, _root) = (root._file, root._index, root._session, env, root);
+        (_file, _index, _session, _env, _root, _saves) = (root._file, root._index, root._session, env, root, root._saves);
         _value = root._value.In(env);
     }
 
@@ -85,44 +89,36 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     public double RunValue(RunView run) => _value.Value(run);
 
     /// <summary>
-    /// A fight's end as the engine's searches price it (plans/2026-11-21-1604-fight-score.md, 2.1), in this net's
-    /// environment: what the player carries out of the fight, the HP plus the max HP plus f of each potion kept (the HP
-    /// V says it will save in the fight where it is drunk); a death is 0, which the leaf gives. V is no judge of a fight's
-    /// HP: it learned from its games that a low HP after a boss goes with runs that fought for later, and valued less HP
-    /// higher, so a search that asked it kept the line that lost the most. With a V of before the fight score, which says
-    /// no f, V of the run, until the champion is one of after; then that goes. A run's f is the same at any HP, so it is
-    /// kept by the run without its HP and max HP (<see cref="Saved"/>): each new belt a search meets costs one graph.
+    /// A fight's end as the engine's searches price it (plans/2026-11-21-1655-fight-score-f.md, 2.1), in this net's
+    /// environment: the fight's score, what the player carries out of the fight, the HP plus the max HP plus f of each
+    /// potion kept (the HP it will save in the fight where it is drunk); a death is 0, which the leaf gives. V is no judge
+    /// of a fight's HP: it learned from its games that a low HP after a boss goes with runs that fought for later, and
+    /// valued less HP higher, so a search that asked it kept the line that lost the most. With no f, V of the run, until
+    /// the champions have their f; then that goes. A run's f is the same at any HP, so it is kept by the run without its HP
+    /// and max HP (<see cref="Saved"/>): each new belt a search meets costs one graph.
     /// </summary>
-    public double FightValue(RunView run) =>
-        _says != false && Saved(run) is { } saved ? run.Hp + run.MaxHp + saved : _value.Value(run);
+    public double FightValue(RunView run) => _saves != null ? run.Hp + run.MaxHp + Saved(run, _saves) : _value.Value(run);
 
-    /// <summary>The f of a run's potions, summed, by the run without its HP and max HP; none from a V that says no f.</summary>
-    private double? Saved(RunView run)
+    /// <summary>The f of a run's potions, summed, by the run without its HP and max HP.</summary>
+    private double Saved(RunView run, SavesNet saves)
     {
         if (_lastSaved.Value is var (last, known) && run with { Hp = last.Hp, MaxHp = last.MaxHp } == last) return known;
         ulong key = ProtocolJson.Hash(run with { Hp = 0, MaxHp = 0 });
         if (!_saved.TryGetValue(key, out double saved))
         {
-            if (_value.Saves(run) is not { } each)
-            {
-                _says = false;
-                return null;
-            }
-            _says = true;
             if (_saved.Count >= Kept) _saved.Clear();
-            saved = _saved[key] = each.Sum();
+            saved = _saved[key] = saves.Saves(run, _env).Sum();
         }
         _lastSaved.Value = (run, saved);
         return saved;
     }
 
-    /// <summary>Whether V says f, known from the first fight's end asked about: a V of before says none, and is then
-    /// asked straight away.</summary>
-    private bool? _says;
-
     /// <summary>The f of the runs' potions, summed (<see cref="Saved"/>), and the run a thread last asked about.</summary>
     private readonly ConcurrentDictionary<ulong, double> _saved = new();
     private readonly ThreadLocal<(RunView Run, double Saved)?> _lastSaved = new();
+
+    /// <summary>f's name, which the champion's name shows (none without f).</summary>
+    public string? SavesName => _saves?.Name;
 
     /// <summary>
     /// This leaf reading every state in <paramref name="env"/> (<see cref="CombatTokens.EnvTokens"/>), its endings priced
@@ -130,10 +126,11 @@ public sealed class CombatNet : ICombatLeaf, IDisposable
     /// </summary>
     public ICombatLeaf In(PlayEnvironment env) => env == _env ? this : env == _root._env ? _root : new CombatNet(_root, env);
 
-    /// <summary>The net of a file, its endings priced by <paramref name="value"/>, once it gives every test state the trainer's outcome.</summary>
-    public static CombatNet Load(CombatNetFile file, IRunValue value)
+    /// <summary>The net of a file, its endings priced by <paramref name="value"/>, a fight's end by its score with
+    /// <paramref name="saves"/> (<see cref="FightValue"/>), once it gives every test state the trainer's outcome.</summary>
+    public static CombatNet Load(CombatNetFile file, IRunValue value, SavesNet? saves = null)
     {
-        var net = new CombatNet(file, value);
+        var net = new CombatNet(file, value, saves);
         foreach (var test in file.Tests)
         {
             var outputs = net.Graph(test.Obs, test.History, test.Env is { } env ? Enum.Parse<PlayEnvironment>(env) : PlayEnvironment.SL);

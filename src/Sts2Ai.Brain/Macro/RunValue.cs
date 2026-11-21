@@ -13,8 +13,4 @@ public interface IRunValue
     /// <summary>This V in <paramref name="env"/>: one that reads the environment (<see cref="RunNet"/>) marks its runs
     /// so; another is the same in every environment.</summary>
     IRunValue In(PlayEnvironment env) => this;
-
-    /// <summary>Each potion the run holds, in the belt's order, with the HP this V says it will save in the fight where
-    /// it is drunk (f, <see cref="RunNet.Saves(RunView, PlayEnvironment)"/>); none from a V that does not say.</summary>
-    IReadOnlyList<double>? Saves(RunView run) => null;
 }

@@ -38,39 +38,26 @@ public class CombatNetTests
         public double Value(RunView run) => run.Potions.Count(p => p != null) == held ? 1 : 0;
     }
 
-    /// <summary>A V for the tests that says what each potion will save (f): 3 HP a potion, and counts how often it is asked.</summary>
-    private sealed class Saving : IRunValue
-    {
-        public int Asked;
-        public string Name => "test";
-        public double Value(RunView run) => 0.5;
-
-        public IReadOnlyList<double>? Saves(RunView run)
-        {
-            Interlocked.Increment(ref Asked);
-            return [.. run.Potions.OfType<string>().Select(_ => 3.0)];
-        }
-    }
-
     /// <summary>
-    /// The engine's searches price a fight's end by the fight score (plans/2026-11-21-1604-fight-score.md): with a V that
-    /// says f, the HP plus max HP plus each potion's f, asked once for each run without its HP and max HP; with one that
-    /// does not, V.
+    /// The engine's searches price a fight's end by its score (plans/2026-11-21-1655-fight-score-f.md): with f, the HP
+    /// plus max HP plus each potion's f, the same f at any HP; without f, V.
     /// </summary>
     [Fact]
-    public void AFightsEndIsItsHpAndMaxHpAndItsPotionsWorthWhenVSaysWhatTheySave()
+    public void AFightsEndIsItsHpAndMaxHpAndItsPotionsFWithF()
     {
         var file = ProtocolJson.Deserialize<CombatNetFile>(File.ReadAllText(Fixture));
-        var v = new Saving();
-        using var net = CombatNet.Load(file, v);
+        using var f = SavesNet.Read(SavesNetTests.Fixture);
+        using var net = CombatNet.Load(file, new Linear(), f);
         var run = Fixtures.Floor1() with { Hp = 20, MaxHp = 70, Potions = ["FIRE_POTION", null, "BLOCK_POTION"] };
-        Assert.Equal(20 + 70 + 6, net.FightValue(run));
-        Assert.Equal(55 + 71 + 6, net.FightValue(run with { Hp = 55, MaxHp = 71 }));
-        Assert.Equal(1, v.Asked);  // the same run but for its HP: f is the same
-        Assert.Equal(40 + 70 + 3, net.FightValue(run with { Hp = 40, Potions = ["FIRE_POTION", null, null] }));
-        Assert.Equal(2, v.Asked);  // a new belt: asked once more
-        using var old = CombatNet.Load(file, new Linear());
-        Assert.Equal(new Linear().Value(run), old.FightValue(run));
+        double kept = f.Saves(run, PlayEnvironment.SL).Sum();
+        Assert.True(kept > 0);
+        Assert.Equal(20 + 70 + kept, net.FightValue(run), 9);
+        Assert.Equal(55 + 71 + kept, net.FightValue(run with { Hp = 55, MaxHp = 71 }), 9);
+        var one = run with { Potions = ["FIRE_POTION", null, null] };
+        Assert.Equal(20 + 70 + f.Saves(one, PlayEnvironment.SL).Sum(), net.FightValue(one), 9);
+        Assert.Equal(f.Saves(run, PlayEnvironment.NoSL).Sum(), ((CombatNet)net.In(PlayEnvironment.NoSL)).FightValue(run) - 90, 9);
+        using var plain = CombatNet.Load(file, new Linear());
+        Assert.Equal(new Linear().Value(run), plain.FightValue(run));
     }
 
     /// <summary>The champion's own file: loading checks CombatNet gives its test states the trainer's endings.</summary>

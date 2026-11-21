@@ -167,10 +167,12 @@ internal sealed class LeafArgs
         "the combat net file, which values the search's leaves; pimc and plan need it");
     private readonly Option<string?> _value = Opt.Maybe<string?>("--value",
         "V, a net file: l0 values its options by it, and it prices the combat net's endings; --macro l0 and --combat-net need it");
+    private readonly Option<string?> _saves = Opt.Maybe<string?>("--f-net",
+        "f, a net file: a fight's end is its score, HP + max HP + f of each potion kept, for the combat search; with --combat-net");
 
-    public IEnumerable<Option> Options => [_net, _value];
+    public IEnumerable<Option> Options => [_net, _value, _saves];
 
-    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_net), r.GetValue(_value));
+    public LeafChoice Read(ParseResult r) => LeafChoice.Read(r.GetValue(_net), r.GetValue(_value), r.GetValue(_saves));
 }
 
 /// <summary>--champion FILE for the commands that play a champion: the champion file's options, under the ones given.</summary>

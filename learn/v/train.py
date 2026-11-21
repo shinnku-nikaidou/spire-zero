@@ -1,10 +1,8 @@
 """Train V from self-play, and write its net file for `run --value`.
 
-The samples are v/data.py's: the logged macro decisions of every character with where their runs ended, the next
-combats' HP costs, and what each potion held saved later by the combat net of --combat-net (f's labels, v/saves.py).
-The loss is the hazards' cross-entropy plus the second head's squared errors plus f's; early stopping is on the
-held-out runs' hazards and second head, weighed the same way. The HP-shaped heads and f's (v/net.py) learn at HEAD_LR,
-the rest at LR: they start untrained when a net is carried into this structure (plans/2026-11-21-1604-fight-score.md). A run is valued by its chance to win, the chance to survive every floor; the
+The samples are v/data.py's: the logged macro decisions of every character with where their runs ended and the next
+combats' HP costs. The loss is the hazards' cross-entropy plus the second head's squared errors; early stopping on the
+held-out runs weighs them the same way. A run is valued by its chance to win, the chance to survive every floor; the
 report gives the Brier score of that chance on the held-out decisions against whether their runs were won
 (`brier_held_out`, and `brier_held_out_floor_only` for the training runs' hazards whatever the state), and of the
 held-out decisions that hold a potion, the share V values higher with one potion gone (`potion_below_empty`,
@@ -31,8 +29,7 @@ the change.
 A run is read by the simulator's code (common.Encoder): --encoder is how to start it, the simulator's `encode` at
 the commit that will play the net (`"~/sts2/sim-REV.sh encode"`), or the program src/Sts2Ai.Encode.
 
-    uv run python -m v.train --list PREFIX --name NAME --encoder "SIM encode" --combat-net C.json
-        [--init ../weights/all/CHAMPION.json]
+    uv run python -m v.train --list PREFIX --name NAME --encoder "SIM encode" [--init ../weights/all/CHAMPION.json]
 """
 
 import functools
@@ -52,7 +49,7 @@ import common  # noqa: E402
 import game_ids  # noqa: E402
 from common import LearnError  # noqa: E402
 from v import bootstrap, data, export, potions, spec  # noqa: E402
-from v.net import Batch, Net, aux_loss, hazard_loss, save_loss, win_chance  # noqa: E402
+from v.net import Batch, Net, aux_loss, hazard_loss, win_chance  # noqa: E402
 from weights import out_path  # noqa: E402
 from workers import built  # noqa: E402
 
@@ -62,10 +59,7 @@ FLOORS = 64  # the hazard head's floors, from floor 0
 EPOCHS, PATIENCE = 40, 3  # at most, and without a better held-out loss before stopping
 BATCH = 256  # decisions per step
 LR, WEIGHT_DECAY = 3e-5, 1e-4
-HEAD_LR = 1e-3  # the HP-shaped heads and f's
-HEADS = ("hp_weights.", "hp_scales.", "save_phi.")
 AUX_WEIGHT = 3.0  # the second head's squared errors, per decision
-SAVE_WEIGHT = 1.0  # f's squared errors (in SAVE_SCALE HP), per decision
 
 
 @script.command(help=__doc__)
@@ -73,7 +67,6 @@ def main(
     list_: Annotated[str, typer.Option("--list", help="the list pair PREFIX-logs.txt and PREFIX-recs.txt")],
     name: Annotated[str, typer.Option(help="the net's name, as the champion will show it")],
     encoder: Annotated[str, typer.Option(help="how to start the encoder that reads the runs: \"SIM encode\"")],
-    combat_net: Annotated[str, typer.Option(help="the combat net file that says what each potion saved (f's labels)")],
     out: Annotated[str | None, typer.Option(help="where the file goes (default: weights/all/NAME.json)")] = None,
     init: Annotated[
         str | None,
@@ -105,7 +98,7 @@ def main(
     reader = common.Encoder(encoder)
     if missing := [name for name in spec.STATE if name not in reader.hello["state"]]:
         raise LearnError(f"the encoder knows no {', '.join(missing)} of a run: is it this code's commit?")
-    samples, runs = data.read_runs(logs, records, FLOORS, reader, workers, combat_net)
+    samples, runs = data.read_runs(logs, records, FLOORS, reader, workers)
     reader.close()
     if not frozen and (left := sum(1 for s in samples if "later" in s)):
         logger.info("{} event options whose lines left the room are left out: their labels need --bootstrap", left)
@@ -218,16 +211,14 @@ def main(
         model.eval()
         init_loss, _, init_won_chance = evaluate(model)
         logger.info("the file's held-out loss {:.4f}", init_loss)
-    heads = [p for n, p in model.named_parameters() if n.startswith(HEADS)]
-    rest = [p for n, p in model.named_parameters() if not n.startswith(HEADS)]
-    opt = torch.optim.AdamW([{"params": rest}, {"params": heads, "lr": HEAD_LR}], lr=LR, weight_decay=WEIGHT_DECAY)
+    opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     best, best_state, stale, epochs = math.inf, None, 0, 0
     for epoch in range(max_epochs):
         epochs = epoch + 1
         model.train()
         for b in batches(train, True):
-            logits, aux, saves = model.all(*b.inputs())
-            per_sample = hazard_loss(logits, b) + AUX_WEIGHT * aux_loss(aux, b) + SAVE_WEIGHT * save_loss(saves, b)
+            logits, aux = model.both(*b.inputs())
+            per_sample = hazard_loss(logits, b) + AUX_WEIGHT * aux_loss(aux, b)
             loss = (per_sample * b.weight).sum() / b.weight.sum()
             opt.zero_grad()
             loss.backward()
@@ -255,27 +246,6 @@ def main(
     def brier(chance):
         return float((weights * (chance - won) ** 2).sum() / weights.sum())
 
-    def saves_error():
-        """f's root mean squared error in HP on the held-out potions whose saving is known, and that of each potion id's
-        mean on the training decisions, whatever the run."""
-        known = [(p, v) for s in train for p, v in s.get("saves", []) if v is not None]
-        by_id = {}
-        for p, v in known:
-            by_id.setdefault(p, []).append(v)
-        mean = {p: sum(v) / len(v) for p, v in by_id.items()}
-        overall = sum(v for _, v in known) / max(1, len(known))
-        net_sq, id_sq, n = 0.0, 0.0, 0
-        with torch.no_grad():
-            for b in batches(test, False):
-                f = model.all(*b.inputs())[2]
-                net_sq += float(((f - b.saved) ** 2 * b.saved_mask).sum())
-                n += int(b.saved_mask.sum())
-        for s in test:
-            for p, v in s.get("saves", []):
-                if v is not None:
-                    id_sq += (mean.get(p, overall) - v) ** 2
-        return {"potions": n, "rmse": math.sqrt(net_sq / max(1, n)), "rmse_id_mean": math.sqrt(id_sq / max(1, n))}
-
     report = {
         "runs": len({s["key"] for s in samples}),
         "held_out_runs": len({s["key"] for s in test}),
@@ -290,7 +260,6 @@ def main(
         "brier_held_out_floor_only": brier(base_won_chance),
         # how often V would still throw a potion away: under potions.LIMIT, MacroBrain.Offered goes
         "potion_below_empty": potions.below_empty(potions.by(model, make), test)["share"],
-        "saves_held_out": saves_error(),
         "held_out_loss_by_env": by_env(model),
         "event_samples": event_kinds,
         "held_out_event_loss": event_loss(model),
@@ -304,7 +273,6 @@ def main(
     settings = {
         "floors": FLOORS, "epochs": max_epochs, "patience": PATIENCE, "batch": BATCH, "lr": LR, "weight_decay": WEIGHT_DECAY,
         "aux_weight": AUX_WEIGHT, "dim": Net.DIM, "hidden": Net.HIDDEN, "body": Net.BODY,
-        "head_lr": HEAD_LR, "save_weight": SAVE_WEIGHT, "combat_net": combat_net,
     }  # fmt: skip
     trained = common.trained(list_, start, seed, epochs, settings, reader)
     if fold:
