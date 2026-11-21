@@ -1,81 +1,81 @@
 {
  "source": {
-  "report": "the champion's Silent report (eval/champions/sl.json's reports.SILENT)",
+  "report": "the champion's Silent report",
   "what": "each run's surfaces counts, summed over the report's runs; the example is the SL play of seed 0SSL7NS01MU6 (run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE); card prompts outside combat are the card prompts less those of the combat prompts' brain"
  },
  "runs": 200,
- "won": 61,
+ "won": 166,
  "surfaces": [
   {
    "surface": "combat",
-   "decisions": 111439,
+   "decisions": 137296,
    "runs": 200,
-   "example": 615
+   "example": 616
   },
   {
    "surface": "rewards",
-   "decisions": 11087,
+   "decisions": 15198,
    "runs": 200,
-   "example": 71
+   "example": 85
   },
   {
    "surface": "card_choice",
-   "decisions": 8385,
+   "decisions": 9888,
    "runs": 200,
-   "example": 44
+   "example": 37
   },
   {
    "surface": "map",
-   "decisions": 8054,
+   "decisions": 9205,
    "runs": 200,
    "example": 47
   },
   {
    "surface": "event",
-   "decisions": 3794,
+   "decisions": 4196,
    "runs": 200,
-   "example": 23
+   "example": 18
   },
   {
    "surface": "rest",
-   "decisions": 3131,
-   "runs": 199,
-   "example": 22
+   "decisions": 3515,
+   "runs": 200,
+   "example": 20
   },
   {
    "surface": "card_reward",
-   "decisions": 2497,
+   "decisions": 3045,
    "runs": 200,
-   "example": 15
+   "example": 22
   },
   {
    "surface": "shop",
-   "decisions": 1759,
-   "runs": 192,
-   "example": 11
+   "decisions": 2232,
+   "runs": 193,
+   "example": 12
   },
   {
    "surface": "treasure",
-   "decisions": 574,
-   "runs": 193,
-   "example": 4
+   "decisions": 630,
+   "runs": 198,
+   "example": 3
   },
   {
    "surface": "crystal_sphere",
-   "decisions": 96,
-   "runs": 32,
+   "decisions": 111,
+   "runs": 37,
    "example": 0
   },
   {
    "surface": "bundle",
-   "decisions": 8,
-   "runs": 8,
+   "decisions": 7,
+   "runs": 7,
    "example": 0
   }
  ],
  "card_choice_macro": {
-  "all": 8385,
-  "example": 44
+  "all": 9888,
+  "example": 37
  },
  "example": {
   "seed": "0SSL7NS01MU6",

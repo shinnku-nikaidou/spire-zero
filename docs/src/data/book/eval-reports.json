@@ -1,78 +1,64 @@
 {
  "source": {
   "what": "one report: per floor, where its lost runs died",
-  "report": "the champion's Necrobinder report (eval/champions/sl.json's reports.NECROBINDER)"
+  "report": "the champion's Necrobinder report"
  },
  "report": {
   "env": "SL",
   "ascension": 10,
   "seedSet": "promotion-1-200",
   "runs": 200,
-  "won": 31,
+  "won": 138,
   "bossesReached": [
-   175,
-   122,
-   83
+   193,
+   178,
+   170
   ],
   "bossesBeaten": [
-   133,
-   99,
-   31
+   190,
+   176,
+   138
   ],
   "deaths": {
    "byFloor": [
     {
      "floor": 7,
      "Boss": 0,
-     "Elite": 7,
+     "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
      "floor": 8,
      "Boss": 0,
-     "Elite": 4,
+     "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
      "floor": 9,
      "Boss": 0,
-     "Elite": 2,
+     "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
-     "floor": 11,
+     "floor": 12,
      "Boss": 0,
-     "Elite": 2,
-     "Monster": 1,
+     "Elite": 3,
+     "Monster": 0,
      "outside": 0
     },
     {
-     "floor": 13,
+     "floor": 15,
      "Boss": 0,
      "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
-     "floor": 14,
-     "Boss": 0,
-     "Elite": 3,
-     "Monster": 1,
-     "outside": 0
-    },
-    {
-     "floor": 15,
-     "Boss": 0,
-     "Elite": 4,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
      "floor": 17,
-     "Boss": 42,
+     "Boss": 3,
      "Elite": 0,
      "Monster": 0,
      "outside": 0
@@ -81,20 +67,27 @@
      "floor": 24,
      "Boss": 0,
      "Elite": 1,
-     "Monster": 0,
+     "Monster": 1,
      "outside": 0
     },
     {
      "floor": 25,
      "Boss": 0,
-     "Elite": 1,
+     "Elite": 2,
+     "Monster": 0,
+     "outside": 0
+    },
+    {
+     "floor": 27,
+     "Boss": 0,
+     "Elite": 2,
      "Monster": 1,
      "outside": 0
     },
     {
      "floor": 28,
      "Boss": 0,
-     "Elite": 5,
+     "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
@@ -106,92 +99,64 @@
      "outside": 0
     },
     {
-     "floor": 30,
-     "Boss": 0,
-     "Elite": 1,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
      "floor": 31,
      "Boss": 0,
-     "Elite": 1,
+     "Elite": 3,
      "Monster": 0,
      "outside": 0
     },
     {
      "floor": 33,
-     "Boss": 23,
+     "Boss": 2,
      "Elite": 0,
      "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 38,
-     "Boss": 0,
-     "Elite": 0,
-     "Monster": 1,
-     "outside": 0
-    },
-    {
-     "floor": 39,
-     "Boss": 0,
-     "Elite": 0,
-     "Monster": 1,
      "outside": 0
     },
     {
      "floor": 40,
      "Boss": 0,
-     "Elite": 1,
-     "Monster": 0,
-     "outside": 0
-    },
-    {
-     "floor": 42,
-     "Boss": 0,
      "Elite": 2,
-     "Monster": 1,
+     "Monster": 0,
      "outside": 0
     },
     {
      "floor": 43,
      "Boss": 0,
-     "Elite": 2,
-     "Monster": 1,
-     "outside": 0
-    },
-    {
-     "floor": 44,
-     "Boss": 0,
      "Elite": 1,
      "Monster": 0,
      "outside": 0
     },
     {
+     "floor": 44,
+     "Boss": 0,
+     "Elite": 0,
+     "Monster": 1,
+     "outside": 0
+    },
+    {
      "floor": 45,
      "Boss": 0,
-     "Elite": 2,
-     "Monster": 1,
+     "Elite": 1,
+     "Monster": 0,
      "outside": 0
     },
     {
      "floor": 46,
      "Boss": 0,
      "Elite": 1,
-     "Monster": 2,
+     "Monster": 0,
      "outside": 0
     },
     {
      "floor": 48,
-     "Boss": 23,
+     "Boss": 9,
      "Elite": 0,
      "Monster": 0,
      "outside": 0
     },
     {
      "floor": 49,
-     "Boss": 29,
+     "Boss": 23,
      "Elite": 0,
      "Monster": 0,
      "outside": 0

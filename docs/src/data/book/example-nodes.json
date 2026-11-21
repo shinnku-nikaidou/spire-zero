@@ -87,47 +87,63 @@
     {
      "kind": "decision",
      "surface": "map",
-     "action": "map:1,2",
+     "action": "map:2,2",
      "decision": 26
     }
    ]
   },
   {
    "floor": 3,
-   "point": "Unknown",
+   "point": "Monster",
    "steps": [
     {
      "kind": "arrive",
      "save": "arrival"
     },
     {
-     "kind": "roll",
-     "becomes": "event"
-    },
-    {
-     "kind": "decision",
-     "surface": "event",
-     "action": "event:0",
-     "decision": 27
-    },
-    {
-     "kind": "prompt",
+     "kind": "combat",
+     "encounter": "NIBBITS_WEAK",
+     "hp": 70,
+     "max_hp": 70,
+     "end_hp": 70,
      "decisions": [
-      28,
-      28
+      27,
+      48
      ]
     },
     {
+     "kind": "save",
+     "save": "combat_won"
+    },
+    {
      "kind": "decision",
-     "surface": "event",
-     "action": "proceed",
-     "decision": 29
+     "surface": "rewards",
+     "action": "reward:0",
+     "decision": 49
+    },
+    {
+     "kind": "decision",
+     "surface": "rewards",
+     "action": "reward:1",
+     "decision": 50
+    },
+    {
+     "kind": "decision",
+     "surface": "card_reward",
+     "action": "card:2",
+     "decision": 51
+    },
+    {
+     "kind": "decision",
+     "surface": "rewards",
+     "action": "rewards_done",
+     "decision": 52
     },
     {
      "kind": "decision",
      "surface": "map",
-     "action": "map:1,3",
-     "decision": 30
+     "action": "map:3,3",
+     "decision": 53
     }
    ]
   }

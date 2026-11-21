@@ -71,32 +71,36 @@ def walk() -> dict:
     f = b.feed
 
     with torch.no_grad():
-        cards, ups, numbers = f["cards"][0], f["ups"][0], f["numbers"][0]
-        mods, mod_mask, mod_amounts = f["mods"][0], f["mod_mask"][0], f["mod_amounts"][0]
-        x = (
-            net.cards(cards)
-            + ups[:, None] * net.card_up(cards)
-            + numbers[:, 0:1] * net.card_damage(cards)
-            + numbers[:, 1:2] * net.card_block(cards)
-            + numbers[:, 2:3] * net.card_grown(cards)
-            + ((net.modifiers(mods) + mod_amounts[..., None] * net.mod_amount(mods)) * mod_mask[..., None]).sum(1)
-        )
+        one = {k: t[0:1] for k, t in f.items()}  # the batch of one, as the net's helpers take it
+        x = net.card_x(*(one[k] for k in ("cards", "ups", "mods", "mod_mask", "mod_amounts", "numbers")))[0]
         h = net.phi(x)
         n = len(tok["cards"])
         total = h[:n].sum(0)
         parts = [total / n, total * Net.SUM_SCALE]
         groups = []
         for t, mask_name in spec.BAGS.items():
-            ids, mask = f[t][0], f[mask_name][0]
-            rows = net.bags[t](ids)
-            if t == "relics":
-                rows = rows + f["relic_values"][0][:, 0:1] * net.relic_counter(ids) + f["relic_values"][0][:, 2:3] * net.melted
-                rows = rows + net.relic_status(f["relic_status"][0])
-            g = (rows * mask[:, None]).sum(0)
+            ids, mask = one[t], one[mask_name]
+            rows = net.relic_rows(ids, one["relic_values"], one["relic_status"]) if t == "relics" else net.bags[t](ids)
+            g = (rows * mask[..., None]).sum(1)[0]
             parts.append(g)
             groups.append([t, four(g), norm(g)])
         kept = (net.phi(net.cards(f["held"][0])) * f["held_mask"][0][:, None]).sum(0)
-        z = torch.cat(parts + [f["state"][0], kept])
+        # The event option picked and not yet played out: its key, the cards, relics and potions its button names, and
+        # its numbers, as Body.encoded reads them; all zero for none.
+        p = spec.PEND
+        named = net.card_x(*(one[p + k] for k in ("cards", "ups", "mods", "mod_mask", "mod_amounts", "numbers")))
+        named = named + one[p + "cards_owned"][..., None] * net.pend_card_owned
+        relics = net.relic_rows(one[p + "relics"], one[p + "relic_values"], one[p + "relic_status"])
+        relics = relics + one[p + "relics_owned"][..., None] * net.pend_relic_owned
+        potions = net.bags["potions"](one[p + "potions"]) + one[p + "potions_owned"][..., None] * net.pend_potion_owned
+        event = [
+            (net.pending(one["pending"]) * one["pending_mask"][..., None]).sum(1)[0],
+            (net.phi(named) * one[p + "card_mask"][..., None]).sum(1)[0],
+            (relics * one[p + "relic_mask"][..., None]).sum(1)[0],
+            (potions * one[p + "potion_mask"][..., None]).sum(1)[0],
+            (net.event_vars(one[p + "vars"]) * (one[p + "var_values"] * one[p + "var_mask"])[..., None]).sum(1)[0],
+        ]
+        z = torch.cat(parts + [f["state"][0], kept] + event)
         b1 = net.body[1](net.body[0](z))
         b2 = net.body[3](net.body[2](b1))
         hazards = torch.sigmoid(net.head(b2)).double()
@@ -200,8 +204,9 @@ def walk() -> dict:
         "ascension_scaled": bool(FILE["state"]["std"][spec.STATE.index("ascension")] != 1 or FILE["state"]["mean"][spec.STATE.index("ascension")] != 0),
         "body": {
             "width": int(z.numel()),
-            "parts": [int(p.numel()) for p in parts[:2]] + [len(spec.BAGS), Net.DIM, len(spec.STATE), int(kept.numel())],
+            "parts": [int(q.numel()) for q in parts[:2]] + [len(spec.BAGS), Net.DIM, len(spec.STATE), int(kept.numel()), sum(int(e.numel()) for e in event)],
             "kept_zero": not tok["held"],
+            "event_zero": not any(bool(e.any()) for e in event),
             "b1": [int((b1 > 0).sum()), int(b1.numel())],
             "b2": [int((b2 > 0).sum()), int(b2.numel())],
         },

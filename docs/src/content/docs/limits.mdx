@@ -7,10 +7,10 @@ The earlier chapters describe only what runs today. This chapter lists where the
 
 ## Weaknesses
 
-- **NoSL has not been trained.** The two networks learn only from SL runs. NoSL has no training of its own, no gate and no results, and the networks' values lean optimistic there.
-- **Ascension 10 is uneven.** The champion wins three runs in five there, but the Fool won only 25 of 200, and the Necrobinder 104 of 200.
-- **The networks have not learned the Dread mode.** They read the mode and its dominions, but none of the runs they learned from was played in it, so they value a Dread run as an ordinary one at Ascension 10. The champion won 197 of its 1,199 Dread runs.
-- **Most lost runs die to a boss.** At Ascension 10 that is 373 of the 486 lost runs, two thirds of them at the act 3 boss.
+- **NoSL is far behind SL.** At Ascension 10 the NoSL champion won 120 of 596 runs, the SL champion 892 of 1,200.
+- **Ascension 10 is uneven.** In SL the champion wins three runs in four there, but the Fool won only 88 of 200, and the Necrobinder 138 of 200.
+- **The Dread mode is the hardest.** The SL champion won 314 of its 1,198 Dread runs, the NoSL champion 9 of 598.
+- **Most lost runs die to a boss.** At Ascension 10 in SL that is 235 of the 308 lost runs, three quarters of them at the act 3 boss.
 - **What a decision does more than four floors later comes through another V.** That V learns from whole runs, where hundreds of decisions share one outcome, so a slow consequence it does not see, V does not learn either.
 - **Exploration is mixed into the labels.** A random draw in a decision's next four floors lowers its label, the V that labels the rest learned from runs that explore, and V does not know how much a run explored.
 - **Combat search is narrow.** SL keeps only 8 positions per turn, so a better line may be pushed out, and most plans are not guaranteed to be the best.
@@ -23,7 +23,6 @@ The earlier chapters describe only what runs today. This chapter lists where the
 
 ## Not built yet
 
-- **Training, a gate and results for NoSL.**
 - **Search that looks past the current room.** Today search stops at the room's exit in both environments.
 - **A cheaper combat search.** Start by keeping 1 position per turn and widen round by round, so that easy combats stop early and hard ones get more.
 - **Search results as labels.** Today the labels are the real outcomes of runs and, for V past four floors, the estimate of another V.

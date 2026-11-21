@@ -75,7 +75,8 @@ It builds the site, then `scripts/check.mjs` checks:
   characters and the book of at most 55,000, counted on the Traditional Chinese pages;
 - what the book may not say (below), in the text of every built page and in the site's sources and data under `src/`
   (`.mdx`, `.md`, `.svelte`, `.ts`, `.json`; not the game's names);
-- no tracked file outside `docs/` cites the book (`docs: PAGE §N`);
+- no tracked file outside `docs/` and `plans/` (the working plans, records rather than code) cites the book
+  (`docs: PAGE §N`);
 - the combat net's figure data (`src/data/combat-walk.json`) holds what the test states of the champion's combat net
   file hold (the file `eval/champions/sl.json` names), and V's walk (`src/data/v-walk.json`) ends in the value the
   champion's V file holds for its first test run.

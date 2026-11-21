@@ -145,8 +145,9 @@ if (book > limits.book) errors.push(`the book: ${book} characters in Traditional
 for (const file of sourceFiles(fileURLToPath(new URL('../src/', import.meta.url))))
   lint(relative(root, file), readFileSync(file, 'utf8'));
 
-// No code cites the book (`docs: PAGE §N`): the book holds the design, the code documents itself.
-const tracked = execFileSync('git', ['ls-files', '-z', '--', '.', ':!docs'], { cwd: root, encoding: 'utf8' }).split('\0');
+// No code cites the book (`docs: PAGE §N`): the book holds the design, the code documents itself. The working plans
+// (plans/) are records of how the work went, not code.
+const tracked = execFileSync('git', ['ls-files', '-z', '--', '.', ':!docs', ':!plans'], { cwd: root, encoding: 'utf8' }).split('\0');
 for (const file of tracked.filter(Boolean)) {
   let text;
   try {

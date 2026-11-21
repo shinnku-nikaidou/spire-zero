@@ -8,7 +8,7 @@ import BeamStepper from '../../components/combat/BeamStepper.svelte';
 
 In SL, the environment that allows saving and loading, the AI holds a **copy** of the current room: an identical combat, down to which card is drawn next and what each enemy does next turn. So it does not have to guess. Before the fight starts, it plays the combat through many times on the copy, finds the line with the best outcome, and then follows that line in the real combat.
 
-Below is floor 17 of the book's example run: Ceremonial Beast, the act 1 boss, with the player at 52/70 HP. The AI thought for half a second at the first decision and got a line of 9 turns and 33 actions. It then followed the line all the way and never thought a second time. It ended the combat at 52 HP, without losing any.
+Below is floor 17 of the book's example run: Ceremonial Beast, the act 1 boss, with the player at 68/70 HP. The AI thought for about a second at the first decision and got a line of 11 turns and 44 actions. It then followed the line all the way and never thought a second time. It ended the combat at 68 HP, without losing any.
 
 <PlanTimeline client:visible lang="en" />
 
@@ -26,7 +26,7 @@ So a combat is no longer a gamble but a search for a path: many lines lead from 
 
 When a line has been played out, the player leaves the combat with some HP, some max HP and the potions still on the belt. The line's **score** counts exactly that: HP + max HP + f of each potion kept. **f** is a learned function that says how many HP a potion will save in the combat where it is later drunk. If the combat is lost, the run is over and the score is 0.
 
-So the best line is the one with the highest score once it is played out. It need not lose the least HP or kill the fastest: losing a few HP to keep a potion is the better line whenever the potion's f is larger than the HP it costs. The plan for the boss fight above drinks its one potion on the first turn and ends at 52/70 HP, so it scores 52 + 70 = 122.
+So the best line is the one with the highest score once it is played out. It need not lose the least HP or kill the fastest: losing a few HP to keep a potion is the better line whenever the potion's f is larger than the HP it costs. The plan for the boss fight above drinks its one potion on the second turn and ends at 68/70 HP, so it scores 68 + 70 = 138.
 
 **HP is counted, not judged.** V, the learned function that estimates a run's chance of winning, is not asked here. It learned from whole runs, where the HP left after a fight also says how the run was built: a run that leaves a boss with plenty of HP has often spent less on the strength it needs later. V reads the two together and can rate less HP higher, and a search that asked V would throw HP away for nothing. Counted one for one, more HP always scores more.
 

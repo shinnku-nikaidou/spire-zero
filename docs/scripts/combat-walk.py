@@ -32,10 +32,10 @@ def tokens_of(obs: dict, history: list) -> dict:
 CHAMPION = json.loads((ROOT / "eval/champions/sl.json").read_text())
 FILE = ROOT / CHAMPION["options"]["combat-net"]
 OUT = ROOT / "docs/src/data/combat-walk.json"
-MAIN = 8  # a test state holding one potion (the Defect against the Knowledge Demon, the act 2 boss)
-# The fight with the largest chance of a death (the Fool at 27 of 77 HP against the Waterfall Giant, the act 1 boss), and
-# the lowest HP of the 16 (the Necrobinder at 9 of 69 HP against the Spiny Toad)
-OTHERS = {"danger": 6, "mask": 4}
+MAIN = 10  # a test state holding one potion (the Silent against a Lone Globe Head in act 3, a Ghost in a Jar)
+# The fight with the largest chance of a death (the Necrobinder at 14 of 69 HP against the Aeonglass, the act 3 boss), and
+# the lowest HP of the 16 (the Defect at 3 of 91 HP against the Aeonglass)
+OTHERS = {"danger": 2, "mask": 9}
 LOST_HP = 10  # the sibling state of the search step
 END_HP = 30  # the label's ending: a win at this HP, which the state's file does not hold
 

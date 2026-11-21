@@ -1,219 +1,242 @@
 {
- "source": "the champion's V, weights/all/v11-0-td4.json, tests[0]; vectors show their first four numbers",
+ "source": "the champion's V, weights/all/v-sl-td4-12-1-d2.json, tests[0]; vectors show their first four numbers",
  "run": {
-  "character": "FOOL",
-  "ascension": 3,
-  "floor": 8,
-  "hp": 34,
-  "max_hp": 89,
-  "gold": 147,
-  "deck": 10,
-  "relics": 3,
+  "character": "REGENT",
+  "ascension": 7,
+  "floor": 28,
+  "hp": 69,
+  "max_hp": 80,
+  "gold": 212,
+  "deck": 21,
+  "relics": 5,
   "potions": 0,
-  "slots": 3,
+  "slots": 2,
   "after": "RestSite",
   "entering": false
  },
  "tags": {
   "cards": [
-   "STRIKE_FOOL ×5",
-   "DEFEND_FOOL ×2",
-   "DEFEND_FOOL (NIMBLE)",
-   "FOOLISH_SHOT",
-   "NOCK"
+   "DEFEND_REGENT ×4",
+   "STRIKE_REGENT ×3",
+   "GATHER_LIGHT+ ×2",
+   "SPOILS_OF_BATTLE+ ×2",
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   "BIG_BANG (Exhaust)",
+   "CRUSH_UNDER",
+   "FALLING_STAR+",
+   "GATHER_LIGHT",
+   "GLITTERSTREAM+",
+   "GLOW+",
+   "HEIRLOOM_HAMMER",
+   "REFLECT",
+   "VENERATE+"
   ],
   "damage": [
-   "STRIKE_FOOL 0.30 ×5",
-   "FOOLISH_SHOT 0.75"
+   "STRIKE_REGENT 0.30 ×3",
+   "CRUSH_UNDER 0.40",
+   "FALLING_STAR+ 0.60",
+   "HEIRLOOM_HAMMER 1.00"
   ],
   "block": [
-   "DEFEND_FOOL 0.25 ×2",
-   "DEFEND_FOOL (NIMBLE) 0.25"
+   "DEFEND_REGENT 0.25 ×4",
+   "GATHER_LIGHT+ 0.55 ×2",
+   "GATHER_LIGHT 0.40",
+   "GLITTERSTREAM+ 0.65",
+   "REFLECT 0.75"
   ],
   "grown": [],
-  "modified": 1,
+  "modified": 2,
   "relics": [
-   "SONG_BOW",
-   "PRECISE_SCISSORS",
-   "VENERABLE_TEA_SET"
+   "DIVINE_DESTINY",
+   "LOST_COFFER",
+   "AMETHYST_AUBERGINE",
+   "BELT_BUCKLE",
+   "TOUCH_OF_OROBAS"
   ],
   "counters": [],
   "statuses": {
-   "Normal": 2,
-   "Active": 1
+   "Normal": 5
   },
   "melted": 0,
   "kept": [],
   "potions": [],
   "context": [
-   "character:FOOL",
-   "act:OVERGROWTH",
-   "boss:CEREMONIAL_BEAST_BOSS",
-   "ancient:NEOW"
+   "character:REGENT",
+   "act:HIVE",
+   "boss:THE_INSATIABLE_BOSS",
+   "ancient:OROBAS"
   ],
   "map": [
    "Monster+1",
-   "Treasure+2",
-   "Treasure+2",
-   "Monster+3",
-   "RestSite+3",
-   "Elite+4",
+   "Elite+1",
+   "Monster+2",
+   "Shop+2",
+   "Elite+3",
+   "Elite+3",
    "RestSite+4",
-   "Monster+4",
-   "Unknown+5",
-   "Elite+5",
-   "Monster+5",
-   "Unknown+6",
-   "Shop+6",
-   "Elite+6",
-   "Monster+7",
-   "Unknown+7",
-   "Monster+7",
-   "RestSite+8",
-   "RestSite+8",
-   "RestSite+8",
-   "Boss+9"
+   "RestSite+4",
+   "Boss+5"
   ]
  },
  "lookup": [
   [
-   "DEFEND_FOOL",
-   169
+   "ASCENDERS_BANE",
+   26
   ],
   [
-   "DEFEND_FOOL",
-   169
+   "STRIKE_REGENT",
+   601
   ],
   [
-   "enchant:NIMBLE",
-   18
+   "keyword:Eternal",
+   31
   ],
   [
-   "SONG_BOW",
-   265
+   "DIVINE_DESTINY",
+   71
   ],
   [
-   "character:FOOL",
-   28
+   "character:REGENT",
+   31
   ],
   [
    "Monster+1",
    129
   ],
   [
-   "Treasure+2",
-   277
+   "Elite+1",
+   87
   ]
  ],
  "card_vectors": [
   [
-   "STRIKE_FOOL",
-   "E + 0.30·D",
-   [
-    -0.005,
-    -0.02,
-    0.042,
-    0.018
-   ]
-  ],
-  [
-   "DEFEND_FOOL",
+   "DEFEND_REGENT",
    "E + 0.25·K",
    [
-    0.007,
-    -0.029,
+    -0.002,
+    -0.072,
+    -0.008,
+    0.016
+   ]
+  ],
+  [
+   "STRIKE_REGENT",
+   "E + 0.30·D",
+   [
+    -0.014,
+    -0.008,
+    0.017,
+    0.0
+   ]
+  ],
+  [
+   "GATHER_LIGHT+",
+   "E + U + 0.55·K",
+   [
+    -0.377,
+    -0.306,
+    0.243,
+    -0.008
+   ]
+  ],
+  [
+   "SPOILS_OF_BATTLE+",
+   "E + U",
+   [
+    -0.083,
+    -0.072,
+    0.124,
+    -0.024
+   ]
+  ],
+  [
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   "E + M[keyword:Eternal] + M[keyword:Ethereal] + M[keyword:Unplayable]",
+   [
     0.031,
-    0.023
-   ]
-  ],
-  [
-   "DEFEND_FOOL (NIMBLE)",
-   "E + 0.25·K + M[enchant:NIMBLE] + 0.20·A[enchant:NIMBLE]",
-   [
-    0.049,
-    0.248,
-    0.197,
-    -0.03
-   ]
-  ],
-  [
-   "NOCK",
-   "E",
-   [
-    0.01,
-    -0.017,
-    0.059,
-    0.022
+    -0.044,
+    0.219,
+    0.125
    ]
   ]
  ],
  "phi": [
   [
-   "STRIKE_FOOL",
+   "DEFEND_REGENT",
    [
-    0.088,
-    0.328,
-    0.361,
-    0.129
+    0.101,
+    0.052,
+    0.065,
+    0.0
    ],
-   2.91
+   2.23
   ],
   [
-   "DEFEND_FOOL",
+   "STRIKE_REGENT",
    [
-    0.109,
-    0.139,
+    0.089,
+    0.316,
     0.244,
-    0.052
+    0.07
    ],
-   2.47
+   2.48
   ],
   [
-   "DEFEND_FOOL (NIMBLE)",
+   "GATHER_LIGHT+",
    [
-    0.29,
-    0.147,
-    0.383,
-    0.105
+    0.299,
+    0.0,
+    0.0,
+    0.292
    ],
-   3.11
+   4.12
   ],
   [
-   "NOCK",
+   "SPOILS_OF_BATTLE+",
    [
-    0.083,
-    0.338,
-    0.296,
-    0.107
+    0.47,
+    0.208,
+    0.224,
+    0.407
    ],
-   2.83
+   6.32
+  ],
+  [
+   "ASCENDERS_BANE (Eternal, Ethereal, Unplayable)",
+   [
+    0.179,
+    0.161,
+    0.0,
+    0.032
+   ],
+   4.04
   ]
  ],
  "pool": {
-  "n": 10,
+  "n": 21,
   "mean": [
-   0.158,
-   0.294,
-   0.375,
-   0.148
+   0.233,
+   0.115,
+   0.123,
+   0.145
   ],
   "sum": [
-   0.099,
-   0.184,
-   0.234,
-   0.092
+   0.305,
+   0.15,
+   0.162,
+   0.19
   ]
  },
  "groups": [
   [
    "relics",
    [
-    0.025,
-    0.002,
-    0.251,
-    -0.296
+    0.053,
+    -0.254,
+    0.003,
+    -0.092
    ],
-   1.61
+   1.96
   ],
   [
    "potions",
@@ -228,54 +251,54 @@
   [
    "context",
    [
-    0.154,
-    -0.209,
-    0.194,
-    -0.807
+    0.522,
+    -0.444,
+    -0.294,
+    0.028
    ],
-   2.07
+   2.98
   ],
   [
    "map",
    [
-    3.465,
-    0.808,
-    -1.224,
-    -1.289
+    0.596,
+    0.023,
+    -1.33,
+    -1.0
    ],
-   7.62
+   5.98
   ]
  ],
  "numbers": [
   [
    "floor",
-   8.0,
-   -0.587
+   28.0,
+   1.532
   ],
   [
    "HP",
-   34.0,
-   -1.717
+   69.0,
+   0.424
   ],
   [
    "max HP",
-   89.0,
-   3.511
+   80.0,
+   1.77
   ],
   [
    "gold",
-   147.0,
-   -0.178
+   212.0,
+   0.31
   ],
   [
    "ascension",
-   3.0,
-   3.0
+   7.0,
+   7.0
   ],
   [
    "potion slots",
-   3.0,
-   -0.229
+   2.0,
+   -2.244
   ],
   [
    "auto-win",
@@ -293,70 +316,39 @@
  ],
  "ascension_scaled": false,
  "body": {
-  "width": 1033,
+  "width": 1545,
   "parts": [
    256,
    256,
    4,
    64,
    9,
-   256
+   256,
+   512
   ],
   "kept_zero": true,
+  "event_zero": true,
   "b1": [
-   355,
+   339,
    512
   ],
   "b2": [
-   224,
+   254,
    512
   ]
  },
  "hazards": {
-  "start": 8,
-  "floors": 56,
+  "start": 28,
+  "floors": 36,
   "spans": [
    {
-    "from": 8,
-    "to": 16,
-    "h": [
-     0.0014,
-     0.0098,
-     0.0,
-     0.0477,
-     0.1177,
-     0.0588,
-     0.148,
-     0.1244,
-     0.0
-    ]
-   },
-   {
-    "from": 17,
-    "to": 17,
-    "h": [
-     0.9164
-    ],
-    "boss": true
-   },
-   {
-    "from": 18,
+    "from": 28,
     "to": 32,
     "h": [
-     0.0,
+     0.0001,
      0.0004,
-     0.0028,
-     0.0132,
-     0.028,
-     0.0456,
-     0.1238,
-     0.1012,
-     0.0,
-     0.0959,
-     0.1204,
-     0.0903,
-     0.1091,
-     0.1257,
+     0.0006,
+     0.0024,
      0.0
     ]
    },
@@ -364,7 +356,7 @@
     "from": 33,
     "to": 33,
     "h": [
-     0.7846
+     0.1315
     ],
     "boss": true
    },
@@ -373,18 +365,18 @@
     "to": 47,
     "h": [
      0.0,
-     0.0114,
-     0.0016,
-     0.0091,
-     0.0292,
-     0.0331,
-     0.0621,
+     0.0001,
      0.0,
-     0.0631,
-     0.05,
-     0.0413,
-     0.0793,
-     0.0606,
+     0.0003,
+     0.0005,
+     0.0008,
+     0.0027,
+     0.0,
+     0.0024,
+     0.0027,
+     0.0025,
+     0.0038,
+     0.0084,
      0.0
     ]
    },
@@ -392,7 +384,7 @@
     "from": 48,
     "to": 48,
     "h": [
-     0.7989
+     0.2396
     ],
     "boss": true
    },
@@ -400,8 +392,8 @@
     "from": 49,
     "to": 63,
     "h": [
+     0.0004,
      0.0,
-     0.0042,
      0.0,
      0.0,
      0.0,
@@ -419,21 +411,18 @@
    }
   ],
   "bosses": [
-   17,
    33,
    48
   ]
  },
  "reach": {
-  "17": 0.5834,
-  "33": 0.0198,
-  "48": 0.0027
+  "33": 0.9965,
+  "48": 0.8446
  },
  "beat": {
-  "17": 0.0836,
-  "33": 0.2154,
-  "48": 0.2011
+  "33": 0.8685,
+  "48": 0.7604
  },
- "value": 0.0005,
- "test_value": 0.00054133207018532
+ "value": 0.642,
+ "test_value": 0.6419895092817485
 }

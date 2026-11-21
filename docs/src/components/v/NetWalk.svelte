@@ -117,9 +117,9 @@
     {
       title: w('Join and body', '拼接与主干', '串接與主幹'),
       text: w(
-        `512 + 4 × 64 + 9 + 256 = ${b.width.toLocaleString('en')} numbers, the last 256 the cards the relics keep${b.kept_zero ? ', none here: zeros' : ''}. Then two ReLU layers. Here ${b.b1[0]} of the first layer’s ${b.b1[1]} numbers and ${b.b2[0]} of the second’s are above 0.`,
-        `512 + 4 × 64 + 9 + 256 = ${b.width.toLocaleString('en')} 个数，最后 256 个是遗物保留的牌${b.kept_zero ? '，这里没有，全是零' : ''}。再经过两层 ReLU。这里第一层 ${b.b1[1]} 个数有 ${b.b1[0]} 个大于 0，第二层有 ${b.b2[0]} 个。`,
-        `512 + 4 × 64 + 9 + 256 = ${b.width.toLocaleString('en')} 個數，最後 256 個是遺物保留的牌${b.kept_zero ? '，這裡沒有，全是零' : ''}。再經過兩層 ReLU。這裡第一層 ${b.b1[1]} 個數有 ${b.b1[0]} 個大於 0，第二層有 ${b.b2[0]} 個。`,
+        `512 + 4 × 64 + 9 + 256 + 512 = ${b.width.toLocaleString('en')} numbers: 256 for the cards the relics keep${b.kept_zero ? ', none here: zeros' : ''}, and the last 512 for an event option picked and not yet played out${b.event_zero ? ', none here: zeros' : ''}. Then two ReLU layers. Here ${b.b1[0]} of the first layer’s ${b.b1[1]} numbers and ${b.b2[0]} of the second’s are above 0.`,
+        `512 + 4 × 64 + 9 + 256 + 512 = ${b.width.toLocaleString('en')} 个数：256 个是遗物保留的牌${b.kept_zero ? '，这里没有，全是零' : ''}；最后 512 个是选了还没结算的事件选项${b.event_zero ? '，这里没有，全是零' : ''}。再经过两层 ReLU。这里第一层 ${b.b1[1]} 个数有 ${b.b1[0]} 个大于 0，第二层有 ${b.b2[0]} 个。`,
+        `512 + 4 × 64 + 9 + 256 + 512 = ${b.width.toLocaleString('en')} 個數：256 個是遺物保留的牌${b.kept_zero ? '，這裡沒有，全是零' : ''}；最後 512 個是選了還沒結算的事件選項${b.event_zero ? '，這裡沒有，全是零' : ''}。再經過兩層 ReLU。這裡第一層 ${b.b1[1]} 個數有 ${b.b1[0]} 個大於 0，第二層有 ${b.b2[0]} 個。`,
       ),
       rows: [['z', b.width.toLocaleString('en')], ['b₁', `${b.b1[1]} (${b.b1[0]} > 0)`], ['b₂', `${b.b2[1]} (${b.b2[0]} > 0)`]],
     },

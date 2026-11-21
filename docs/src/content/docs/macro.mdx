@@ -28,7 +28,7 @@ What these decisions have in common: few options, a long reach, cheap to carry o
 
 The hard part is that the effect of a choice shows up only many floors later. A card taken on floor 2 is still in the deck at the act 3 boss. A rest site skipped on floor 43 to fight one more monster may decide whether the run reaches floor 48.
 
-The book's example run has 193 of these decisions, and they all share one result: the run was won.
+The book's example run has 207 of these decisions, and they all share one result: the run was won.
 
 ## Why value the position after the play
 
@@ -48,7 +48,7 @@ V's unit is the chance of winning the run. If two options differ by 0.02, V judg
 - **Card reward**: three cards, or none. A card can be worth less than taking nothing: with one more weak card in the deck, the good cards are drawn less often.
 - **Map**: a few floors before the boss, a monster combat or a rest site. The combat gives gold and a card but costs HP.
 
-The figure below is the map on floor 14 of the example run, with 50/70 HP. Two points are open: V gives the move to the elite room 97.95% and the move to the enemy room 97.00%, so the AI takes on the elite, which also gives a relic. The purple line is the route it intends to follow all the way to the boss.
+The figure below is the map on floor 14 of the example run, with 68/70 HP. Two points are open: V gives the move to the elite room 95.16% and the move to the enemy room 93.87%, so the AI takes on the elite, which also gives a relic. The purple line is the route it intends to follow all the way to the boss.
 
 <MapRoute client:visible lang="en" />
 
@@ -66,4 +66,4 @@ Choosing a path is the exception. Moving to the next point leaves the room, and 
 
 ## When there is no copy
 
-NoSL has no copy, so the AI can only work out the result from what the screen says: add the card, subtract the gold, add the HP healed. What the screen does not say stays hidden, such as the true cost of an event option or what a transform will produce. So the same V makes these decisions more roughly in NoSL.
+NoSL has no copy, so the AI can only work out the result from what the screen says: add the card, subtract the gold, add the HP healed. What the screen does not say stays hidden, such as what a transform will produce. An event option whose result is not on the screen goes to V as picked and not yet played out: which option it is, and the cards, relics, potions and numbers its button names. NoSL's V learns from NoSL's runs what such an option brings, and these decisions stay rougher than on SL's copy.

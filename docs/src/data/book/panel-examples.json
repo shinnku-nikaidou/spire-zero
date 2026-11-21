@@ -4,41 +4,36 @@
   "source": {
    "title": "SL combat",
    "how": "the first decision of a fight: the SL planner plans the fight",
-   "decision": 456,
+   "decision": 626,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c11-0 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v11-0 clone, macro prompts l0 v11-0 clone",
+   "champion": "combat plan c-sl-12-1-d2 + f-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 28 · HP 65/70",
-   "zh-CN": "静默猎手 · A0 · 第 28 层 · HP 65/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 28 層 · HP 65/70"
+   "en": "The Silent · A0 · floor 33 · HP 70/70",
+   "zh-CN": "静默猎手 · A0 · 第 33 层 · HP 70/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 33 層 · HP 70/70"
   },
-  "floor": 28,
-  "hp": 65,
+  "floor": 33,
+  "hp": 70,
   "max_hp": 70,
   "surface": "combat",
   "next": {
-   "en": "Deadly Poison+ → Spiny Toad",
-   "zh-CN": "致命毒药+ → 棘刺蟾蜍",
-   "zh-TW": "致命毒藥+ → 棘刺蟾蜍"
+   "en": "Haze+",
+   "zh-CN": "迷雾+",
+   "zh-TW": "迷霧+"
   },
   "route": false,
   "sub": {
-   "en": "this fight 100% · 65 HP left",
-   "zh-CN": "这场胜率 100% · 剩 65 HP",
-   "zh-TW": "這場勝率 100% · 剩 65 HP"
+   "en": "this fight 100% · 70 HP left",
+   "zh-CN": "这场胜率 100% · 剩 70 HP",
+   "zh-TW": "這場勝率 100% · 剩 70 HP"
   },
   "then": [
    {
-    "en": "Footwork+",
-    "zh-CN": "灵动步法+",
-    "zh-TW": "步法+"
-   },
-   {
-    "en": "Defend",
-    "zh-CN": "防御",
-    "zh-TW": "防禦"
+    "en": "Bubble Bubble+ → Knowledge Demon",
+    "zh-CN": "咕嘟冒泡+ → 知识恶魔",
+    "zh-TW": "咕嘟冒泡+ → 知識惡魔"
    },
    {
     "en": "end turn",
@@ -47,61 +42,61 @@
    }
   ],
   "later": {
-   "en": "6 more turns planned",
-   "zh-CN": "之后还规划 6 回合",
-   "zh-TW": "之後還規劃 6 回合"
+   "en": "8 more turns planned",
+   "zh-CN": "之后还规划 8 回合",
+   "zh-TW": "之後還規劃 8 回合"
   },
   "kind": "fight",
   "options": [
    {
     "name": {
-     "en": "Deadly Poison+ → Spiny Toad",
-     "zh-CN": "致命毒药+ → 棘刺蟾蜍",
-     "zh-TW": "致命毒藥+ → 棘刺蟾蜍"
+     "en": "Haze+",
+     "zh-CN": "迷雾+",
+     "zh-TW": "迷霧+"
     },
-    "value": 0.9914,
+    "value": 141.0617,
     "ci": 0,
     "win": 1,
-    "hp": 65,
+    "hp": 70,
     "rooms": null
    },
    {
     "name": {
-     "en": "Defend",
-     "zh-CN": "防御",
-     "zh-TW": "防禦"
+     "en": "Strike → Knowledge Demon",
+     "zh-CN": "打击 → 知识恶魔",
+     "zh-TW": "打擊 → 知識惡魔"
     },
-    "value": 0.9893,
+    "value": 141.0596,
     "ci": 0,
     "win": 1,
-    "hp": 50,
+    "hp": 70,
     "rooms": null
    }
   ],
-  "brain": "plan c11-0",
-  "seconds": 0.8,
-  "win": 0.9925314106542827,
-  "delta": 0.0005,
+  "brain": "plan c-sl-12-1-d2 + f-sl-12-1-d2",
+  "seconds": 2.1,
+  "win": 0.996965662609741,
+  "delta": -0.0001,
   "recent": [
    {
-    "en": "floor 27 · go to Enemy · 99.3%",
-    "zh-CN": "第 27 层 · 去 敌人 · 99.3%",
-    "zh-TW": "第 27 層 · 去 敵人 · 99.3%"
+    "en": "floor 32 · go to Boss · 99.7%",
+    "zh-CN": "第 32 层 · 去 Boss · 99.7%",
+    "zh-TW": "第 32 層 · 去 頭目 · 99.7%"
    },
    {
-    "en": "floor 27 · leave · 99.2%",
-    "zh-CN": "第 27 层 · 离开 · 99.2%",
-    "zh-TW": "第 27 層 · 離開 · 99.2%"
+    "en": "floor 32 · leave · 99.7%",
+    "zh-CN": "第 32 层 · 离开 · 99.7%",
+    "zh-TW": "第 32 層 · 離開 · 99.7%"
    },
    {
-    "en": "floor 27 · pick Deadly Poison · 99.2%",
-    "zh-CN": "第 27 层 · 选 致命毒药 · 99.2%",
-    "zh-TW": "第 27 層 · 選 致命毒藥 · 99.2%"
+    "en": "floor 32 · pick Accelerant · 99.7%",
+    "zh-CN": "第 32 层 · 选 触媒 · 99.7%",
+    "zh-TW": "第 32 層 · 選 催化劑 · 99.7%"
    },
    {
-    "en": "floor 27 · Smith · 99.2%",
-    "zh-CN": "第 27 层 · 锻造 · 99.2%",
-    "zh-TW": "第 27 層 · 鍛造 · 99.2%"
+    "en": "floor 32 · Smith · 99.7%",
+    "zh-CN": "第 32 层 · 锻造 · 99.7%",
+    "zh-TW": "第 32 層 · 鍛造 · 99.7%"
    }
   ]
  },
@@ -109,32 +104,32 @@
   "source": {
    "title": "NoSL combat",
    "how": "a turn's first decision in the act 3 boss fight: PIMC over 8 worlds",
-   "decision": 693,
+   "decision": 700,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat pimc c11-0 8x300, combat prompts first, macro l0 v11-0, macro prompts l0 v11-0",
+   "champion": "combat pimc c0-nosl-2 + f0-nosl-2 8x300, combat prompts first, macro l0 v0-nosl-2, macro prompts l0 v0-nosl-2",
    "env": "NoSL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 48 · HP 44/70",
-   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 44/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 44/70"
+   "en": "The Silent · A0 · floor 48 · HP 77/77",
+   "zh-CN": "静默猎手 · A0 · 第 48 层 · HP 77/77",
+   "zh-TW": "寂靜獵手 · A0 · 第 48 層 · HP 77/77"
   },
   "floor": 48,
-  "hp": 44,
-  "max_hp": 70,
+  "hp": 77,
+  "max_hp": 77,
   "surface": "combat",
   "next": {
-   "en": "Dodge and Roll+",
-   "zh-CN": "闪躲翻滚+",
-   "zh-TW": "閃躲翻滾+"
+   "en": "Predator+ → Test Subject",
+   "zh-CN": "猎杀者+ → 实验体",
+   "zh-TW": "獵殺者+ → 實驗體"
   },
   "route": false,
   "sub": null,
   "then": [
    {
-    "en": "Haze+",
-    "zh-CN": "迷雾+",
-    "zh-TW": "迷霧+"
+    "en": "Accelerant+",
+    "zh-CN": "触媒+",
+    "zh-TW": "催化劑+"
    },
    {
     "en": "end turn",
@@ -147,24 +142,24 @@
   "options": [
    {
     "name": {
-     "en": "Dodge and Roll+",
-     "zh-CN": "闪躲翻滚+",
-     "zh-TW": "閃躲翻滾+"
+     "en": "Predator+ → Test Subject",
+     "zh-CN": "猎杀者+ → 实验体",
+     "zh-TW": "獵殺者+ → 實驗體"
     },
-    "value": 0.9845,
-    "ci": 0.0011,
+    "value": 120.7103,
+    "ci": 0.7659,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Haze+",
-     "zh-CN": "迷雾+",
-     "zh-TW": "迷霧+"
+     "en": "Accelerant+",
+     "zh-CN": "触媒+",
+     "zh-TW": "催化劑+"
     },
-    "value": 0.9842,
-    "ci": 0.0014,
+    "value": 120.7103,
+    "ci": 0.7659,
     "win": null,
     "hp": null,
     "rooms": null
@@ -175,40 +170,40 @@
      "zh-CN": "打击 → 实验体",
      "zh-TW": "打擊 → 實驗體"
     },
-    "value": 0.9839,
-    "ci": 0.0009,
+    "value": 118.748,
+    "ci": 0.7304,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Deadly Poison+ → Test Subject",
-     "zh-CN": "致命毒药+ → 实验体",
-     "zh-TW": "致命毒藥+ → 實驗體"
+     "en": "Defend",
+     "zh-CN": "防御",
+     "zh-TW": "防禦"
     },
-    "value": 0.9823,
-    "ci": 0.0013,
+    "value": 118.2631,
+    "ci": 0.8326,
     "win": null,
     "hp": null,
     "rooms": null
    },
    {
     "name": {
-     "en": "Peck → Test Subject",
-     "zh-CN": "啄击 → 实验体",
-     "zh-TW": "啄擊 → 實驗體"
+     "en": "Abrasive+",
+     "zh-CN": "磨蚀+",
+     "zh-TW": "磨蝕+"
     },
-    "value": 0.982,
-    "ci": 0.001,
+    "value": 117.4709,
+    "ci": 1.5158,
     "win": null,
     "hp": null,
     "rooms": null
    }
   ],
-  "brain": "pimc c11-0",
-  "seconds": 0.9,
-  "win": 0.9990471885603264,
+  "brain": "pimc c0-nosl-2 + f0-nosl-2",
+  "seconds": 0.1,
+  "win": 0.9988903656036375,
   "delta": -0.0001,
   "recent": [
    {
@@ -217,19 +212,19 @@
     "zh-TW": "第 48 層 · 結束回合"
    },
    {
-    "en": "floor 48 · Defend+",
-    "zh-CN": "第 48 层 · 防御+",
-    "zh-TW": "第 48 層 · 防禦+"
+    "en": "floor 48 · Defend",
+    "zh-CN": "第 48 层 · 防御",
+    "zh-TW": "第 48 層 · 防禦"
    },
    {
-    "en": "floor 48 · end turn",
-    "zh-CN": "第 48 层 · 结束回合",
-    "zh-TW": "第 48 層 · 結束回合"
+    "en": "floor 48 · Defend",
+    "zh-CN": "第 48 层 · 防御",
+    "zh-TW": "第 48 層 · 防禦"
    },
    {
-    "en": "floor 48 · Shiv → Test Subject",
-    "zh-CN": "第 48 层 · 小刀 → 实验体",
-    "zh-TW": "第 48 層 · 小刀 → 實驗體"
+    "en": "floor 48 · Backflip",
+    "zh-CN": "第 48 层 · 后空翻",
+    "zh-TW": "第 48 層 · 後空翻"
    }
   ]
  },
@@ -237,18 +232,18 @@
   "source": {
    "title": "map",
    "how": "a map decision: L0 values each next point with V",
-   "decision": 236,
+   "decision": 291,
    "seed": "0SSL7NS01MU6",
-   "champion": "combat plan c11-0 beam 8x300 easy 4 loss plans 3, combat prompts first, macro l0 v11-0 clone, macro prompts l0 v11-0 clone",
+   "champion": "combat plan c-sl-12-1-d2 + f-sl-12-1-d2 beam 8x300, combat prompts first, macro l0 v-sl-td4-12-1-d2 clone, macro prompts l0 v-sl-td4-12-1-d2 clone",
    "env": "SL"
   },
   "status": {
-   "en": "The Silent · A0 · floor 14 · HP 50/70",
-   "zh-CN": "静默猎手 · A0 · 第 14 层 · HP 50/70",
-   "zh-TW": "寂靜獵手 · A0 · 第 14 層 · HP 50/70"
+   "en": "The Silent · A0 · floor 14 · HP 68/70",
+   "zh-CN": "静默猎手 · A0 · 第 14 层 · HP 68/70",
+   "zh-TW": "寂靜獵手 · A0 · 第 14 層 · HP 68/70"
   },
   "floor": 14,
-  "hp": 50,
+  "hp": 68,
   "max_hp": 70,
   "surface": "map",
   "next": {
@@ -258,9 +253,9 @@
   },
   "route": true,
   "sub": {
-   "en": "win chance 98.0%",
-   "zh-CN": "整局胜率 98.0%",
-   "zh-TW": "整局勝率 98.0%"
+   "en": "win chance 95.2%",
+   "zh-CN": "整局胜率 95.2%",
+   "zh-TW": "整局勝率 95.2%"
   },
   "then": [
    {
@@ -283,7 +278,7 @@
      "zh-CN": "去 精英",
      "zh-TW": "去 菁英"
     },
-    "value": 0.9795,
+    "value": 0.9516,
     "ci": 0,
     "win": null,
     "hp": null,
@@ -299,7 +294,7 @@
      "zh-CN": "去 敌人",
      "zh-TW": "去 敵人"
     },
-    "value": 0.97,
+    "value": 0.9387,
     "ci": 0,
     "win": null,
     "hp": null,
@@ -310,30 +305,30 @@
     ]
    }
   ],
-  "brain": "l0 v11-0 clone",
+  "brain": "l0 v-sl-td4-12-1-d2 clone",
   "seconds": 0.0,
-  "win": 0.9795112378980738,
-  "delta": 0.0022,
+  "win": 0.9516370466016028,
+  "delta": -0.0012,
   "recent": [
    {
-    "en": "floor 14 · proceed · 97.7%",
-    "zh-CN": "第 14 层 · 继续 · 97.7%",
-    "zh-TW": "第 14 層 · 繼續 · 97.7%"
+    "en": "floor 14 · skip the rest, proceed · 95.3%",
+    "zh-CN": "第 14 层 · 跳过其余，继续 · 95.3%",
+    "zh-TW": "第 14 層 · 略過其餘，繼續 · 95.3%"
    },
    {
-    "en": "floor 14 · take Bubble Bubble · 97.7%",
-    "zh-CN": "第 14 层 · 拿 咕嘟冒泡 · 97.7%",
-    "zh-TW": "第 14 層 · 拿 咕嘟冒泡 · 97.7%"
+    "en": "floor 14 · take Deflect · 95.3%",
+    "zh-CN": "第 14 层 · 拿 偏折 · 95.3%",
+    "zh-TW": "第 14 層 · 拿 偏轉 · 95.3%"
    },
    {
-    "en": "floor 14 · open the card reward · 97.7%",
-    "zh-CN": "第 14 层 · 打开卡牌奖励 · 97.7%",
-    "zh-TW": "第 14 層 · 打開卡牌獎勵 · 97.7%"
+    "en": "floor 14 · open the card reward · 95.3%",
+    "zh-CN": "第 14 层 · 打开卡牌奖励 · 95.3%",
+    "zh-TW": "第 14 層 · 打開卡牌獎勵 · 95.3%"
    },
    {
-    "en": "floor 14 · take 13 gold · 97.7%",
-    "zh-CN": "第 14 层 · 拿 13 金币 · 97.7%",
-    "zh-TW": "第 14 層 · 拿 13 金幣 · 97.7%"
+    "en": "floor 14 · take Liquid Memories · 95.3%",
+    "zh-CN": "第 14 层 · 拿 液态记忆 · 95.3%",
+    "zh-TW": "第 14 層 · 拿 液態記憶 · 95.3%"
    }
   ]
  },
@@ -341,9 +336,9 @@
   "source": {
    "command": "run --champion eval/champions/sl.json --env SL --character SILENT --seeds eval/seeds/promotion-1-100.txt --start 12 --n 1 --records FILE --log FILE",
    "seed": "0SSL7NS01MU6",
-   "decision": 236,
+   "decision": 291,
    "floor": 14,
-   "hp": 50,
+   "hp": 68,
    "max_hp": 70,
    "act": 0,
    "act_id": "OVERGROWTH",
@@ -353,7 +348,7 @@
     "map:3,16"
    ]
   },
-  "brain": "l0 v11-0 clone",
+  "brain": "l0 v-sl-td4-12-1-d2 clone",
   "points": [
    {
     "col": 3,
@@ -1097,43 +1092,43 @@
     "row": 1
    },
    {
-    "col": 1,
+    "col": 2,
     "row": 2
    },
    {
-    "col": 1,
+    "col": 3,
     "row": 3
    },
    {
-    "col": 1,
+    "col": 4,
     "row": 4
    },
    {
-    "col": 0,
+    "col": 5,
     "row": 5
    },
    {
-    "col": 1,
+    "col": 6,
     "row": 6
    },
    {
-    "col": 1,
+    "col": 6,
     "row": 7
    },
    {
-    "col": 2,
+    "col": 6,
     "row": 8
    },
    {
-    "col": 1,
+    "col": 6,
     "row": 9
    },
    {
-    "col": 2,
+    "col": 5,
     "row": 10
    },
    {
-    "col": 3,
+    "col": 4,
     "row": 11
    },
    {
@@ -1151,11 +1146,11 @@
   "options": [
    {
     "action": "map:4,14",
-    "value": 0.9795
+    "value": 0.9516
    },
    {
     "action": "map:6,14",
-    "value": 0.97
+    "value": 0.9387
    }
   ],
   "route": [

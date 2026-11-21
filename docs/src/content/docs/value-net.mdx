@@ -21,6 +21,7 @@ It reads these:
 - **Context**: which character, which act, which boss, the game mode and, in the Dread mode, the act's dominion.
 - **The map**: every point in this act that can still be reached.
 - **Nine numbers**: the floor, HP, max HP, gold, the Ascension level, the number of potion slots and so on.
+- **An event option picked and not yet played out**: which option it is, and the cards, relics, potions and numbers its button names. Only NoSL asks V about one, since SL plays the option out on its copy.
 
 It does not read the cost or the numbers printed on a card, the rooms already played, or the maps of the later acts.
 
@@ -44,9 +45,9 @@ The room the run is in now is not counted. Positions recorded in a room all come
 
 ## Joining it up
 
-All of the above is joined into 1,033 numbers, which pass through a network of two layers with 512 units each. Before this point the deck has not seen the relics and the map has not seen the HP. They meet only here.
+All of the above is joined into 1,545 numbers, which pass through a network of two layers with 512 units each. Before this point the deck has not seen the relics and the map has not seen the HP. They meet only here.
 
-The whole network has about 1.22 million weights. The six characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
+The whole network has about 1.51 million weights. The six characters and every Ascension level share one set of weights: the character is a tag and the Ascension level is a number.
 
 ## Why it outputs a risk for each floor
 
@@ -56,7 +57,7 @@ This is easier to learn than outputting the chance of winning directly. Every fl
 
 It also works better than predicting which floor the run will reach. With the floor as the target, V would favour play that reaches the late floors safely and yet never wins.
 
-The figure below takes one real position through the whole network: the Fool at Ascension 3 on floor 8, with 34/89 HP and a rest site ahead. V gives it a 58% chance of reaching the act 1 boss but only an 8% chance of beating it, and the chance of winning the whole run in the end is 0.05%.
+The figure below takes one real position through the whole network: the Regent at Ascension 7 on floor 28, with 69/80 HP, just after a rest site. V gives it an 87% chance of beating the act 2 boss and a 76% chance of beating the act 3 boss once there, and a 64% chance of winning the whole run.
 
 <NetWalk client:visible lang="en" />
 
@@ -70,7 +71,7 @@ The decisions of one run share one outcome, so each sample is weighted by 1 divi
 
 During training the network predicts one more thing: how much HP each of the next six combats will cost. This only gives the network more places in a run where it can check its answers. It is not written into the network file and takes no part in decisions.
 
-The champion's V learned from about 69,000 runs and about 10.6 million samples. On the runs held back for checking, which keep their real outcomes, the error of its predicted chance of winning is 0.083, against 0.144 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
+The SL champion's V learned from about 125,000 runs and about 20.9 million samples. On the runs held back for checking, which keep their real outcomes, the error of its predicted chance of winning is 0.100, against 0.178 for a baseline that knows only the floor. Smaller is better. But this score shows only that V can tell good runs from bad ones. It does not guarantee that V ranks the options of one decision correctly. So in the end, whether a V is good is judged by the results it plays.
 
 ## What it cannot express
 

@@ -302,19 +302,45 @@ export function valueNet(lang: Lang): Diagram {
           },
         ],
       },
+      {
+        title: L(w('Event option', '事件选项', '事件選項')),
+        input: L(w('picked, not yet played out:\nkey · cards · relics ·\npotions · numbers', '选了还没结算的：\n键 · 牌 · 遗物 ·\n药水 · 数字', '選了還沒結算的：\n鍵 · 牌 · 遺物 ·\n藥水 · 數字')),
+        items: [
+          {
+            kind: 'block',
+            label: L(w('Key, relics, potions,\nnumbers: 64 each', '键、遗物、药水、\n数字：各 64', '鍵、遺物、藥水、\n數字：各 64')),
+            tone: 'embed',
+            info: L(w(
+              'The option’s key from a table of its own; the relics and potions its button names as the bags read them, plus a vector when the player already owns one; each number times its name’s vector. Each group summed: 4 × 64 numbers.',
+              '选项的键来自它自己的表；按钮上写的遗物和药水照背包的读法，玩家已拥有时再加一个向量；每个数字乘以它名称的向量。每组相加：4 × 64 个数。',
+              '選項的鍵來自它自己的表；按鈕上寫的遺物和藥水照背包的讀法，玩家已擁有時再加一個向量；每個數字乘以它名稱的向量。每組相加：4 × 64 個數。',
+            )),
+          },
+          {
+            kind: 'block',
+            label: L(w('Its cards: the deck’s φ\n64 → 256 → 256, sum', '它的牌：牌组的 φ\n64 → 256 → 256，求和', '它的牌：牌組的 φ\n64 → 256 → 256，加總')),
+            tone: 'ff',
+            info: L(w(
+              'The cards its button names, read as the deck’s cards are, plus a vector when the player already owns one, through the deck’s φ and added up: 256 numbers. The whole column is zero when no option is pending.',
+              '按钮上写的牌照牌组的牌来读，玩家已拥有时再加一个向量，经过牌组的 φ 后相加：256 个数。没有待结算的选项时，整列为零。',
+              '按鈕上寫的牌照牌組的牌來讀，玩家已擁有時再加一個向量，經過牌組的 φ 後相加：256 個數。沒有待結算的選項時，整列為零。',
+            )),
+          },
+        ],
+      },
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033', '拼接：512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033', '串接：512 + 64 + 64 + 64 + 64 + 9 + 256 = 1,033')),
+      label: L(w('Concatenate: 512 + 4 × 64 + 9 + 256 + 512 = 1,545', '拼接：512 + 4 × 64 + 9 + 256 + 512 = 1,545', '串接：512 + 4 × 64 + 9 + 256 + 512 = 1,545')),
       tone: 'norm',
-      info: L(w('One vector of 1,033 numbers. The parts meet only from here on.', '一个 1,033 个数的向量。各部分从这里才开始相遇。', '一個 1,033 個數的向量。各部分從這裡才開始相遇。')),
+      info: L(w('One vector of 1,545 numbers. The parts meet only from here on.', '一个 1,545 个数的向量。各部分从这里才开始相遇。', '一個 1,545 個數的向量。各部分從這裡才開始相遇。')),
     },
     top: [
       {
         kind: 'repeat',
         times: 'MLP',
         info: L(w('The body: every relation between the parts is worked out here. A second head, used only in training, reads its output too: Linear 512 → 6, not in the net file.', '主干：各部分之间的关系都在这里算出来。训练时另有第二个输出头也读它的输出：线性层 512 → 6，不进网络文件。', '主幹：各部分之間的關係都在這裡算出來。訓練時另有第二個輸出頭也讀它的輸出：線性層 512 → 6，不進網路檔案。')),
-        items: body(lang, 1033),
+        items: body(lang, 1545),
       },
       { kind: 'block', label: L(w('Hazard head\nLinear 512 → 64', '风险值输出头\n线性层 512 → 64', '風險值輸出頭\n線性層 512 → 64')), tone: 'head', info: L(w('One logit per floor, 0 to 63.', '每层一个 logit，0 到 63。', '每層一個 logit，0 到 63。')) },
       {
@@ -425,18 +451,18 @@ export function combatNet(lang: Lang): Diagram {
       },
       {
         title: L(w('The rest', '其余', '其餘')),
-        input: L(w('relics · potions · encounter ·\norbs · allies · 4 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 4 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 4 個數')),
+        input: L(w('relics · potions · encounter ·\norbs · allies · 6 numbers', '遗物 · 药水 · 遭遇 ·\n充能球 · 盟友 · 6 个数', '遺物 · 藥水 · 遭遇 ·\n充能球 · 盟友 · 6 個數')),
         narrow: true,
         items: [
           {
             kind: 'block',
-            label: L(w('4 × 64 + 128 + 4', '4 × 64 + 128 + 4', '4 × 64 + 128 + 4')),
+            label: L(w('4 × 64 + 128 + 6', '4 × 64 + 128 + 6', '4 × 64 + 128 + 6')),
             tone: 'embed',
             info: L(
               w(
-                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 64 each; allies through their own φ, 128; the ascension, orb slots, gold and potion slots, 4.',
-                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 64；盟友经自己的 φ，128；进阶、充能球栏位、金币和药水栏位，4。',
-                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 64；盟友經自己的 φ，128；晉階、充能球欄位、金幣和藥水欄位，4。',
+                'Relics (id, counter, melted and status), potions, the context (the encounter and the character; act and room read as unknown) and orbs (id, passive, evoke and place in the queue), 64 each; allies through their own φ, 128; the ascension, orb slots, gold, potion slots, arrows and arrow slots, 6.',
+                '遗物（id、计数、熔化和状态）、药水、上下文（遭遇和角色；幕和房间读作未知）和充能球（id、被动值、激发值和队列中的位置），各 64；盟友经自己的 φ，128；进阶、充能球栏位、金币、药水栏位、箭矢和箭矢栏位，6。',
+                '遺物（id、計數、熔化和狀態）、藥水、上下文（遭遇和角色；幕和房間讀作未知）和充能球（id、被動值、激發值和佇列中的位置），各 64；盟友經自己的 φ，128；晉階、充能球欄位、金幣、藥水欄位、箭矢和箭矢欄位，6。',
               ),
             ),
           },
@@ -445,12 +471,12 @@ export function combatNet(lang: Lang): Diagram {
     ],
     merge: {
       kind: 'block',
-      label: L(w('Concatenate: 512 + 256 + 128 + 8 + 388 = 1,292', '拼接：512 + 256 + 128 + 8 + 388 = 1,292', '串接：512 + 256 + 128 + 8 + 388 = 1,292')),
+      label: L(w('Concatenate: 512 + 256 + 128 + 8 + 390 = 1,294', '拼接：512 + 256 + 128 + 8 + 390 = 1,294', '串接：512 + 256 + 128 + 8 + 390 = 1,294')),
       tone: 'norm',
-      info: L(w('One vector of 1,292 numbers.', '一个 1,292 个数的向量。', '一個 1,292 個數的向量。')),
+      info: L(w('One vector of 1,294 numbers.', '一个 1,294 个数的向量。', '一個 1,294 個數的向量。')),
     },
     top: [
-      ...body(lang, 1292),
+      ...body(lang, 1294),
       {
         kind: 'block',
         label: L(w('Endings head\n512 → 51', '结局输出头\n512 → 51', '結局輸出頭\n512 → 51')),

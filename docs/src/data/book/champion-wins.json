@@ -9,37 +9,37 @@
    "character": "IRONCLAD",
    "ascension": 10,
    "runs": 200,
-   "won": 172
-  },
-  {
-   "character": "SILENT",
-   "ascension": 10,
-   "runs": 200,
-   "won": 151
+   "won": 181
   },
   {
    "character": "DEFECT",
    "ascension": 10,
    "runs": 200,
-   "won": 146
+   "won": 169
+  },
+  {
+   "character": "SILENT",
+   "ascension": 10,
+   "runs": 200,
+   "won": 166
   },
   {
    "character": "REGENT",
    "ascension": 10,
    "runs": 200,
-   "won": 116
+   "won": 150
   },
   {
    "character": "NECROBINDER",
    "ascension": 10,
    "runs": 200,
-   "won": 104
+   "won": 138
   },
   {
    "character": "FOOL",
    "ascension": 10,
    "runs": 200,
-   "won": 25
+   "won": 88
   }
  ]
 }

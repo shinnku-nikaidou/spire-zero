@@ -29,7 +29,7 @@ At every decision outside combat, with probability ε the AI draws one option ev
 
 - **Why draw evenly.** Which option is drawn depends neither on V nor on how well the run is going. Only then are the outcomes clean evidence about each option. A draw weighted by V's preferences would only retry, again and again, what V already likes.
 - **Why also a sharp draw.** Where V rates two options almost alike, it cannot tell which is better, and trying the other one costs almost nothing.
-- **Why three tiers.** A batch of runs is split evenly into three tiers, with ε at 0.06, 0.03 and 0.01. Runs with a large ε see more options, and only runs with a small ε reach the late floors as often as the champion does.
+- **Why three tiers.** A batch of runs is split evenly into three tiers, with ε at 0.06, 0.03 and 0.01 in SL, and twice as high in NoSL. Runs with a large ε see more options, and only runs with a small ε reach the late floors as often as the champion does.
 - **The cost.** Exploration loses runs: the more a tier explores, the fewer runs it wins.
 
 There is no exploration in combat: the AI plays whatever search finds.
@@ -43,7 +43,7 @@ The V that labels a run must never have seen it. A V learns its training runs' o
 
 ## Hundreds of decisions, one outcome
 
-The example run has 193 decisions outside combat, and they share one outcome. Labels like this have no bias but a lot of noise: from one run alone, nobody can say which decision caused the win or the loss. The project does five things about this at present:
+The example run has 207 decisions outside combat, and they share one outcome. Labels like this have no bias but a lot of noise: from one run alone, nobody can say which decision caused the win or the loss. The project does five things about this at present:
 
 - **Labels are given by floor.** Every floor survived is information, not just the final win or loss.
 - **Four floors of what happened, then an estimate.** The luck after a decision's next four floors stays out of its label, so decisions four floors apart share little of their noise: a run gives about 9.6 independent labels, where its outcome alone gives about 1.2. The price is that, past four floors, a label is only as right as the V that gives it.
@@ -57,7 +57,7 @@ Training continues from the champion's weights and does not start from zero. On 
 
 Older batches are a trade-off. Runs played by a weaker champion give a position a label that is too low: the current champion, playing on from there, would win more often. But a network that learns from the newest batch alone forgets the positions that only the older runs reach.
 
-The champion's two networks learned from the newest batch together with the two before it, about 69,000 runs.
+The SL champion's two networks learned from the newest batch together with the three before it, about 125,000 runs. NoSL's pair began from SL's and learned from NoSL's own runs, its newest batch alone, about 72,000 runs.
 
 ## Training seeds and test seeds never meet
 

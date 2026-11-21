@@ -48,10 +48,9 @@ PLAY = {
 # The decisions the figures show, by decision_id in the plays' logs; each is checked where it matters. After a promotion
 # the plays differ: pick them again with the same intent.
 PLAN_FIGHT = 17  # PlanTimeline: the floor of the SL fight, the act 1 boss (one enemy, as the figure's bars expect)
-PANEL_SL = 456  # PanelMock: the first decision of an SL fight with two first actions kept, both won (no boss fight keeps two)
-PANEL_NOSL = 693  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
-PANEL_MAP = 236  # PanelMock and MapRoute: an SL map decision of two options, an enemy or an elite
-LOG_LINES = {"combat": 4, "card prompt": 1, "rest": 67}  # DecisionLog: one line of each kind
+PANEL_SL = 626  # PanelMock: the first decision of an SL fight with two first actions kept, both won (the act 2 boss)
+PANEL_NOSL = 700  # PanelMock: a turn's first decision in the NoSL run's act 3 boss fight, after an end turn
+PANEL_MAP = 291  # PanelMock and MapRoute: an SL map decision of two options, an enemy or an elite
 
 
 def lines(path: Path) -> list[dict]:
@@ -310,6 +309,8 @@ def macro_action(lang: str, play: Play, k: int) -> str:
             return T(lang, "take {0} gold", after["gold"] - view["gold"])
         case ("rewards", _) if added("relics"):
             return T(lang, "take {0}", NAMES[lang]["relic"][added("relics")[0]["id"]])
+        case ("rewards", _) if [x for x in added("potions") if x]:
+            return T(lang, "take {0}", NAMES[lang]["potion"][next(x for x in added("potions") if x)])
         case ("card_reward", _) if added("deck"):
             return T(lang, "take {0}", card(lang, added("deck")[0]))
         case ("treasure", _) if added("relics"):

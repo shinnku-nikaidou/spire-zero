@@ -7,7 +7,7 @@ import OutcomeHead from '../../components/combat/OutcomeHead.svelte';
 
 Search often stops inside a combat that is not over, and it then needs to know what the current position is worth. The **combat net** reads the position and predicts how the combat will end: death, or a win, with how much more HP lost and whether the potions in hand are still there. Each ending is scored by what the player carries out of the combat: HP + max HP + f of each potion kept, where **f** is a small network that says how many HP a potion will save in a later combat. The scores are weighted by probability. The combat net says only what will happen; what that is worth is counted from it.
 
-The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 6 against the Waterfall Giant, the act 1 boss, the Fool has 27/77 HP left and only Strikes and Defends in hand: the net is all but sure that it dies.
+The figure below shows its predictions on 16 real positions. The red bar is the chance of death, the other 50 bars are the endings of a win, and the grey ones cannot happen. For example, on turn 5 against the Aeonglass, the act 3 boss, the Necrobinder has 14/69 HP left: the net gives it about a four in five chance of dying.
 
 <OutcomeHead client:visible lang="en" />
 
@@ -21,7 +21,7 @@ The net reads what the player can see at the start of a turn:
 - **Enemies**: who each one is, its HP, Block and current intent, plus the intents it showed over the previous three turns.
 - **The rest**: relics, potions, which character is playing, which encounter this is, the Ascension level and, in the Dread mode, the dominion over this combat.
 
-It does not read the draw order, the random numbers or the enemies' queued next moves. So its values cannot leak anything hidden, and the same net can be used in both environments.
+It does not read the draw order, the random numbers or the enemies' queued next moves. So its values cannot leak anything hidden, and a net of the same structure serves both environments.
 
 It does not read the numbers printed on a card either. That Strike deals 6 damage is something the net learns by itself from "this card is Strike". No field in the input says whether a card is good or bad.
 
@@ -56,9 +56,9 @@ HP is counted as it is and not judged by V, the network that values a whole run.
 
 ## How it learns
 
-A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the champion uses learned from about 69,000 runs and about 6.55 million turns. One run in five is held back from learning and used only for checking.
+A sample is the start of each turn in self-play, and its label is how that combat really ended. The net the SL champion uses learned from about 125,000 runs and about 12.6 million turns. One run in five is held back from learning and used only for checking.
 
-On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.94. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.71. The death rate it predicts is 6.34%, and the real one is 5.93%.
+On the runs held back for checking, among positions from the same encounter and the same turn, the net tells death from survival with a score of about 0.94. On this score 1 is perfect, 0.5 is guessing, and looking at HP alone gives 0.72. The death rate it predicts is 4.70%, and the real one is 4.81%.
 
 ## What a potion kept is worth
 
@@ -74,5 +74,4 @@ f starts from the champion V's layers and learned from about 125,000 runs. On th
 
 - **Only HP, max HP and potions are scored.** Gold stolen in the combat or a card grown in it is not part of an ending's score.
 - **Cards cannot see each other.** Each card is computed by itself before the sum, so how two cards work together can be learned only by the two layers that follow.
-- **It learns SL's endings.** Every run it was trained on was played in SL, so in NoSL it estimates as if a stronger player were playing.
 - **Where it is wrong, f is wrong too.** f's labels are this net's own estimates.

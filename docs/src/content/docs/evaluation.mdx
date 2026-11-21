@@ -13,22 +13,22 @@ SL environment, Ascension 10, on the test seeds:
 
 | Character | Runs | Wins | 95% interval of the win rate |
 |---|---|---|---|
-| The Ironclad | 200 | 172 | 80.5–90.1% |
-| The Silent | 200 | 151 | 69.1–80.9% |
-| The Defect | 200 | 146 | 66.5–78.7% |
-| The Regent | 200 | 116 | 51.1–64.6% |
-| The Necrobinder | 200 | 104 | 45.1–58.8% |
-| The Fool | 200 | 25 | 8.6–17.8% |
+| The Ironclad | 200 | 181 | 85.6–93.8% |
+| The Defect | 200 | 169 | 78.8–88.9% |
+| The Silent | 200 | 166 | 77.2–87.6% |
+| The Regent | 200 | 150 | 68.6–80.5% |
+| The Necrobinder | 200 | 138 | 62.3–75.0% |
+| The Fool | 200 | 88 | 37.3–50.9% |
 
-Together that is 714 wins in 1,200 runs, 60%. At Ascension 0 it won 1,162 of 1,200 runs, and in the Dread mode 197 of 1,199, 16%. NoSL has no results yet.
+Together that is 892 wins in 1,200 runs, 74%. At Ascension 0 it won 1,186 of 1,200 runs, and in the Dread mode 314 of 1,198, 26%. In NoSL, on 100 seeds with each character, the NoSL champion won 120 of 596 runs at Ascension 10, 20%, 537 of 596 at Ascension 0 and 9 of 598 in the Dread mode.
 
-The interval means this: with 172 wins in 200 runs, the true win rate may lie anywhere between 81% and 90%. That is all 200 runs can say. In the figure below you can enter your own number of runs. When wins are very few, the textbook formula gives a win rate below 0, so this book uses another formula that never leaves the range.
+The interval means this: with 181 wins in 200 runs, the true win rate may lie anywhere between 86% and 94%. That is all 200 runs can say. In the figure below you can enter your own number of runs. When wins are very few, the textbook formula gives a win rate below 0, so this book uses another formula that never leaves the range.
 
 <WilsonInterval client:visible lang="en" />
 
 ## Where it loses
 
-At Ascension 10 the six characters lost 486 runs in all. Of these, 373 died to a boss, 248 of them to the act 3 boss. 76 died to elites and 37 to ordinary monsters, and not one run was lost outside combat. The figure below shows the Necrobinder's 200 runs.
+At Ascension 10 the six characters lost 308 runs in all. Of these, 235 died to a boss, 179 of them to the act 3 boss. 60 died to elites and 13 to ordinary monsters, and not one run was lost outside combat. The figure below shows the Necrobinder's 200 runs.
 
 <DeathsByFloor client:visible lang="en" />
 
@@ -41,7 +41,7 @@ Without this pairing, the comparison would rest on two independent batches of ru
 ## The gate
 
 1. **Both sides play again, on the same version of the code.** The champion's earlier results are not used for the comparison. An older version of the code played those, and comparing against them would credit the new networks with improvements in the code.
-2. **At Ascension 0, at Ascension 10 and in the Dread mode, 200 seeds with every character; no exploration.** The two sides play 7,200 runs in total.
+2. **At Ascension 0, at Ascension 10 and in the Dread mode, 200 seeds with every character in SL and 100 in NoSL; no exploration.** In SL the two sides play 7,200 runs in total.
 3. **Each pair is scored.** New wins and old loses scores +1, old wins and new loses scores −1, and anything else scores 0.
 4. **The lower bound is computed.** For each of the three, take the mean of its pairs and subtract 1.645 times the standard error. A result above 0 is the case for putting the new pair in.
 
