@@ -3,13 +3,14 @@
 # Played by the bundle v-sl-silent-0 (sl-silent-g0.bundle.json beside this file): d2's V with SILENT's 30 card ids reset
 # to about a site-B card (eval/resets/2026-11-22-cards.toml; the user: "这113 張卡 得重置 啊"), d2's combat net and f.
 # Every fight at xhigh (the user: "這個xhigh之後用於訓練用的"). The shiv family favored on 20 % of the runs, nothing on
-# 70 %, the poison family refused on 10 % (the user: "20%的對局具有小刀傾向, 70%的對局不管, 10%的對局屏蔽掉毒"; the bonus
-# 0.2, the user on 2026-11-20: "用 0.2"). The untouched runs at the last SL dataset's tiers, the tilted ones at a low
-# epsilon so that their decks take shape (plans/2026-11-20-1231-silent-shiv-poison.md 2.3).
+# 75 %, the poison family refused on 5 % (the user: "20 / 75 / 5 分成小刀傾向、不管、不拿毒"; the bonus 0.2, the user on
+# 2026-11-20: "用 0.2"). Epsilon and tau as before (the user: "epeslone和 tau 和以前一样"): the untouched runs at the last
+# SL dataset's tiers, the tilted ones at a low epsilon so that their decks take shape
+# (plans/2026-11-20-1231-silent-shiv-poison.md 2.3).
 # A10 13,400, the Dread mode 13,400, A0-A9 13,200 (1,320 each): 40,000 runs (the user: "共40,000 局").
 #
-# A draft: the bundle names weights/all/v-sl-silent-0.json, which box.py launch takes from this checkout (it refuses a
-# net it lacks); the untouched runs' tiers are still the user's to give (the plan's 11).
+# The bundle names weights/all/v-sl-silent-0.json, which box.py launch takes from this checkout and sends through the hub
+# (it refuses a net it lacks; the net is not on the GitHub release).
 name = "sl-silent-g0"
 deadline = "+96h"                   # box.py deadline sl-silent-g0 UNTIL moves it; about 85 h of the pool at xhigh
 priority = 0
@@ -40,7 +41,7 @@ mode = "dread"
 auto_win = []
 effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
 
-# Each place split 20 / 70 / 10, a row each: the shiv tilt, the untouched runs (the file's tiers), the poison refused.
+# Each place split 20 / 75 / 5, a row each: the shiv tilt, the untouched runs (the file's tiers), the poison refused.
 [[runs]]
 game = "full"
 asc = 10
@@ -50,12 +51,12 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 [[runs]]
 game = "full"
 asc = 10
-n = 9380
+n = 10050
 
 [[runs]]
 game = "full"
 asc = 10
-n = 1340
+n = 670
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
 
 [[runs]]
@@ -67,12 +68,12 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 [[runs]]
 game = "dread"
 asc = 10
-n = 9380
+n = 10050
 
 [[runs]]
 game = "dread"
 asc = 10
-n = 1340
+n = 670
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
 
 [[runs]]
@@ -84,10 +85,10 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["shiv"], favor_by = 0.2 }]
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [924, 924, 924, 924, 924, 924, 924, 924, 924, 924]
+n = [990, 990, 990, 990, 990, 990, 990, 990, 990, 990]
 
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [132, 132, 132, 132, 132, 132, 132, 132, 132, 132]
+n = [66, 66, 66, 66, 66, 66, 66, 66, 66, 66]
 explore = [{ epsilon = 0.01, tau = 0.01, refuse = ["poison"] }]
