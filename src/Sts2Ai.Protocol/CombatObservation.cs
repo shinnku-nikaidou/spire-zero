@@ -159,8 +159,9 @@ public sealed record RelicView
 public sealed record CreatureView
 {
     public required uint? Uid { get; init; }
-    /// <summary>The monster's id; null for a creature that is not a monster.</summary>
-    public required string? Id { get; init; }
+    /// <summary>The monster's id; null for a creature that is not a monster (a teammate in a co-op combat), which the
+    /// JSON leaves out.</summary>
+    public string? Id { get; init; }
     public required int Hp { get; init; }
     public required int MaxHp { get; init; }
     public required int Block { get; init; }

@@ -233,6 +233,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         var me = run != null ? LocalContext.GetMe(run) : null;
         // A run of more than one player is NoSL's (no clone holds the others' choices), and the AI only advises in it.
         _coop = run is { Players.Count: > 1 };
+        panel.Coop = _coop;
         if (_coop && _goal != Goal.Off) Stop(L10n.T("advice only in multiplayer"));
         var env = _coop ? PlayEnvironment.NoSL : settings.Env;
         if (env != _env) Switch(env);
@@ -522,7 +523,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
             : _goal == Goal.Auto ? (L10n.T("Auto on"), Tone.Plain)
             : _goal != Goal.Off ? (L10n.T("Acting"), Tone.Plain)
             : (L10n.T("Your move"), Tone.Plain);
-        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent], _coop);
+        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent]);
     }
 
     /// <summary>The line under the next action: V's chance to win after it, or how the fight is expected to end.</summary>
