@@ -28,6 +28,11 @@ internal sealed partial class Assist
     /// and <see cref="Settings.Multiplayer"/> (<c>ai mp always</c>) off, the mod sits out such a run.</summary>
     public static bool Multiplayer { get; set; }
 
+    /// <summary>The console's hidden <c>ai mp sl</c> (the user, 2026-11-22: 得有一個隱藏的指令開啟 ai mp sl, 不然就是nosl): a run
+    /// of more than one player plays the panel's environment, SL included, until the game closes or <c>ai mp nosl</c>;
+    /// off, such a run is NoSL's whatever the panel says.</summary>
+    public static bool CoopSl { get; set; }
+
     // ---- the decisions asked ----
 
     /// <summary>A decision asked of the brain, with what a query needs to ask it again.</summary>
@@ -50,7 +55,7 @@ internal sealed partial class Assist
             : null;
         int round = asking.Obs.Screen is CombatScreen combat ? combat.Combat.Round : -1;
         _requests.AddLast(new Request(decision, key, node != null ? NodeRecord.Steps : null, node,
-            new RunHeader(_run!, me.Character.Id.Entry, run.AscensionLevel), round));
+            new RunHeader(_run!, me.Character.Id.Entry, run.AscensionLevel, run.Players.Count), round));
         if (_requests.Count > KeptRequests) _requests.RemoveFirst();
         Checked(asking, run.TotalFloor);
     }
@@ -81,8 +86,9 @@ internal sealed partial class Assist
     {
         if (!_connected) throw new AiError("no brain is running");
         bool sl = env == PlayEnvironment.SL;
-        if (sl && request.Node == null)
-            throw new AiError("no SL clone of this decision: SL's questions need the room's checkpoint (one player, the record whole)");
+        // A co-op run has no record: SL asks it without a clone.
+        if (sl && request.Node == null && request.Header.Players == 1)
+            throw new AiError("no SL clone of this decision: SL's questions need the room's checkpoint (the record whole)");
         var decision = request.Decision with { Legal = legal ?? request.Decision.Legal, Trace = sl ? request.Trace : null };
         long id = ++_queryId;
         var settings = Settings.Current;

@@ -11,6 +11,9 @@
 //!    first line of the record's hidden.txt, and so does the world after its action.
 //!  - `begin`: a combat written out as it began (opening.export.json) begun in the engine (`sz_world_begin`), its
 //!    start's prompts answered as the game's were, shows the combat's first record, and is carried through the combat.
+//!  - `alone`: in a co-op combat, every record with an export, and the opening, taken in as SL's world with the other
+//!    players killed (`sz_world_alone`): none of them alive, the local player as the record shows them, and the combat
+//!    played on from there.
 
 mod support;
 
@@ -45,6 +48,14 @@ impl World {
     fn begin(export: &[u8]) -> Result<World, String> {
         match unsafe { ffi::sz_world_begin(export.as_ptr(), export.len()) } {
             0 => Err(format!("error: sz_world_begin: {}", last_error())),
+            world => Ok(World(world)),
+        }
+    }
+
+    /// SL's world of a co-op combat, the other players killed (`sz_world_alone`).
+    fn alone(export: &[u8], opening: bool) -> Result<World, String> {
+        match unsafe { ffi::sz_world_alone(export.as_ptr(), export.len(), opening as i32) } {
+            0 => Err(format!("error: sz_world_alone: {}", last_error())),
             world => Ok(World(world)),
         }
     }
@@ -444,4 +455,109 @@ fn begin() {
         tally
     })
     .finish("begin");
+}
+
+/// The other players in an observation (allies with no monster id), as (alive, the observation's text of them).
+fn teammates_of(observation: &serde_json::Value) -> Vec<bool> {
+    observation["allies"]
+        .as_array()
+        .map(|allies| allies.iter().filter(|a| a.get("id").is_none()).map(|a| a["hp"].as_i64().unwrap_or(0) > 0).collect())
+        .unwrap_or_default()
+}
+
+/// The alone check: in a co-op combat (another player among the record's allies), each record with an export taken in
+/// as SL's world with the other players killed (`sz_world_alone`): none of them alive, the local player as the record
+/// shows them (`player` and `hand`), and from the first such record (and from the opening, begun with its start's
+/// prompts answered as the game's were), the combat played on: a prompt's first answer, else the turn ended (which must
+/// reach a later round, a prompt or the combat's end), up to 40 steps or the combat's end, each step through
+/// `sz_world_step`. A combat of one player is skipped.
+#[test]
+fn alone() {
+    fn observe(world: &World) -> Result<serde_json::Value, String> {
+        serde_json::from_slice(&world.text("sz_world_observe", ffi::sz_world_observe)?).map_err(|e| e.to_string())
+    }
+    fn holds(world: &World, shown: Option<&serde_json::Value>) -> Result<(), String> {
+        let observation = observe(world)?;
+        if teammates_of(&observation).iter().any(|&alive| alive) {
+            return Err(format!("a teammate alive: {}", observation["allies"]));
+        }
+        if observation["player"]["hp"].as_i64().unwrap_or(0) <= 0 {
+            return Err("the local player is dead".into());
+        }
+        if let Some(shown) = shown {
+            for field in ["player", "hand"] {
+                if observation[field] != shown[field] {
+                    return Err(format!("{field}: {} != {}", observation[field], shown[field]));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn play_on(mut world: World) -> Result<usize, String> {
+        for steps in 0..40 {
+            if world.status()? != 0 {
+                return Ok(steps);
+            }
+            let legal = String::from_utf8_lossy(&world.text("sz_world_legal", ffi::sz_world_legal)?).into_owned();
+            let shown = observe(&world)?;
+            let prompt = !shown["prompt"].is_null();
+            let action = if !prompt && legal.lines().any(|l| l == "end_turn") { "end_turn".to_string() }
+                else { legal.lines().next().ok_or("no legal action")?.to_string() };
+            world = world.step(&action).map_err(|e| format!("step {steps} ({action}): {e}"))?;
+            // The turn's end moves the combat on: to a later round, a prompt, or its end.
+            if action == "end_turn" && world.status()? == 0 {
+                let after = observe(&world)?;
+                if after["prompt"].is_null() && after["round"].as_i64() <= shown["round"].as_i64() {
+                    return Err(format!("step {steps}: the turn's end left the combat at round {}", after["round"]));
+                }
+            }
+        }
+        Ok(40)
+    }
+    sweep(|fixture| {
+        let mut tally = Tally::default();
+        let mut first = true;
+        for k in 0..fixture.records.len() {
+            if !fixture.has_export(k) {
+                tally.skipped += 1;
+                continue;
+            }
+            let shown: serde_json::Value = serde_json::from_slice(&fixture.bytes(k, "observation.json")).expect("observation.json");
+            if teammates_of(&shown).is_empty() {
+                tally.skipped += fixture.records.len() - k;
+                return tally;
+            }
+            let checked = World::alone(&fixture.bytes(k, "export.json"), false).and_then(|world| {
+                holds(&world, Some(&shown))?;
+                if std::mem::take(&mut first) {
+                    play_on(world)?;
+                }
+                Ok(())
+            });
+            match checked {
+                Ok(()) => tally.passed += 1,
+                Err(why) => tally.failed.push((format!("{} record {k}", fixture.name), why)),
+            }
+        }
+        if let Ok(export) = std::fs::read(fixture.folder.join("opening.export.json")) && !first {
+            let answers: Vec<Vec<i32>> = match std::fs::read(fixture.folder.join("opening.answers.json")) {
+                Ok(text) => serde_json::from_slice(&text).expect("opening.answers.json"),
+                Err(_) => Vec::new(),
+            };
+            let begun = World::alone(&export, true).and_then(|mut world| {
+                for answer in &answers {
+                    let given = format!("given:{}", answer.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","));
+                    world = world.step(&given)?;
+                }
+                holds(&world, None)?;
+                play_on(world)
+            });
+            match begun {
+                Ok(_) => tally.passed += 1,
+                Err(why) => tally.failed.push((format!("{} opening", fixture.name), why)),
+            }
+        }
+        tally
+    })
+    .finish("alone");
 }

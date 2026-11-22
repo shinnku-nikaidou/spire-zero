@@ -71,6 +71,20 @@ public sealed unsafe class EngineWorld : ICombatWorld, IDisposable
         return new(world.Weighing(export.Length), run, export.Length, new());
     }
 
+    /// <summary>SL's world of a co-op combat: the real combat, exact, with every other player killed as the game's own kill
+    /// command does, before anything is played, so that the local player's plays alone decide what follows (world.rs,
+    /// <c>Live::alone</c>); written out between actions, or as it begins (<paramref name="opening"/>), then begun as
+    /// <see cref="Begin"/> begins it.</summary>
+    /// <param name="run">The run around the combat, as it stood at the export.</param>
+    /// <exception cref="EngineException">The engine cannot take the combat in, kill the others, or begin it.</exception>
+    public static EngineWorld Alone(ReadOnlySpan<byte> export, RunView run, bool opening)
+    {
+        WorldHandle world;
+        fixed (byte* json = export) world = Native.sz_world_alone(json, (nuint)export.Length, opening ? 1 : 0);
+        if (world.IsInvalid) throw Native.Failed("sz_world_alone");
+        return new(world.Weighing(export.Length), run, export.Length, new());
+    }
+
     /// <summary>The draw pile's public record (JSON, as an export's <c>sim.draw_log</c>) as the host holds it where this
     /// world stands now, having taken the actions since its export as the game did: what a NoSL world drawn here reads
     /// (<see cref="Pimc"/> at a card prompt).</summary>

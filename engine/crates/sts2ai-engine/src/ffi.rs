@@ -307,6 +307,16 @@ pub unsafe extern "C" fn sz_world_begin(json: *const u8, len: usize) -> u64 {
     call(0, || Ok(make(Engine::begin(unsafe { text(json, len, "the export") }?)?, false)))
 }
 
+/// The SL world of a co-op combat, with every other player dead (world.rs, `Live::alone`): written out between actions,
+/// or as it begins (`opening` 1), then begun as `sz_world_begin` does; 0 on error.
+///
+/// # Safety
+/// `json` points at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sz_world_alone(json: *const u8, len: usize, opening: i32) -> u64 {
+    call(0, || Ok(make(Engine::alone(unsafe { text(json, len, "the export") }?, opening != 0)?, false)))
+}
+
 /// The draw pile's public record (JSON, as an export's `sim.draw_log`) as the host holds it where the world stands
 /// now: what a NoSL world drawn here reads (`sz_pimc` at a card prompt). The world took the actions since its export
 /// as the game did, so the host's record is the one of this state. 0 when it was set.

@@ -148,9 +148,12 @@ pub fn set_ready_to_end_turn(
             .players_that_cannot_un_end_turn
             .add(player);
     }
-    if g::combat::combat_manager::all_players_ready_to_end_turn__combat_turn_state(
-        me, turn_state, c,
-    ) {
+    // The engine plays the local player's side, its run single-player (so AllPlayersReadyToEndTurn holds for anyone): the
+    // local player's end of turn ends the side's turn, and another player's only marks them ready. A teammate's turn is
+    // ended where they die (the kill command), as in SL's world of a co-op combat (`world::Live::alone`).
+    if g::context::local_context::is_me__player(player, c)
+        && g::combat::combat_manager::all_players_ready_to_end_turn__combat_turn_state(me, turn_state, c)
+    {
         let combat_state = g::entities_players::player::player_combat_state(player, c);
         let scheduled_turn_number = if combat_state.is_null() {
             -1
@@ -643,7 +646,8 @@ fn side_turn_started(
             context, task, c,
         )?;
     }
-    // A player who is dead or does not start the turn is ready to end it at once.
+    // A player who is dead or does not start the turn is ready to end it at once; the side's turn ends there only where
+    // that player is the local one (`set_ready_to_end_turn`: the engine plays the local player's side).
     for player in g::combat::combat_state::players(state, c) {
         let dead = g::entities_creatures::creature::is_dead(
             g::entities_players::player::creature(player, c),
@@ -651,9 +655,9 @@ fn side_turn_started(
         );
         if dead || !players.contains(&player) {
             set_ready_to_end_turn(me, player, false, Fn0::default(), c);
-            if g::combat::combat_manager::all_players_ready_to_end_turn__combat_turn_state(
-                me, turn_state, c,
-            ) {
+            if g::context::local_context::is_me__player(player, c)
+                && g::combat::combat_manager::all_players_ready_to_end_turn__combat_turn_state(me, turn_state, c)
+            {
                 return Ok(false);
             }
         }

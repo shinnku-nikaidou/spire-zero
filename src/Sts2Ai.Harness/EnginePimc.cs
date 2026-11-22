@@ -53,10 +53,12 @@ public sealed class EnginePimc(CombatNet net, int threads)
 
     /// <summary>The engine standing at the card prompt the combat waits on: the combat as the host last wrote it out,
     /// begun first where it was written as it began, and the steps since taken as the game took them; with the host's
-    /// record of the draw pile at the prompt, which the worlds drawn there read.</summary>
-    public static EngineWorld Stand(PromptCombat at)
+    /// record of the draw pile at the prompt, which the worlds drawn there read. With <paramref name="alone"/>, SL's
+    /// world of a co-op combat, the other players killed before the steps (<see cref="EngineWorld.Alone"/>).</summary>
+    public static EngineWorld Stand(PromptCombat at, bool alone = false)
     {
-        var world = at.Opening ? EngineWorld.Begin(at.From.Bytes, at.From.Run) : EngineWorld.Import(at.From.Bytes, at.From.Run);
+        var world = alone ? EngineWorld.Alone(at.From.Bytes, at.From.Run, at.Opening)
+            : at.Opening ? EngineWorld.Begin(at.From.Bytes, at.From.Run) : EngineWorld.Import(at.From.Bytes, at.From.Run);
         try
         {
             foreach (var step in at.Steps)

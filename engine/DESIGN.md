@@ -597,6 +597,7 @@ another, so different worlds may be used from different threads. Every function 
 uint64_t sz_world_import(const uint8_t *json, size_t len, int32_t sample);   // a live combat as EngineExport wrote it; 0 on error
 uint64_t sz_world_clone(uint64_t world);
 uint64_t sz_world_begin(const uint8_t *json, size_t len);          // an SL world of a combat written out as it begins, its start run; 0 on error
+uint64_t sz_world_alone(const uint8_t *json, size_t len, int32_t opening);   // SL's world of a co-op combat, every other player killed first; as it begins with opening 1; 0 on error
 int32_t  sz_world_draw_log(uint64_t world, const uint8_t *json, size_t len);   // the draw pile's record where the world stands (a prompt); 0 ok
 uint64_t sz_world_determinize(uint64_t world, uint64_t seed);       // a NoSL world: a copy with what the player cannot see drawn again; 0 on error
 void     sz_world_free(uint64_t world);

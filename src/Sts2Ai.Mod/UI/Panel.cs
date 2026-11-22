@@ -98,9 +98,13 @@ internal sealed class Panel
     private object? _built;
     private Drive? _drive;
 
-    /// <summary>The run on screen has more than one player: the AI only advises (no buttons that play), and the SL/NoSL
-    /// switch is held at NoSL. Set by the assist every frame.</summary>
+    /// <summary>The run on screen has more than one player: the AI only advises (no buttons that play). Set by the assist
+    /// every frame.</summary>
     public bool Coop { get; set; }
+
+    /// <summary>The run on screen is NoSL's whatever the setting says (a run of more than one player without the hidden
+    /// <c>ai mp sl</c>), and the SL/NoSL switch is held there. Set by the assist every frame.</summary>
+    public bool HeldAtNoSl { get; set; }
     private PlayEnvironment? _envStyled;
     private (bool, AutoSpeed, bool, bool, bool, SearchEffort)? _toolStyled;
 
@@ -325,14 +329,13 @@ internal sealed class Panel
         Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
         _champion.Text = champion;
         _status.Text = status;
-        // A run of more than one player is NoSL's whatever the setting says, and the switch is held there.
-        var env = Coop ? PlayEnvironment.NoSL : settings.Env;
+        var env = HeldAtNoSl ? PlayEnvironment.NoSL : settings.Env;
         if (env != _envStyled)
         {
             _envStyled = env;
             foreach (var (button, which) in _switch) Restyle(button, which == env);
         }
-        foreach (var (button, _) in _switch) button.Disabled = Coop;
+        foreach (var (button, _) in _switch) button.Disabled = HeldAtNoSl;
         _drive = drive;
         _toolbar.Visible = drive != null && !Coop && _pressed != null;
         _effortRow.Visible = drive != null && _pressed != null;

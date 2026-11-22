@@ -69,7 +69,8 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 ///
 /// In SL the host also sends the current node's checkpoint and each decision taken in it, which make the node's clone
 /// for the combat brain and, with <paramref name="clones"/>, for the macro side, which gets it opened at each of its
-/// decisions (<see cref="MacroDecision.Clone"/>).
+/// decisions (<see cref="MacroDecision.Clone"/>). A co-op run (<paramref name="players"/> more than one) has none, since
+/// nothing holds the teammates' choices: its combat brain gets no clone, and the macro side values what the screen shows.
 ///
 /// In NoSL self-play with <paramref name="clones"/> the host sends them too, for the log alone: at an event the macro
 /// side gets the node's clone as <see cref="MacroDecision.Lines"/>, on which it plays the options out for V's training
@@ -80,7 +81,8 @@ public sealed record DecisionNote(string Brain, IReadOnlyList<string>? Plan = nu
 /// carries the route it would take after it.
 /// </summary>
 public sealed class Dispatcher(
-    string runId, PlayEnvironment env, CombatRoute combat, Route<IMacroPolicy> macro, Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false)
+    string runId, PlayEnvironment env, CombatRoute combat, Route<IMacroPolicy> macro, Route<IChoicePolicy> macroChoices, bool log = false, Func<NodeClone, IMacroClone>? clones = null, bool explain = false,
+    int players = 1)
     : ICombatPolicy, IChoicePolicy, IMacroPolicy
 {
     /// <summary>Every surface outside combat that has a route.</summary>
@@ -173,7 +175,7 @@ public sealed class Dispatcher(
         _moves.Witness(decision.Observation);
         var history = History;
         var (id, seed, clock) = Begin(combat.Brain);
-        var result = combat.Decide(decision, seed, env == PlayEnvironment.SL ? Clone() : null, history);
+        var result = combat.Decide(decision, seed, env == PlayEnvironment.SL && TakesNodes ? Clone() : null, history);
         double ms = clock.Elapsed.TotalMilliseconds;
         if (result.Replanned) Replans++;
         // A search leaves candidates, a planned step and a forced answer none: so a plan was made here, at a prompt.
@@ -271,9 +273,9 @@ public sealed class Dispatcher(
 
     /// <summary>
     /// Whether the host sends the node's checkpoints and the steps since (<see cref="Checkpoint"/>, <see cref="Steps"/>):
-    /// in SL always; in NoSL only for the event lines of self-play's log (<c>clones</c>).
+    /// in SL for a run of one player; in NoSL only for the event lines of self-play's log (<c>clones</c>).
     /// </summary>
-    public bool TakesNodes => env == PlayEnvironment.SL || clones != null;
+    public bool TakesNodes => env == PlayEnvironment.SL ? players == 1 : clones != null;
 
     /// <summary>A new checkpoint (one of the game's saves); the decisions after it follow.</summary>
     public void Checkpoint(NodeCheckpoint checkpoint)
@@ -294,8 +296,8 @@ public sealed class Dispatcher(
         else if (steps != null) throw new InvalidOperationException($"node steps in {env}");
     }
 
-    /// <summary>SL with <c>clones</c>: the node's clone at this decision, for the macro side.</summary>
-    private IMacroClone? MacroClone() => env == PlayEnvironment.SL && clones != null ? clones(Clone()) : null;
+    /// <summary>SL with <c>clones</c>, in a run of one player: the node's clone at this decision, for the macro side.</summary>
+    private IMacroClone? MacroClone() => env == PlayEnvironment.SL && TakesNodes && clones != null ? clones(Clone()) : null;
 
     /// <summary>NoSL with <c>clones</c>, at an event: the node's clone for the log's event lines alone.</summary>
     private IMacroClone? LinesClone(MacroDecision decision) =>

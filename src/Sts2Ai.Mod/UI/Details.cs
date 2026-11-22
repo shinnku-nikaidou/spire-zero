@@ -35,7 +35,7 @@ internal sealed class Details
 
     /// <summary>The card beside <paramref name="beside"/> (the panel's card): on its right, or on its left where the
     /// window has no room; hidden with no table. <paramref name="coop"/>: a run of more than one player, whose search
-    /// takes the teammates to play nothing more this turn.</summary>
+    /// takes the teammates as dead in SL and as playing nothing more this turn in NoSL.</summary>
     public void Show(FightTable? table, bool visible, Rect2 beside, float opacity, bool coop = false)
     {
         _card.Visible = visible && table != null;
@@ -74,9 +74,11 @@ internal sealed class Details
         _body.AddChild(Table(table));
         _body.AddChild(Legend(table));
         _body.AddChild(Chart(table));
-        string foot = table.Status != CombatStatus.InProgress ? "Played out to the fight's end."
+        bool sl = Settings.Current.Env == PlayEnvironment.SL && (!coop || Assist.CoopSl);
+        string foot = table.Status != CombatStatus.InProgress ? sl && coop ? "Played out to the fight's end, your teammates dead." : "Played out to the fight's end."
+            : sl ? coop ? "Played out to the end of the plan, your teammates dead; after it, the combat net's guess."
+                : "Played out to the end of the plan; after it, the combat net's guess."
             : coop ? "This turn played out in one sampled world, your teammates playing nothing more, to the end of the enemies' turn; after it, the combat net's guess."
-            : Settings.Current.Env == PlayEnvironment.SL ? "Played out to the end of the plan; after it, the combat net's guess."
             : "This turn played out in one sampled world, to the end of the enemies' turn; after it, the combat net's guess.";
         var note = Panel.Wrapped(Panel.Text(L10n.T(foot), 11, Panel.Muted));
         note.CustomMinimumSize = new Vector2(ChartWidth, 0);

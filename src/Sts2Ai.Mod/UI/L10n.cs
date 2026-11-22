@@ -128,6 +128,13 @@ internal static class L10n
         ["Won the fight"] = ["Combat gagné", "Combate ganado", "赢下战斗", "贏下戰鬥", "戦闘に勝利"],
         ["Lost the fight"] = ["Combat perdu", "Combate perdido", "输掉战斗", "輸掉戰鬥", "戦闘に敗北"],
         ["Played out to the fight's end."] = ["Joué jusqu'à la fin du combat.", "Jugado hasta el final del combate.", "模拟到战斗结束。", "模擬到戰鬥結束。", "戦闘の終わりまで再生。"],
+        ["Played out to the fight's end, your teammates dead."] = ["Joué jusqu'à la fin du combat, vos coéquipiers morts.",
+            "Jugado hasta el final del combate, con tus compañeros muertos.", "模拟到战斗结束，队友当作已死。", "模擬到戰鬥結束，隊友當作已死。", "仲間は死んだものとして、戦闘の終わりまで再生。"],
+        ["Played out to the end of the plan, your teammates dead; after it, the combat net's guess."] = [
+            "Joué jusqu'à la fin du plan, vos coéquipiers morts ; ensuite, l'estimation du réseau de combat.",
+            "Jugado hasta el final del plan, con tus compañeros muertos; después, la estimación de la red de combate.",
+            "模拟到计划结束，队友当作已死；之后是战斗网络的估计。", "模擬到計畫結束，隊友當作已死；之後是戰鬥網路的估計。",
+            "仲間は死んだものとして、プランの終わりまで再生；その後は戦闘ネットの推定。"],
         ["Played out to the end of the plan; after it, the combat net's guess."] = ["Joué jusqu'à la fin du plan ; ensuite, l'estimation du réseau de combat.", "Jugado hasta el final del plan; después, la estimación de la red de combate.", "模拟到计划结束；之后是战斗网络的估计。", "模擬到計畫結束；之後是戰鬥網路的估計。", "計画の終わりまで再生；以降は戦闘ネットの推定。"],
         ["This turn played out in one sampled world, your teammates playing nothing more, to the end of the enemies' turn; after it, the combat net's guess."] = ["Ce tour joué dans un monde tiré au sort, vos coéquipiers ne jouant plus rien, jusqu'à la fin du tour ennemi ; ensuite, l'estimation du réseau de combat.", "Este turno jugado en un mundo muestreado, sin que tus compañeros jueguen nada más, hasta el final del turno enemigo; después, la estimación de la red de combate.", "本回合在一个抽样世界里模拟到敌人回合结束，队友不再出牌；之后是战斗网络的估计。", "本回合在一個抽樣世界裡模擬到敵人回合結束，隊友不再出牌；之後是戰鬥網路的估計。", "このターンを抽出した一つの世界で、仲間はこれ以上何もプレイしないものとして敵のターン終了まで試算；その後は戦闘ネットの推定。"],
         ["This turn played out in one sampled world, to the end of the enemies' turn; after it, the combat net's guess."] = ["Ce tour joué dans un monde tiré au sort, jusqu'à la fin du tour ennemi ; ensuite, l'estimation du réseau de combat.", "Este turno jugado en un mundo muestreado, hasta el final del turno enemigo; después, la estimación de la red de combate.", "本回合在一个抽样世界里模拟到敌人回合结束；之后是战斗网络的估计。", "本回合在一個抽樣世界裡模擬到敵人回合結束；之後是戰鬥網路的估計。", "このターンを1つのサンプル世界で敵ターン終了まで再生；以降は戦闘ネットの推定。"],

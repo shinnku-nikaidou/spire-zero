@@ -17,6 +17,8 @@ namespace Sts2Ai.Harness;
 /// opens its combat, one a plan ran out at, one where a step did not hold) starts on the node's clone instead, which
 /// is asked what follows each answer (<see cref="PromptRoot"/>, <see cref="EngineCrossing"/>): the search is the same
 /// one, over a world that is the clone's up to where the player can play again and the engine's from there.
+///
+/// In a co-op combat the world holds the local player alone, the teammates dead (<see cref="Alone"/>).
 /// </summary>
 /// <param name="net">The combat net, loaded in the engine where a world is first searched (the engine's library is
 /// loaded only once a world is made), once for each net.</param>
@@ -39,6 +41,34 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         return Plan(root, budget, history);
     }
 
+    /// <summary>
+    /// SL in a co-op combat (another player among the allies; the user, 2026-11-22: 隊友當然是當全部死光的sl): the world
+    /// holds the local player alone, every teammate killed as the game kills, before anything is played
+    /// (<see cref="EngineWorld.Alone"/>), so the player's plays alone decide what follows and the world is one exact combat,
+    /// as SL's always is. It is taken in again at each decision, so it follows what the teammates did, and it is searched as
+    /// it shows itself: the decision becomes its observation and legal actions (a dead teammate only takes targets away, so
+    /// what it gives is legal in the game too). A co-op run has no node clone (no record holds the teammates' choices): at a
+    /// card prompt the world stands there from the combat the host last wrote out and the steps since
+    /// (<see cref="CombatDecision.Prompted"/>). Null in a combat of one player.
+    /// </summary>
+    private static Coop? Alone(CombatDecision decision)
+    {
+        if (!Together(decision.Observation)) return null;
+        var world = decision.Observation.Prompt != null
+            ? EnginePimc.Stand(decision.Prompted ?? throw new InvalidOperationException("a card prompt in a co-op combat with no combat to stand at"), alone: true)
+            : decision.Export is { } live ? EngineWorld.Alone(live.Bytes, live.Run, opening: false)
+            : throw new InvalidOperationException("the host gives no live combat for the engine: plan needs a host that holds the game");
+        var shown = world.Observe();
+        return new(world, new CombatDecision(decision.Only ? decision.Legal : world.Legal(), () => shown, _ => decision.RunObservation!,
+            () => decision.Export!, decision.Early, decision.Hurry, decision.After, () => decision.Prompted!, decision.Only));
+    }
+
+    /// <summary>A co-op combat: another player among the allies (a creature with no monster id).</summary>
+    private static bool Together(CombatObservation observation) => observation.Allies.Any(a => a.Id == null);
+
+    /// <summary>SL's world of a co-op combat at a decision, and the decision as it shows it (<see cref="Alone"/>).</summary>
+    private sealed record Coop(EngineWorld World, CombatDecision Decision);
+
     /// <summary>The engine's beam from where <paramref name="root"/> stands (<see cref="EngineWorld.Plan"/>).</summary>
     private SlPlan Plan(EngineWorld root, Budget budget, IReadOnlyList<EnemyTurns> history)
     {
@@ -51,9 +81,8 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     /// engine, and the beam's plan from there (or, where it ends the combat, the combat's end as it is); the candidates
     /// are those first actions, best first, each with its line's value, chance to win and HP left, and the plan after it.
     /// </summary>
-    private SlPlan Only(CombatExport live, IReadOnlyList<CombatAction> first, Budget budget, IReadOnlyList<EnemyTurns> history)
+    private SlPlan Only(EngineWorld root, IReadOnlyList<CombatAction> first, Budget budget, IReadOnlyList<EnemyTurns> history)
     {
-        using var root = EngineWorld.Import(live.Bytes, live.Run);
         var lines = new List<(CombatAction First, SlPlan? Plan, double Value, double Win, double Hp)>();
         foreach (var action in first)
         {
@@ -119,7 +148,17 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             using var process = Process.GetCurrentProcess();
             return process.TotalProcessorTime + pool.CpuTime();
         });
-        return new(name, (decision, _, node, history) => route.Decide(decision.Observation, decision.Legal, b =>
+        return new(name, (decision, _, node, history) =>
+        {
+            var coop = Alone(decision);
+            using var world = coop?.World;
+            var asked = coop?.Decision ?? decision;
+            return route.Decide(asked.Observation, asked.Legal, b => world != null
+                ? meter.Count(() => asked.Only ? Only(world, asked.Legal, b, history) : Plan(world, b, history))
+                : Searched(decision, node, b, history));
+        }, budget, () => meter.Tally);
+
+        SlPlan Searched(CombatDecision decision, NodeClone? node, Budget b, IReadOnlyList<EnemyTurns> history)
         {
             if (decision.Observation.Prompt is { } prompt)
             {
@@ -130,10 +169,15 @@ public sealed class EnginePlanner(CombatNet net, int threads)
             }
             long started = Stopwatch.GetTimestamp();
             var live = decision.Export ?? throw new InvalidOperationException("the host gives no live combat for the engine: plan needs a host that holds the game");
-            if (decision.Only) return meter.Count(() => Only(live, decision.Legal, b, history));
+            if (decision.Only)
+                return meter.Count(() =>
+                {
+                    using var root = EngineWorld.Import(live.Bytes, live.Run);
+                    return Only(root, decision.Legal, b, history);
+                });
             double exportMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             return meter.Count(() => Plan(live, b, history, importMs => meter.Imported(live.Bytes.Length, exportMs, importMs)));
-        }), budget, () => meter.Tally);
+        }
     }
 
     /// <summary>The route's answers between actions with their line's table: the line played out on the real combat,
@@ -145,7 +189,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         {
             var result = route.Decide(decision, seed, node, history);
             if (decision.Observation.Prompt != null || decision.Export is not { } live) return result;
-            using var real = EngineWorld.Import(live.Bytes, live.Run);
+            using var real = Together(decision.Observation) ? EngineWorld.Alone(live.Bytes, live.Run, opening: false) : EngineWorld.Import(live.Bytes, live.Run);
             var table = FightTables.Of(real, [result.First, .. result.Plan]);
             if (table.Status == CombatStatus.InProgress && result.Candidates is [{ Win: { } win, Hp: { } hp }, ..])
                 table = table with { Win = win, HpLeft = hp };
@@ -177,10 +221,14 @@ public sealed class EnginePlanner(CombatNet net, int threads)
         {
             // A player's question about given first actions is the beam's (Only), whatever the effort.
             if (decision.Only) return Route(budget with { Solve = 0 }, name, pool).Decide(decision, seed, node, history);
+            var coop = Alone(decision);
+            using var world = coop?.World;
+            var asked = coop?.Decision ?? decision;
             CombatDecisionResult Decide()
             {
                 bool byBeam = false;
-                var made = route.Decide(decision.Observation, decision.Legal, history, () => Taken(decision, node, pool), () =>
+                // A solver keeps the world it begins on, after this decision too: a copy of the co-op world.
+                var made = route.Decide(asked.Observation, asked.Legal, history, () => world != null ? Taken(world.Clone()) : Taken(decision, node, pool), () =>
                 {
                     byBeam = true;
                     return (beam ??= Route(budget with { Solve = 0 }, name, pool)).Decide(decision, seed, node, history);
@@ -188,7 +236,7 @@ public sealed class EnginePlanner(CombatNet net, int threads)
                 if (!byBeam) beam = null;
                 return made;
             }
-            if (PimcBrain.Forced(decision.Observation, decision.Legal) != null) return Decide();
+            if (PimcBrain.Forced(asked.Observation, asked.Legal) != null) return Decide();
             CombatDecisionResult? made = null;
             meter.Count(() =>
             {
@@ -231,9 +279,11 @@ public sealed class EnginePlanner(CombatNet net, int threads)
     }
 
     /// <summary>The combat as <paramref name="live"/> is, for a solver.</summary>
-    private TakenCombat Taken(CombatExport live)
+    private TakenCombat Taken(CombatExport live) => Taken(EngineWorld.Import(live.Bytes, live.Run));
+
+    /// <summary>The combat where <paramref name="root"/> stands, for a solver, which keeps the world.</summary>
+    private TakenCombat Taken(EngineWorld root)
     {
-        var root = EngineWorld.Import(live.Bytes, live.Run);
         return new(played =>
         {
             using var at = root.Clone();

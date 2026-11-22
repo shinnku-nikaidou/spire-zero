@@ -74,6 +74,21 @@ impl Live {
         ffi::World::step(&mut world, BEGIN)
     }
 
+    /// SL's world of a co-op combat (the user, 2026-11-22: 隊友當然是當全部死光的sl): the combat as written out, between
+    /// actions, or as it begins (`opening`, then begun as `begin` does), with every other player killed first
+    /// (`kill_teammates`), so that the local player's plays alone decide what follows. They die before anything is
+    /// played: a card prompt's answer runs its action again from the combat before it, which holds them dead.
+    pub fn alone(export: &str, opening: bool) -> Result<Live, String> {
+        let mut world = <Live as ffi::World>::import(export)?;
+        if let Err(stop) = kill_teammates(&mut world.combat) {
+            return Err(format!("killing the teammates stopped: {stop:?}"));
+        }
+        if opening {
+            return ffi::World::step(&mut world, BEGIN);
+        }
+        Ok(world)
+    }
+
     /// This world, standing at a card prompt, as one NoSL sample (`seed`): where the prompt takes its answer, everything
     /// the player cannot see is drawn again (determinize.rs), from the draw pile's record the combat holds
     /// (`Extra::draw_log`, the host's at the prompt). What the prompt shows stays the real combat's.
@@ -496,6 +511,30 @@ fn cap(c: &mut Combat) -> R<()> {
     }
     g::commands::creature_cmd::kill__creature_bool(creature, true, c)?;
     g::combat::combat_manager::check_win_condition__0(manager, c)?;
+    pump(c)
+}
+
+/// Every player but the local one killed the way the game's own kill command does, forced so that nothing revives
+/// them, and the win condition checked, as `cap` kills the local player; then what their deaths queued runs. Nothing
+/// in a combat of one player, or where the others are dead already.
+fn kill_teammates(c: &mut Combat) -> R<()> {
+    let (st, me) = crate::ffi::live(c);
+    let mut killed = false;
+    for player in g::combat::combat_state::players(st, c) {
+        if player == me {
+            continue;
+        }
+        let creature = g::entities_players::player::creature(player, c);
+        if g::entities_creatures::creature::is_dead(creature, c) {
+            continue;
+        }
+        g::commands::creature_cmd::kill__creature_bool(creature, true, c)?;
+        killed = true;
+    }
+    if !killed {
+        return Ok(());
+    }
+    g::combat::combat_manager::check_win_condition__0(c.s.combat_manager__instance, c)?;
     pump(c)
 }
 

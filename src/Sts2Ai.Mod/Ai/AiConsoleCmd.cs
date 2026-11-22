@@ -142,6 +142,13 @@ public sealed class AiConsoleCmd : AbstractConsoleCmd
                 Assist.Multiplayer = false;
                 Settings.Set(Settings.Current with { Multiplayer = false });
                 return "mp off";
+            // Hidden: not in the help or the completions.
+            case "sl":
+                Assist.CoopSl = true;
+                return "mp sl: a run of more than one player plays the panel's environment, SL too (its fights with the teammates dead), until the game closes; ai mp nosl ends it";
+            case "nosl":
+                Assist.CoopSl = false;
+                return "mp nosl: a run of more than one player is NoSL's";
             default:
                 throw new AiError("mp on|always|off");
         }

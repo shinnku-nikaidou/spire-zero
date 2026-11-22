@@ -81,9 +81,10 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
                 MacroExplore > 0 ? new Softmax(MacroExplore, Rng(":explore")) : null, hostSaysPlayed: explain,
                 eventLines: eventLines ? Value.In(env) : null, cards: Cards);
             dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new(L0, l0), new(L0, l0), log,
-                OnClone || eventLines ? node => new PooledClone(pool!, node) : null, explain);
+                OnClone || eventLines ? node => new PooledClone(pool!, node) : null, explain, hello.Run.Players);
         }
-        else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log);
+        else dispatcher = new Dispatcher(hello.Run.RunId, env, combat, new("random", new RandomMacro(rng)), new("random", new RandomChoices(rng)), log,
+            players: hello.Run.Players);
         if (dispatcher.Champion != Name) throw new InvalidOperationException($"champion {dispatcher.Champion} goes by {Name} in champion files");
         return dispatcher;
     };

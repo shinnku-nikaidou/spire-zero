@@ -42,7 +42,9 @@ public abstract record WireMessage
 public sealed record Hello(string GameVersion, string Env, string Role, RunHeader Run, string? Effort = null, bool TurnDecay = false) : WireMessage;
 
 /// <param name="RunId">The run's id (<see cref="IdOf"/>).</param>
-public sealed record RunHeader(string RunId, string Character, int Ascension)
+/// <param name="Players">How many players the run has. A co-op run (more than one) has no SL record, since nothing
+/// holds the teammates' choices: SL plays it with no node clone, its combats with the teammates dead.</param>
+public sealed record RunHeader(string RunId, string Character, int Ascension, int Players = 1)
 {
     /// <summary>A run's id: a hash of its seed, not the seed. An SL checkpoint carries the seed, and so does every combat's
     /// export; NoSL's engine draws it again before any search reads the combat.</summary>

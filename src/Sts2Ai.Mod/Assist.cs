@@ -133,8 +133,9 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     // The AI's play: what it was asked to do, what it did, and why it stopped.
     private Goal _goal;
 
-    /// <summary>The run has more than one player: served only with the console's <c>ai mp on</c>, NoSL, and the AI only
-    /// advises (plans/2026-11-21-1733-coop-advice.md).</summary>
+    /// <summary>The run has more than one player: served only with the console's <c>ai mp on</c>, and the AI only advises
+    /// (plans/2026-11-21-1733-coop-advice.md). NoSL's, with the teammates passing, unless the hidden <c>ai mp sl</c>
+    /// (<see cref="CoopSl"/>) lets the panel's SL play it: without a clone, its fights with the teammates dead.</summary>
     private bool _coop;
     private int _acts;
     private string? _lastSurface;
@@ -236,12 +237,14 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         var settings = Settings.Current;
         var run = RunManager.Instance.DebugOnlyGetState();
         var me = run != null ? LocalContext.GetMe(run) : null;
-        // A run of more than one player is served only after the console's `ai mp on` or `ai mp always`, or the settings' Multiplayer switch; it is NoSL's (no clone holds the
-        // others' choices), and the AI only advises in it.
+        // A run of more than one player is served only after the console's `ai mp on` or `ai mp always`, or the settings' Multiplayer switch, and the AI
+        // only advises in it. It is NoSL's unless the hidden `ai mp sl` is on; then SL too, which sends no record there (no clone holds the others'
+        // choices) and whose brain plays its fights with the teammates dead (the user, 2026-11-22: 隊友當然是當全部死光的sl).
         _coop = run is { Players.Count: > 1 };
         panel.Coop = _coop;
+        panel.HeldAtNoSl = _coop && !CoopSl;
         if (_coop && _goal != Goal.Off) Stop(L10n.T("advice only in multiplayer"));
-        var env = _coop ? PlayEnvironment.NoSL : settings.Env;
+        var env = _coop && !CoopSl ? PlayEnvironment.NoSL : settings.Env;
         if (env != _env) Switch(env);
         if (settings.Effort != _effort) Switch(settings.Effort);
         if (settings.TurnDecay != _turnDecay) Switch(settings.TurnDecay);
@@ -299,8 +302,10 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         if (_run == null)
         {
             (_run, _champion, _failure, _next, _sentNode) = (id, null, null, 0, -1);
-            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel), settings.EffortName, settings.TurnDecay));
-            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {_env}, effort {settings.EffortName}, turn decay {(settings.TurnDecay ? "on" : "off")}");
+            link.Send(new Hello(gameVersion, _env.ToString(), "mod", new RunHeader(id, me.Character.Id.Entry, run.AscensionLevel, run.Players.Count), settings.EffortName,
+                settings.TurnDecay));
+            ModLog.Write("brain", $"hello: run {id}, {me.Character.Id.Entry} A{run.AscensionLevel}, {run.Players.Count} player(s), {_env}, effort {settings.EffortName}, " +
+                                  $"turn decay {(settings.TurnDecay ? "on" : "off")}");
         }
         // HasRunEnded, not IsGameOver: a prevented death (Fairy in a Bottle, Lizard Tail) sits at 0 HP until it heals.
         bool over = RunManager.Instance.HasRunEnded;
@@ -333,8 +338,9 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         }
         _idle = Environment.TickCount64;
         // SL plans a combat and values every option outside it on the node's clone; without one there is nothing to play
-        // on: the brain would refuse the run, or value the options on the record's last state, not the screen's.
-        if (_env == PlayEnvironment.SL && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
+        // on: the brain would refuse the run, or value the options on the record's last state, not the screen's. A co-op
+        // run has no record, and SL plays it without a clone.
+        if (_env == PlayEnvironment.SL && !_coop && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
         {
             (_key, _stable) = (null, 0);
             // Auto-play hands the room over, rather than wait on it: nothing plays it until the game's next save.
@@ -386,7 +392,8 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
             }
             return;
         }
-        bool sl = _env == PlayEnvironment.SL;
+        // SL sends the record in a run of one player; a co-op run has none.
+        bool sl = _env == PlayEnvironment.SL && !_coop;
         if (sl) SendNode();
         // In the same frame as the observation, with the action queue empty: the combat as it is shown. SL's search
         // plays it; NoSL's draws its worlds from it, everything the player cannot see drawn again first.
@@ -644,7 +651,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
                 ModLog.Warn("brain", $"brain: {error.Message}");
                 // An SL decision is asked on the node's clone, which the record builds: when it fails there, the record is
                 // off for the rest of the room, as one the player went back into, and the brain stays on for the run.
-                if (_asked != null && _env == PlayEnvironment.SL && NodeRecord.Checkpoint != null && NodeRecord.Broken == null)
+                if (_asked != null && _env == PlayEnvironment.SL && !_coop && NodeRecord.Checkpoint != null && NodeRecord.Broken == null)
                 {
                     string line = error.Message.Split('\n')[0];
                     int cause = line.LastIndexOf(": ", StringComparison.Ordinal);
