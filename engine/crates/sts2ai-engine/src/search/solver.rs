@@ -43,9 +43,10 @@
 //! reach), a turn it pruned is to be searched again (`again`): until it is, all it found stays, its ends and the states
 //! below it, and its new search takes the place of the old. The states searched at a time (`batch`) are a turn's search
 //! each, run apart by a `Searcher`; the search is the same for the same nodes and batch, wherever it runs. A run shares
-//! the nodes it is asked for over each batch's states (`PIECE` at the least): a turn with more pauses there
-//! (`turn::Turn`) and goes on in the next batch before any state waiting starts, so a run ends near its nodes however
-//! big a turn is (one batch of whole turns ran 30 to 100 thousand nodes on a run of 16,384 in big Regent turns).
+//! the nodes it is asked for over each batch's states (`PIECE` at the least; under xhigh's early stop, the stop's nodes):
+//! a turn with more pauses there (`turn::Turn`) and goes on in the next batch before any state waiting starts, so a run
+//! ends near its nodes however big a turn is (one batch of whole turns ran 30 to 100 thousand nodes on a run of 16,384
+//! in big Regent turns).
 //!
 //! Ported line for line from the C# brain (plans/2026-11-18-2132-sl-search-rust.md, B and C); the C# search was deleted
 //! on 2026-11-19 at the user's word (C5), and the `C#:` names below are where each piece came from, in git's history.
@@ -405,7 +406,11 @@ impl Solver {
     /// `PIECE` each: a state's turn that has more pauses there, and goes on in the next batch, in this run or the next,
     /// before any state waiting starts. The root's turn alone pauses at the run's end, while the solver has a line to
     /// play meanwhile (`playing`). With xhigh's early stop, a run after the solver's first also ends at the end of a
-    /// batch, or of a piece of the root's turn, where `content` holds.
+    /// batch, or of a piece of the root's turn, where `content` holds; and a batch then shares the stop's nodes over its
+    /// states instead of the run's, so that the rule is looked at every `stop` nodes or so. Shared over the run's
+    /// 16,384, one batch of big turns spent a decision's budget before the stop was first looked at: in sl-silent-g0's
+    /// first 3,880 runs, the decisions answered with a won line whose first action never changed spent 7,866 nodes on
+    /// average where the rule asks 1,024, and 101,788 of them the whole budget.
     pub fn run(&mut self, search: &dyn Searcher, nodes: i64) -> Result<(), String> {
         let until = if nodes >= i64::MAX - self.nodes { i64::MAX } else { self.nodes + nodes };
         let (begun, stops) = (self.nodes, self.started && self.stop > 0);
@@ -443,7 +448,12 @@ impl Solver {
             if states.is_empty() {
                 continue;
             }
-            let piece = ((until - self.nodes) / states.len() as i64).max(self.piece).min(i32::MAX as i64) as i32;
+            let mut piece = ((until - self.nodes) / states.len() as i64).max(self.piece);
+            if stops {
+                // A batch shares the stop's nodes at most, so `content` is looked at as often as its rule counts.
+                piece = piece.min((self.stop / states.len() as i64).max(1));
+            }
+            let piece = piece.min(i32::MAX as i64) as i32;
             let jobs: Vec<Job> = states
                 .iter()
                 .map(|&n| {

@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::beam::{self, Budget, Job, UNLIMITED};
+use super::beam::{self, Budget, Job, Searcher, UNLIMITED};
 use super::bound::{self, Bounds};
 use super::leaf::{Leaf, LeafOutcome, LeafState};
 use super::loops;
@@ -632,9 +632,38 @@ fn xhigh_ends_a_later_run_once_its_won_picks_first_action_held() {
 }
 
 #[test]
+fn xhigh_shares_the_stop_over_a_batch_not_the_runs_nodes() {
+    // A later run asked for far more nodes than the stop: each batch's turns get the stop's nodes between them, so the
+    // stop is looked at every few nodes, not once one batch has spent the run's budget.
+    let beam = planned(&toy(24), &ToyLeaf, &budget(10, 1));
+    let mut xhigh = solver(4);
+    xhigh.set_stop(8);
+    xhigh.seed(beam.line.clone(), beam.from);
+    let replay = toy_searcher(&[], 24, false);
+    xhigh.run(&replay, 10).expect("a search");
+    assert!(!xhigh.rooting());
+    let begun = xhigh.nodes();
+    let batches = RefCell::new(Vec::new());
+    let counted = jobs(|jobs: &[Job], nodes, keep| {
+        batches.borrow_mut().push(jobs.iter().map(|job| job.most.expect("a piece") as i64).sum::<i64>());
+        replay.search(jobs, nodes, keep)
+    });
+    xhigh.run(&counted, 100_000).expect("a search");
+    let batches = batches.into_inner();
+    assert!(!batches.is_empty());
+    assert!(batches.iter().all(|&share| share <= 8), "{batches:?}");
+    assert!(xhigh.content(begun));
+    assert!(xhigh.nodes() - begun < 16, "{} nodes", xhigh.nodes() - begun);
+    let plan = result(&xhigh);
+    assert_eq!(Status::Won, plan.end);
+    assert_replays(&plan, 24, &[], false);
+}
+
+#[test]
 fn xhigh_searches_as_max_while_no_line_wins() {
-    // The enemy beyond reach: every pick loses, so the stop never holds and the runs are max's, node for node.
-    let (mut max, mut xhigh) = (solver(1), solver(1));
+    // The enemy beyond reach: every pick loses, so the stop never holds and the runs are max's, node for node, where
+    // max's batches pause as finely as the stop's (one state a batch: the same turns searched in the same order).
+    let (mut max, mut xhigh) = (solver(1).with_piece(1), solver(1).with_piece(1));
     xhigh.set_stop(1);
     for _ in 0..4 {
         for s in [&mut max, &mut xhigh] {
