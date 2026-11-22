@@ -503,7 +503,7 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   Multiplayer (experimental) switch. brain/nets holds 18 nets, the 12 V's among them; the packed brain answered the SL
   and NoSL v6 wires (the Fool's) with v-sl-fool-0 and v-nosl-fool-0, no errors. Installed in `mods/` over 1.0.6 while the
   game ran (04:55Z, 12:55 Taiwan), so it takes effect at the game's next start.
-- 2026-11-22 13:2x: mod 1.0.8 built for linux-x64 only, not uploaded (asked by the Fake Merchant session, where the user said
+- 2026-11-22 14:2x: mod 1.0.8 built for linux-x64 only, not uploaded (asked by the Fake Merchant session, where the user said
   Ask it to build). At 1d58d9ec: no event decision once the Foul Potion has started the Fake Merchant's fight (the user's
   run, Necrobinder A10 floor 28, where the probe met the fight with an answer left), and the SL solver's exact cost per
   card. The packed brain answered the SL and NoSL v6 wires the same as 1.0.7, no errors. The game was running; the user
