@@ -345,13 +345,14 @@ impl State {
     }
 
     /// The world exactly, as far as a line played on from here depends on it: the observation's hash; every card of the
-    /// player's piles (hand, draw, discard, exhaust, play) by its id, in each pile's order; and the counters that name
-    /// what comes later: the card prompts asked so far (a prompt's number orders its options that look the same, so the
-    /// same `pick` takes another copy), the next card's id and the next creature's. The two keys tell copies of a card
-    /// apart by nothing and hold none of the counters, and the observation shows the uid of a card in hand only, so two
-    /// lines can reach one key and one observation with the copies laid out otherwise in the draw pile, or after another
-    /// number of prompts; a line played on from one then plays a copy the other does not hold. Where the search keeps no
-    /// world (a prompt crossed on the clone, a toy) or the combat is over, the observation's hash.
+    /// player's piles (hand, draw, discard, exhaust, play) by its id and its own cost (`own_cost`), in each pile's order;
+    /// and the counters that name what comes later: the card prompts asked so far (a prompt's number orders its options
+    /// that look the same, so the same `pick` takes another copy), the next card's id and the next creature's. The two
+    /// keys tell copies of a card apart by nothing and hold none of the counters, and the observation shows the uid of a
+    /// card in hand only, so two lines can reach one key and one observation with the copies laid out otherwise in the
+    /// draw pile, or after another number of prompts; a line played on from one then plays a copy the other does not
+    /// hold. Where the search keeps no world (a prompt crossed on the clone, a toy) or the combat is over, the
+    /// observation's hash.
     pub fn exact(&mut self) -> u64 {
         use crate::r#gen as g;
         use crate::protocol::Sink as _;
@@ -380,11 +381,40 @@ impl State {
             for card in g::entities_cards::card_pile::cards(pile, c) {
                 let (known, id) = g::game_actions_multiplayer::net_combat_card_db::try_get_card_id(db, card, c);
                 hash.put(&(if known { id } else { u32::MAX }).to_le_bytes());
+                own_cost(card, c, &mut hash);
             }
             hash.put(b"|");
         }
         hash.0
     }
+}
+
+/// A card's own cost, which the observation shows only with what other models change of it: its energy cost's base and
+/// each change made to the card itself, and its star cost's. With Pounce's free skill, a Defend made free for the combat
+/// (Touch of Insanity) beside a Survivor free by the power shows as the Survivor made free beside a Defend free by it;
+/// once a skill is played the power is gone and only the card made free stays so (sl-silent-g0, seed FER38JLYFJKL).
+fn own_cost(card: crate::r#gen::kinds::CardModel, c: &mut crate::rt::Combat, hash: &mut Fnv) {
+    use crate::r#gen as g;
+    use crate::protocol::Sink as _;
+    let energy = g::models::card_model::energy_cost(card, c);
+    let base_stars = g::models::card_model::base_star_cost(card, c);
+    let cost = g::state::CardEnergyCostData::of(energy, c);
+    hash.put(&cost._base.to_le_bytes());
+    for &modifier in &cost._local_modifiers {
+        let modifier = g::state::LocalCostModifierData::of(modifier, c);
+        hash.put(&modifier.amount.to_le_bytes());
+        hash.put(&modifier.type_.0.to_le_bytes());
+        hash.put(&modifier.expiration.0.to_le_bytes());
+        hash.put(&[modifier.is_reduce_only as u8]);
+    }
+    hash.put(b";");
+    hash.put(&base_stars.to_le_bytes());
+    for &temporary in &g::state::CardModelData::of(card, c)._temporary_star_costs {
+        let temporary = g::state::TemporaryCardCostData::of(temporary, c);
+        hash.put(&temporary.cost.to_le_bytes());
+        hash.put(&[temporary.clears_when_turn_ends as u8, temporary.clears_when_card_is_played as u8]);
+    }
+    hash.put(b";");
 }
 
 /// A combat's public record of enemy moves (C#: MoveRecord's History): what each living enemy showed at the first
