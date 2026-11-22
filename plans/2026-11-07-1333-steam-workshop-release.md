@@ -508,3 +508,13 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   run, Necrobinder A10 floor 28, where the probe met the fight with an answer left), and the SL solver's exact cost per
   card. The packed brain answered the SL and NoSL v6 wires the same as 1.0.7, no errors. The game was running; the user
   unit sts2ai-install-1.0.8 swaps it into `mods/` over 1.0.7 once the game closes.
+- 2026-11-23 00:0x: mod 1.0.9 uploaded (the user: 發版本，上傳; the release session took no request, then the user: 你這邊搞吧,
+  so the co-op/xhigh status session built and uploaded it). Built at 78d3ab0d for all three platforms (the Windows VM
+  started for it): SL in co-op runs behind the hidden `ai mp sl` with the engine's end-of-turn fixes, and xhigh's early
+  stop looked at every 1,024 nodes; first on the Workshop too, 1.0.6-1.0.8: the potion-belt record fix, each character's
+  own V, the removal rule, the settings' Multiplayer (experimental) switch, the Fake Merchant fix, the solver's exact card
+  costs. The packed brain answered the SL and NoSL v6 wires the same as 1.0.8, no errors. The game closed here and on the
+  Mac. The commit timed out with the content through (the public API: updated 15:59:31Z, 533.1 MB; 1.0.9 on the
+  changelog page; the English texts the new ones, with ea31f995's multiplayer section); then the texts alone, the 17
+  languages, all OK. The change note (tmp/release-1.0.9/note.txt) leaves out `ai mp sl`, a hidden command. Installed
+  in `mods/` over 1.0.8 (moved to `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
