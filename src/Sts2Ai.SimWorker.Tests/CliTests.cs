@@ -72,6 +72,56 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void RunPlaysItsCharactersOwnNetsFromAChampionFile()
+    {
+        var path = Path.Combine(_dir, "champion.json");
+        File.WriteAllText(path, ProtocolJson.Serialize(new ChampionFile("NoSL", "test", new Dictionary<string, string> { ["env"] = "NoSL", ["value"] = "v-all.json" },
+            new Dictionary<string, string>(), "2026-11-22", Characters: new Dictionary<string, IReadOnlyDictionary<string, string>>
+            {
+                ["IRONCLAD"] = new Dictionary<string, string> { ["value"] = "v-ironclad.json" },
+            })));
+        string? Value(params string[] args) => Cli.Parse(["run", "--champion", path, .. args]).GetValue<string?>("--value");
+
+        Assert.Equal("v-ironclad.json", Value("--character", "IRONCLAD"));
+        Assert.Equal("v-all.json", Value("--character", "SILENT"));
+        Assert.Equal("v-all.json", Value());
+        Assert.Equal("v-given.json", Value("--character", "IRONCLAD", "--value", "v-given.json"));
+    }
+
+    [Fact]
+    public void BrainPlaysEachCharactersOwnNets()
+    {
+        var value = Path.Combine(AppContext.BaseDirectory, "Fixtures", "pure-v-tiny-win.json");
+        var net = Path.Combine(AppContext.BaseDirectory, "Fixtures", "combat-tiny.json");
+        var fNet = Path.Combine(AppContext.BaseDirectory, "Fixtures", "f-tiny.json");
+        string Write(string name, string env, Dictionary<string, string> options)
+        {
+            var own = Path.Combine(_dir, $"v-{name}-ironclad.json");
+            File.Copy(value, own);
+            var path = Path.Combine(_dir, $"{name}.json");
+            File.WriteAllText(path, ProtocolJson.Serialize(new ChampionFile(env, "test", options, new Dictionary<string, string>(), "2026-11-22",
+                Characters: new Dictionary<string, IReadOnlyDictionary<string, string>> { ["IRONCLAD"] = new Dictionary<string, string> { ["value"] = own } })));
+            return path;
+        }
+        var slFile = Write("sl", "SL", new()
+        {
+            ["env"] = "SL", ["policy"] = "plan", ["macro"] = "l0", ["effort"] = "medium", ["value"] = value, ["combat-net"] = net, ["f-net"] = fNet, ["afterstates"] = "clone",
+        });
+        var noSlFile = Write("nosl", "NoSL", new() { ["env"] = "NoSL", ["policy"] = "pimc", ["macro"] = "l0", ["value"] = value, ["combat-net"] = net, ["f-net"] = fNet });
+        var r = Cli.Parse(["brain", "--champion", noSlFile, "--sl-champion", slFile, "--workers", "3"]);
+        var (noSl, sl) = BrainCommand.Champions(r);
+
+        var slIronclad = BrainCommand.Of(r, sl, sl: true, "IRONCLAD");
+        var noSlIronclad = BrainCommand.Of(r, noSl, sl: false, "IRONCLAD");
+        Assert.Equal((Path.Combine(_dir, "v-sl-ironclad.json"), true, 3, "plan"), (slIronclad.ValueFile, slIronclad.OnClone, slIronclad.Workers, slIronclad.Policy));
+        Assert.Equal((Path.Combine(_dir, "v-nosl-ironclad.json"), false, 3, "pimc"), (noSlIronclad.ValueFile, noSlIronclad.OnClone, noSlIronclad.Workers, noSlIronclad.Policy));
+        Assert.Equal("pure-v-tiny-win", slIronclad.Shown);
+        Assert.Same(sl, BrainCommand.Of(r, sl, sl: true, "SILENT"));
+        Assert.Same(noSl, BrainCommand.Of(r, noSl, sl: false, "SILENT"));
+        Assert.Throws<CliException>(() => BrainCommand.Champions(Cli.Parse(["brain", "--champion", noSlFile])));
+    }
+
+    [Fact]
     public void BrainTakesAChampionFileWithoutItsEnvironment()
     {
         var file = ChampionFile(new() { ["env"] = "SL", ["policy"] = "pimc", ["worlds"] = "4" });

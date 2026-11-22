@@ -143,6 +143,8 @@ internal static class PromoteCommand
     {
         var championPath = r.GetValue(ChampionPath)!;
         var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(championPath));
+        // A promotion writes one set of nets for every character; a file that names nets by character is written by hand.
+        if (file.Characters != null) throw new CliException($"{championPath} names nets by character (characters): no promotion writes it");
         bool look = r.GetValue(Look);
         // The new nets, by the champion file's keys, each where a champion's weights files are.
         var nets = new Dictionary<string, string>();

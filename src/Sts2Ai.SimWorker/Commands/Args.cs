@@ -186,18 +186,24 @@ internal sealed class ChampionFileOption : Option<string?>
     /// The parse again with the file's options after the ones given: each that the command has and was not given (brain
     /// has no --env: each host names its own). The file's budget is its combat brain's, so a --policy given that is not
     /// the file's keeps its own budget (plan's effort). The same parse if the command has no --champion FILE or was not
-    /// given one.
+    /// given one. A character's own nets (<see cref="ChampionFile.Characters"/>) go over the file's options: those of
+    /// <paramref name="character"/>, else of the command's --character (run's).
     /// </summary>
-    public static ParseResult Merge(Command root, IReadOnlyList<string> args, ParseResult parsed, ParserConfiguration config)
+    public static ParseResult Merge(Command root, IReadOnlyList<string> args, ParseResult parsed, ParserConfiguration config, string? character = null)
     {
         var command = parsed.CommandResult.Command;
         if (command.Options.OfType<ChampionFileOption>().FirstOrDefault() is not { } option || parsed.GetValue(option) is not { } path)
             return parsed;
         var file = ProtocolJson.Deserialize<ChampionFile>(File.ReadAllText(path));
+        // The run's character: given, else the file's, else the option's default.
+        character ??= command.Options.FirstOrDefault(o => o.Name == "--character") is Option<string> c
+            ? parsed.GetResult(c) is { Implicit: false } ? parsed.GetValue(c) : file.Options.GetValueOrDefault("character") ?? parsed.GetValue(c)
+            : null;
+        var options = file.OptionsOf(character);
         bool otherBrain = command.Options.FirstOrDefault(o => o.Name == "--policy") is Option<string> policy && parsed.GetResult(policy) is { Implicit: false }
-            && parsed.GetValue(policy) != file.Options.GetValueOrDefault("policy");
+            && parsed.GetValue(policy) != options.GetValueOrDefault("policy");
         var merged = args.ToList();
-        foreach (var (key, value) in file.Options)
+        foreach (var (key, value) in options)
         {
             if (command.Options.FirstOrDefault(o => o.Name == "--" + key) is not { } known || parsed.GetResult(known) is { Implicit: false }) continue;
             if (otherBrain && BudgetArgs.Keys.Contains(key)) continue;
@@ -234,15 +240,15 @@ internal sealed class ChampionArgs(bool file)
         "self-play only: card ids, comma-separated, that l0 never lets into the deck by an answer");
 
     /// <summary>The champion a champion file names, with <paramref name="given"/> options over the file's (as <c>run
-    /// --champion FILE OPTION...</c> would play it).</summary>
-    public static ChampionOptions Of(string championFile, IReadOnlyList<string> given)
+    /// --champion FILE OPTION...</c> would play it), and <paramref name="character"/>'s own nets over the file's.</summary>
+    public static ChampionOptions Of(string championFile, IReadOnlyList<string> given, string? character = null)
     {
         var args = new ChampionArgs(file: true);
         var command = Opt.Command("champion", "a champion file's champion", args.Options);
         var root = new RootCommand { command };
         var config = new ParserConfiguration { ResponseFileTokenReplacer = null };
         string[] line = ["champion", "--champion", championFile, .. given];
-        var parsed = ChampionFileOption.Merge(root, line, root.Parse(line, config), config);
+        var parsed = ChampionFileOption.Merge(root, line, root.Parse(line, config), config, character);
         if (parsed.Errors.Count > 0) throw new CliException($"{championFile}: {parsed.Errors[0].Message}");
         return args.Read(parsed);
     }

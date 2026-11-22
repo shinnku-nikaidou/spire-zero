@@ -164,11 +164,21 @@ public static class NetGate
 /// the run options that play it (<c>run --champion FILE</c>; a job gives its own character and ascension), its name as
 /// the reports show it, by character its report (a report is one character at one ascension), and the gate its nets
 /// passed (<c>promote</c>; none in a file written by hand). Each environment has its own nets
-/// (plans/2026-11-18-1340-nosl-v0.md): a promotion changes its own environment's file only.
+/// (plans/2026-11-18-1340-nosl-v0.md): a promotion changes its own environment's file only. Since 2026-11-22 each
+/// character may play its own nets (<paramref name="Characters"/>, the user: 之後所有神經網路分開了): by character, the
+/// options over <paramref name="Options"/> that name them; <paramref name="Champion"/> is then the name of
+/// <paramref name="Options"/>' own champion, which plays the characters without their own.
 /// </summary>
 public sealed record ChampionFile(string Env, string Champion, IReadOnlyDictionary<string, string> Options,
-    IReadOnlyDictionary<string, string> Reports, string Since, NetGate.Result? Gate = null)
+    IReadOnlyDictionary<string, string> Reports, string Since, NetGate.Result? Gate = null,
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Characters = null)
 {
+    /// <summary>The options that play <paramref name="character"/>: its own over the file's; the file's for none.</summary>
+    public IReadOnlyDictionary<string, string> OptionsOf(string? character) =>
+        character != null && Characters?.GetValueOrDefault(character) is { } own
+            ? Options.Concat(own).GroupBy(kv => kv.Key).ToDictionary(g => g.Key, g => g.Last().Value)
+            : Options;
+
     /// <summary>The file after a promotion: the challenger's name, options and reports, and the gate it passed.</summary>
     public ChampionFile Promoted(string champion, IReadOnlyDictionary<string, string> options, string since,
         IReadOnlyDictionary<string, string> reports, NetGate.Result gate) =>
