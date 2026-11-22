@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
@@ -103,6 +104,10 @@ internal sealed class Screens
             case NEventRoom or NFakeMerchant or NMerchantInventory when settled && run.CurrentRoom is EventRoom:
             {
                 var ev = RunManager.Instance.EventSynchronizer.GetLocalEvent();
+                // The Foul Potion thrown at the Fake Merchant: the throw's action ends with its fight on the way, and the
+                // event's screen stays up while the room changes. The simulator enters that fight at once, so it asks no
+                // decision there.
+                if (ev is FakeMerchant { StartedFight: true }) return null;
                 return Ask(run, me, Surfaces.Event, EventActions.Screen(ev, me), EventActions.Legal(ev));
             }
             case NMerchantRoom or NMerchantInventory when settled && run.CurrentRoom is MerchantRoom:
