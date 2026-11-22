@@ -497,3 +497,9 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   build it). At d1b616f8: a potion reward clicked with a full belt is no SL record step (the game refuses it, and the
   brain could not follow the record: "這個房間沒有 SL 複本"). The packed brain answered the SL and NoSL v6 wires the same as
   1.0.5, no errors. The game was running; installed in `mods/` over 1.0.5 once it closed (16:10Z, 00:10 Taiwan).
+- 2026-11-22 12:5x: mod 1.0.7 built for linux-x64 only, not uploaded (asked by the V session for the user's 設成 champion).
+  At 0826fd1f: each character plays its own V (the champion files' `characters`, the 12 reset v-sl-CHAR-0 /
+  v-nosl-CHAR-0 with d2's and v0-nosl-2's c and f), the panel names that V alone, the removal rule, the settings'
+  Multiplayer (experimental) switch. brain/nets holds 18 nets, the 12 V's among them; the packed brain answered the SL
+  and NoSL v6 wires (the Fool's) with v-sl-fool-0 and v-nosl-fool-0, no errors. Installed in `mods/` over 1.0.6 while the
+  game ran (04:55Z, 12:55 Taiwan), so it takes effect at the game's next start.
