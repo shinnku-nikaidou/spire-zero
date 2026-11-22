@@ -38,7 +38,8 @@ internal enum SearchEffort { Low, Medium, High, XHigh, Max }
 /// <param name="TurnDecay">The mod asks the SL planner to take a little off a line for each turn it ended
 /// (<see cref="Hello.TurnDecay"/>), so a fight is not drawn out for nothing; a change starts the run anew for the brain.</param>
 /// <param name="Multiplayer">Runs of more than one player are served in every game session: the console's
-/// <c>ai mp always</c>, and nowhere else (not the settings screen, not <c>ai set</c>).</param>
+/// <c>ai mp always</c>, or the settings screen's Multiplayer switch (the user, 2026-11-22: 或在設定裡面打開開關); not
+/// <c>ai set</c>.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,

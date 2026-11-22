@@ -115,6 +115,8 @@ internal static class SettingsTab
         content.AddChild(Header(L10n.T("Advanced"), font));
         content.AddChild(Choice(L10n.T("Environment"), L10n.T("SL sees the true outcome of the room you are in; NoSL never peeks"), font,
             ["SL", "NoSL"], [PlayEnvironment.SL, PlayEnvironment.NoSL], s => s.Env, (s, v) => s with { Env = v }, refresh));
+        content.AddChild(Choice(L10n.T("Multiplayer (experimental)"), L10n.T("advice in runs with other players, in NoSL; the same as the console's ai mp always"), font,
+            onOff, bools, s => s.Multiplayer, (s, v) => s with { Multiplayer = v }, refresh));
         var reset = new Button { Text = L10n.T("Reset AI settings"), FocusMode = Control.FocusModeEnum.None, SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd };
         Style(reset, font, 1);
         reset.Pressed += () =>

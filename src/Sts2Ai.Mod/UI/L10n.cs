@@ -213,6 +213,11 @@ internal static class L10n
         ["SL sees the true outcome of the room you are in; NoSL never peeks"] = ["SL voit le vrai résultat de la salle actuelle ; NoSL ne regarde jamais",
             "SL ve el resultado real de la sala actual; NoSL nunca mira", "SL 能看到当前房间的真实结果；NoSL 从不偷看", "SL 能看到目前房間的真實結果；NoSL 從不偷看",
             "SLは今いる部屋の本当の結果を見る。NoSLは一切覗かない"],
+        ["Multiplayer (experimental)"] = ["Multijoueur (expérimental)", "Multijugador (experimental)", "多人模式（实验性）", "多人模式（實驗性）", "マルチプレイ（実験的）"],
+        ["advice in runs with other players, in NoSL; the same as the console's ai mp always"] = [
+            "conseils dans les parties avec d'autres joueurs, en NoSL ; comme ai mp always dans la console",
+            "consejos en partidas con otros jugadores, en NoSL; igual que ai mp always en la consola", "和其他玩家一起打时给建议，用 NoSL；和控制台的 ai mp always 一样",
+            "和其他玩家一起打時給建議，用 NoSL；和主控台的 ai mp always 一樣", "ほかのプレイヤーとのランで NoSL で助言。コンソールの ai mp always と同じ"],
         // The console's quiz and the screens of a run of several players.
         ["Quiz: your move"] = ["Quiz : à vous", "Quiz: tu turno", "测验：轮到你", "測驗：輪到你", "クイズ：あなたの番"],
         ["the AI has answered; make your choice"] = ["l'IA a répondu ; faites votre choix", "la IA ya respondió; elige tú", "AI 已经想好了，你来选", "AI 已經想好了，你來選", "AIは答えを出した。あなたが選んで"],
