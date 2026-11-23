@@ -518,3 +518,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   changelog page; the English texts the new ones, with ea31f995's multiplayer section); then the texts alone, the 17
   languages, all OK. The change note (tmp/release-1.0.9/note.txt) leaves out `ai mp sl`, a hidden command. Installed
   in `mods/` over 1.0.8 (moved to `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
+- 2026-11-23 11:4x: mod 1.0.10 built for linux-x64 only, not uploaded (the user: 出測試版). At d2883b22: the panel in its
+  own desktop window (the new setting In game: Panel + marks, Marks only by default, Nothing), each character's colours
+  for the panel and the marks, and the game's mute and 30 FPS in the background following the whole game's focus. Only
+  the mod's UI changed since 1.0.9, the brain and champions not, so the packed brain was not run on the wires again.
+  Installed in `mods/` over 1.0.9 (moved to `tmp/modeng/old-installs/`) with the game closed; not tried in the real game yet.
