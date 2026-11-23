@@ -28,10 +28,13 @@ internal enum Command
 /// <param name="Win">V's chance to win the run at the latest macro decision; null before one.</param>
 /// <param name="Delta">Its change from the macro decision before.</param>
 /// <param name="Recent">What the AI played last, newest first.</param>
-internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pill, Tone PillTone, double? Win, double? Delta, IReadOnlyList<string> Recent)
+/// <param name="Fight">In a fight, the SL planner's expected end of it at its latest answer: the chance to win, the HP
+/// left, and whether its solver proved the line; null outside a fight or before a planned answer.</param>
+internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pill, Tone PillTone, double? Win, double? Delta, IReadOnlyList<string> Recent,
+    (double Win, double Hp, bool Proved)? Fight = null)
 {
     /// <summary>Records are compared by reference for lists: this compares what is shown.</summary>
-    public string Key => $"{Auto}|{Pill}|{PillTone}|{Win}|{Delta}|{string.Join("\n", Recent)}";
+    public string Key => $"{Auto}|{Pill}|{PillTone}|{Win}|{Delta}|{Fight}|{string.Join("\n", Recent)}";
 }
 
 /// <summary>
@@ -412,7 +415,7 @@ internal sealed class Panel
     }
 
     /// <summary>The brain's answer, and the marks it draws on the map or in combat.</summary>
-    /// <param name="sub">A line under the next action: how the fight or the run is expected to go after it.</param>
+    /// <param name="sub">A line under the next action: how the run is expected to go after it.</param>
     /// <param name="foot">Which brain answered, and how long it took.</param>
     /// <param name="table">In a fight, the answer's line turn by turn, for the details card (<see cref="Details"/>),
     /// which a button under the answer opens and closes; null for none.</param>
@@ -606,7 +609,8 @@ internal sealed class Panel
         _card.CallDeferred(Control.MethodName.ResetSize);
     }
 
-    /// <summary>V's chance to win the run, and the AI's state.</summary>
+    /// <summary>V's chance to win the run; in a fight, how the fight is expected to end, marked where the solver proved
+    /// it; and the AI's state.</summary>
     private void StatusStrip(Drive? drive)
     {
         if (drive == null) return;
@@ -629,6 +633,29 @@ internal sealed class Panel
             left.AddChild(line);
         }
         row.AddChild(left);
+        if (drive.Fight is { } fight)
+        {
+            var block = Column(2);
+            block.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            block.AddChild(Text(L10n.T("This fight").ToUpperInvariant(), 11, Muted));
+            var line = Row(6);
+            line.AddChild(Text(Percent(fight.Win, whole: true), 20, Fg));
+            if (fight.Win > 0)
+            {
+                var hp = Text(L10n.T("{0} HP left", Math.Round(fight.Hp)), 12, Muted);
+                hp.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+                line.AddChild(hp);
+            }
+            if (fight.Proved)
+            {
+                var tag = Frame(Colors.Transparent, Accent, 1);
+                tag.SizeFlagsVertical = Control.SizeFlags.ShrinkEnd;
+                tag.AddChild(Text(L10n.T("proved"), 11, Lead));
+                line.AddChild(tag);
+            }
+            block.AddChild(line);
+            row.AddChild(block);
+        }
         var pill = Frame(Track, null, 6);
         var inside = Row(6);
         pill.AddChild(inside);

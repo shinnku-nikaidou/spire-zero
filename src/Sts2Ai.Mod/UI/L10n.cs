@@ -149,7 +149,8 @@ internal static class L10n
         ["HP left"] = ["PV rest.", "PV rest.", "剩 HP", "剩 HP", "残りHP"],
         ["diff"] = ["écart", "dif.", "差", "差", "差"],
         ["value ±CI"] = ["valeur ±IC", "valor ±IC", "分数 ±CI", "分數 ±CI", "値 ±CI"],
-        ["this fight {0} · {1} HP left"] = ["ce combat {0} · {1} PV restants", "este combate {0} · quedan {1} PV", "这场胜率 {0} · 剩 {1} HP", "這場勝率 {0} · 剩 {1} HP", "この戦闘 {0} · 残りHP {1}"],
+        ["This fight"] = ["Ce combat", "Este combate", "这场胜率", "這場勝率", "この戦闘"],
+        ["{0} HP left"] = ["{0} PV restants", "quedan {0} PV", "剩 {0} HP", "剩 {0} HP", "残りHP {0}"],
         ["win chance {0}"] = ["chance de victoire {0}", "prob. de ganar {0}", "整局胜率 {0}", "整局勝率 {0}", "勝率 {0}"],
         ["Recent"] = ["Récent", "Reciente", "刚才做了", "剛才做了", "直近の行動"],
 

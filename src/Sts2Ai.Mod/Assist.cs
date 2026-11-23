@@ -161,7 +161,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     // V's chance to win at the latest macro decisions, and the SL planner's expected end of the current fight.
     private double? _win;
     private double? _before;
-    private (double Win, double Hp)? _fight;
+    private (double Win, double Hp, bool Proved)? _fight;
 
     /// <summary>The latest combat answer's line turn by turn (<see cref="Recommendation.Table"/>), for the details card; null outside a fight.</summary>
     private FightTable? _table;
@@ -548,14 +548,13 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
             : _goal == Goal.Auto ? (L10n.T("Auto on"), Tone.Plain)
             : _goal != Goal.Off ? (L10n.T("Acting"), Tone.Plain)
             : (L10n.T("Your move"), Tone.Plain);
-        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent]);
+        return new Drive(_goal == Goal.Auto, step, finish, pill, tone, _win, _win - _before, [.. _recent], fight ? _fight : null);
     }
 
-    /// <summary>The line under the next action: V's chance to win after it, or how the fight is expected to end.</summary>
+    /// <summary>The line under the next action: V's chance to win after it; the fight's expected end is in the status strip.</summary>
     private string? Sub(Answered answer) => answer.Shown.Kind switch
     {
         ShownKind.Run when answer.Answer.Candidates is { Count: > 0 } c => L10n.T("win chance {0}", Percent(c[0].Value)),
-        ShownKind.Fight or ShownKind.Score when _fight is { } fight => L10n.T("this fight {0} · {1} HP left", Percent(fight.Win, whole: true), Math.Round(fight.Hp)),
         _ => null,
     };
 
@@ -682,10 +681,9 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
     }
 
     /// <summary>What the combat search did for an answer, as the panel's foot adds it: the nodes it searched, while it
-    /// searches on, and that the solver proved its pick.</summary>
+    /// searches on. That the solver proved its pick shows with the fight's expected end (<see cref="Drive.Fight"/>).</summary>
     private static string Searched(Recommendation answer) =>
-        (answer.Nodes is { } n && (answer.Searching == true || answer.After == true) ? " · " + L10n.T("{0} nodes", Compact(n)) : "") +
-        (answer.Proved == true ? " · " + L10n.T("proved") : "");
+        answer.Nodes is { } n && (answer.Searching == true || answer.After == true) ? " · " + L10n.T("{0} nodes", Compact(n)) : "";
 
     /// <summary>What the combat search did for an answer, as the log adds it: the nodes it searched, where it says, and
     /// that the solver proved its pick.</summary>
@@ -709,7 +707,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
                 (_before, _win, _fight) = (_win, candidates[0].Value, null);
                 break;
             case ShownKind.Fight when candidates[0] is { Win: { } win, Hp: { } hp }:
-                _fight = (win, hp);
+                _fight = (win, hp, answer.Proved == true);
                 break;
         }
     }
