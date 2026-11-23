@@ -88,6 +88,7 @@ struct Running {
     entry: Option<super::card_select_cmd::Entry>,
     vakuu: i32,
     turn_start: Option<super::combat_manager::TurnStart>,
+    setup_action: bool,
     only: Option<&'static Only>,
     points: bool,
     resume_point: Option<Arc<Combat>>,
@@ -100,6 +101,7 @@ impl Running {
             entry: c.x.entry.take(),
             vakuu: c.x.vakuu,
             turn_start: c.x.turn_start.take(),
+            setup_action: c.x.setup_action,
             only: c.only.take(),
             points: c.x.points,
             resume_point: c.x.resume_point.take(),
@@ -111,6 +113,7 @@ impl Running {
         c.x.entry = self.entry;
         c.x.vakuu = self.vakuu;
         c.x.turn_start = self.turn_start;
+        c.x.setup_action = self.setup_action;
         c.only = self.only;
         c.x.points = self.points;
         c.x.resume_point = self.resume_point;

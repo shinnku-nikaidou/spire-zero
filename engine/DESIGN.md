@@ -484,7 +484,13 @@ game's objects (`Combat.x`).
   and IRONCLAD `--deck
   STRATAGEM*2,DARK_EMBRACE*2,TRUE_GRIT*2,BURNING_PACT,STRIKE_IRONCLAD*3,DEFEND_IRONCLAD*2,ASCENDERS_BANE*2`. The
   cards the turn end plays by itself (`AfterAutoPostPlayPhaseEntered`: Stampede, Simpleton, Howl from Beyond) are
-  awaited where they are played, so their prompts come before the turn goes on.
+  awaited where they are played, so their prompts come before the turn goes on. A turn start's setup that paused
+  runs its choice, its rest and its `RunAutoPrePlayPhase` inside its own action, so the executor is busy there
+  (`Extra::setup_action`): a hook that asks then (Bombardment's or Mayhem's kill under Tyranny's exhaust, Gremlin
+  Horn's draw, the shuffle's Stratagem) waits behind that action, and its prompt comes once the action has ended
+  (after Mayhem's card and that card's own prompt), with the draw pile as it is then. The lockstep check reaches it
+  with REGENT `--deck TYRANNY,STRATAGEM,MAYHEM,BOMBARDMENT,QUASAR,STRIKE_REGENT*4,DEFEND_REGENT*3 --relics
+  GREMLIN_HORN` (the options above, every encounter at A0 and A10).
 
 **Events.** An event of the game is a list of delegates, called in the order they subscribed. Nearly all are how
 the game tells its screen that something changed. An event is state when a subscriber is game code: a member of an

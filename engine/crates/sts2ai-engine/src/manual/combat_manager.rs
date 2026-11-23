@@ -429,6 +429,7 @@ fn turn_start_end(
             if g::combat::combat_manager::is_in_progress(manager, c) {
                 g::combat::combat_manager::check_win_condition__0(manager, c)?;
             }
+            c.x.setup_action = false;
         } else {
             players_turn_started(me, turn_state, c)?;
         }
@@ -594,6 +595,9 @@ pub fn turn_start_rest(c: &mut Combat) -> R<()> {
     if !g::combat::combat_turn_state::is_in_progress(turn_state, c) {
         return Err(Stop::Dropped);
     }
+    // Then it runs the setup's action: the setup's choice, its rest and its RunAutoPrePlayPhase run inside it, up to
+    // `turn_start_end`'s win check.
+    c.x.setup_action = true;
     Ok(())
 }
 

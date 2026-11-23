@@ -35,6 +35,10 @@ pub struct Extra {
     pub waits: combat_manager::Waits,
     /// The turn start whose player's setup is running (manual/combat_manager.rs, `start_turn`).
     pub turn_start: Option<combat_manager::TurnStart>,
+    /// Set while a setup that paused for a choice runs its rest and its RunAutoPrePlayPhase, after the rest of the
+    /// turn start (manual/combat_manager.rs, `turn_start_rest` to `turn_start_end`): the game's executor runs that as
+    /// the setup's own action, so it is busy then (manual/action_executor.rs, `start_at_once`).
+    pub setup_action: bool,
     /// The game's two signals to the turn loop, while nobody has taken them: every player is ready to end the turn
     /// (an EndTurnSignal), every player is ready for the enemies' turn (what to run during it; null for nothing).
     pub end_turn_signal: Option<crate::rt::Obj>,

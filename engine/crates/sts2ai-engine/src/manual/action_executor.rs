@@ -39,8 +39,13 @@ pub fn execute_actions(me: ActionExecutor, c: &mut Combat) -> R<()> {
 
 /// C#: ActionExecutor.ActionQueueChanged, for the action of a hook that pauses for the player, just enqueued
 /// (manual/hook_player_choice_context.rs): an executor that is idle starts at once, and when the hook's action is the
-/// one it starts, starts it and waits on the hook (the game's one thread goes on in the hook). Whether it did.
+/// one it starts, starts it and waits on the hook (the game's one thread goes on in the hook). Whether it did. In a
+/// paused setup's rest the executor is running the setup's action (`Extra::setup_action`): the hook's action waits
+/// behind it.
 pub fn start_at_once(me: ActionExecutor, action: GameAction, c: &mut Combat) -> bool {
+    if c.x.setup_action {
+        return false;
+    }
     let executor = ActionExecutorData::of(me, c);
     if !executor.currently_running_action.is_null() || executor._is_paused {
         return false;
