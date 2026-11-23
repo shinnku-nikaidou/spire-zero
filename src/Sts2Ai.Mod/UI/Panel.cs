@@ -270,7 +270,7 @@ internal sealed class Panel
         _effortRow = effort;
         _effortRow.Visible = false;
 
-        // While auto-play runs: its speed and where it stops.
+        // Auto-play's speed and where it stops, with the toolbar: set before auto-play starts too, and kept when it stops.
         var options = Column(5);
         var speed = Row(8);
         speed.AddChild(_speedLabel = Text("", 11, Muted));
@@ -477,7 +477,7 @@ internal sealed class Panel
         _drive = drive;
         _toolbar.Visible = drive != null && !Coop && _pressed != null;
         _effortRow.Visible = drive != null && _pressed != null;
-        _options.Visible = drive is { Auto: true };
+        _options.Visible = _toolbar.Visible;
         if (_controls != null) _controls.Visible = _toolbar.Visible || _effortRow.Visible;
         if (drive == null) return;
         Set(_auto, drive.Auto ? L10n.T("Pause") : L10n.T("Auto"), drive.Auto ? Icons.Pause : Icons.Play, true);
