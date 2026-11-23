@@ -1,0 +1,47 @@
+# The SL self-play dataset sl-regent-g0 (plans/2026-11-23-1545-sl-regent-g0.md): REGENT's own data, to train
+# v-sl-regent-1, the Regent's first bundle of its own (nets per character since 2026-11-22).
+# Played by the bundle v-sl-regent-0 (sl-regent-g0.bundle.json beside this file): d2's V with REGENT's 24 card ids reset
+# to about a site-B card (eval/resets/2026-11-22-cards.toml), d2's combat net and f; REGENT's entry in eval/champions/sl.json.
+# Every fight at xhigh, as sl-silent-g0. No card family favored or refused: every run is an untouched run at the last SL
+# datasets' tiers.
+# A10 10,000, the Dread mode 10,000, A0-A9 10,000 (1,000 each): 30,000 runs (the user, 2026-11-23: "30000場, 1:1:1 A0-9, 10 恐懼").
+#
+# The bundle names weights/all/v-sl-regent-0.json, which box.py launch takes from this checkout and sends through the hub
+# (it refuses a net it lacks; the net is not on the GitHub release).
+name = "sl-regent-g0"
+deadline = "+72h"                   # box.py deadline sl-regent-g0 UNTIL moves it; about 55-60 h of the pool at xhigh
+priority = 0
+seeds = 6400000                     # the ledger's blocks 6400000-6999999; REGENT (k = 3) plays 6700000-6729999, the smoke from 6799000
+characters = ["REGENT"]
+champion = "eval/datasets/sl-regent-g0.bundle.json"   # v-sl-regent-0
+workers = 4
+
+# sl-silent-g0's untouched tiers (v11g0-td4-high's): a third of a row's runs each, a decision drawn evenly with chance
+# epsilon, the others by a softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at xhigh (max's solver with the early stop, solve 16384 stop 1024).
+[games.full]
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+# The Dread mode, which the game plays at ascension 10 only.
+[games.dread]
+mode = "dread"
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+[[runs]]
+game = "full"
+asc = 10
+n = 10000
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 10000
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
