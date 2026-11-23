@@ -561,3 +561,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   parallel loop; the same commit built on the second) and swapped in with the game closed, DamageMeter still disabled.
   Its fix: an SL clone of a boss room's checkpoint has no dominion, as the run it came from (the cycle guard held no
   state there, and the AI opened and skipped the act 2 boss's card reward twenty times; `clones` on that wire 0 → 7 of 7).
+- 2026-11-23 18:3x: mod 1.0.17, a local build for this machine's game only, not uploaded; 1.0.16 (3775879a) was built
+  but never installed. 1.0.15's check threw when a checkpoint's dominion and the loaded run's differed, which every
+  arrival at a boss's point does (no clone there, the act 1 boss's card prompt stalled). 1.0.16 took the dominion off
+  wherever the checkpoint had none, which also took it off the run's first checkpoint, taken before the act gives it.
+  1.0.17 (built at 010152a2) takes it off only in the act's finished boss room, the one place the game's load gets it
+  wrong; the checkpoint carries no dominion. `clones` on every decision of the dropped run 230 of 231 (the one left, the
+  act's first screen, is asked before the game sets the dominion after the act's fade, as in every version), the boss
+  wire 13 of 13, the loop wire 7 of 7. The recorded run was dropped and a new one starts from floor 0.
