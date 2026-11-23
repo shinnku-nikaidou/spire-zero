@@ -578,3 +578,14 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   a failed solver is dropped (a6182f67). The brain on both fights at the game's own times: 1.0.17 fails to the end,
   1.0.18 answers from the first decision in the play phase; `clones` on today's won run 881 of 885 (the same four
   non-combat differences as before the change), the boss wire 13 of 13, the loop wire 7 of 7.
+- 2026-11-23 22:3x: mod 1.0.19 uploaded (the user: 直接打包 mod + 发布). Built at 9b4b6908 for all three platforms (the
+  Windows VM started for it, shut down after): SL clones retrace the run (checkpoints only on arrival while playing on,
+  the 1.0.15-1.0.17 dominion patches deleted), every search checks its clone against the decision first, and the mod
+  asks and presses only once the game is idle (Settle.Idle: no action, no room change, NetService.IsGameLoading off,
+  which EnterAct holds through Hook.AfterActEntered); with them 1.0.13-1.0.18's fixes and the engine's two hook fixes
+  reach the Workshop. The packed brain: the NoSL v6 wire and the SILENT SL wire answer as 1.0.12, no errors; the old
+  FOOL Dread SL wire now refuses its decision 0 (".run.dominion is absent in the game and WATERFALL_GIANT_DOMINION in
+  the clone": that wire's mod asked Neow before the act's dominion came) and answers the other 7 as 1.0.12. The game
+  closed here and on the Mac. The commit went through at once (the public API: updated 14:32:39Z, 552.2 MB), the 17
+  languages' texts with it, unchanged. Note: tmp/release-1.0.19/note.txt. Installed in `mods/` over 1.0.18 (moved to
+  `tmp/modeng/old-installs/`), DamageMeter still disabled; the game not started on it yet.
