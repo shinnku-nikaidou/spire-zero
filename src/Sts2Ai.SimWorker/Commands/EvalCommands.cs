@@ -89,7 +89,7 @@ internal static class GateCommand
             throw new CliException($"the champion has no report of {character} to pair with; play one with its options first");
         var champion = ProtocolJson.Deserialize<EvalReport>(File.ReadAllText(reportPath));
         var challenger = Challenger.Read(r);
-        if (challenger.Explores) throw new CliException("--explore, --macro-explore, --favor and --refuse are for self-play; a challenger plays its best");
+        if (challenger.Explores) throw new CliException("--explore, --macro-explore and the card lock (--favor, --refuse, --keep, --upgrade-first) are for self-play; a challenger plays its best");
         if (runs.FirstOrDefault(run => run.Config.Champion != challenger.Name) is { } other)
             throw new CliException($"run {other.Seed} was played by {other.Config.Champion}, not by the options given ({challenger.Name})");
         IReadOnlyList<(RunRecord, RunRecord)> pairs;

@@ -15,7 +15,7 @@ namespace Sts2Ai.SimWorker.Brains;
 /// evenly, whatever V says (--explore, <see cref="Uniform"/>); 0 for none.</param>
 /// <param name="MacroExplore">For self-play only: l0's softmax temperature τ over the log of V's values for the decisions
 /// not drawn evenly (--macro-explore, <see cref="Softmax"/>); 0 for none, V's best.</param>
-/// <param name="Cards">For self-play only: l0's card lock (--favor, --favor-by, --refuse, <see cref="CardLock"/>); null for none.</param>
+/// <param name="Cards">For self-play only: l0's card lock (--favor, --favor-by, --refuse, --keep, --upgrade-first, <see cref="CardLock"/>); null for none.</param>
 internal sealed record ChampionOptions(string Policy, string Macro, Budget Budget, int Workers, IRunValue? Value, string? ValueFile,
     LeafChoice Leaf, bool OnClone = false, double Explore = 0, double MacroExplore = 0, CardLock? Cards = null)
 {
@@ -93,7 +93,7 @@ internal sealed record ChampionOptions(string Policy, string Macro, Budget Budge
     private string Combat => Policy + Leaf.Suffix;
 
     /// <summary>l0 by its V's name, then "clone" if it plays on the node's clone, then "explore τ" and "eps ε" if it explores,
-    /// then "favor N by B refuse M" if it locks its cards.</summary>
+    /// then "favor N by B refuse M" if it locks its cards, with "keep K" and "upgrade first U" where it has them.</summary>
     private string L0 => $"l0 {Value?.Name}" + (OnClone ? " clone" : "") + (MacroExplore > 0 ? FormattableString.Invariant($" explore {MacroExplore}") : "")
         + (Explore > 0 ? FormattableString.Invariant($" eps {Explore}") : "") + (Cards != null ? $" {Cards.Name}" : "");
 

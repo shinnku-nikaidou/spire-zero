@@ -76,7 +76,7 @@ public class RemovalOrderTests
     {
         var choice = Prompt(1, 2, [Neutralize, Strike, StrikeUp, Regret]);
         var drawn = Enumerable.Range(0, 400).Select(seed => new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Removal(choice))).ToList();
-        Assert.All(drawn, a => Assert.True(a.Explored && RemovalOrder.Keeps(choice, a.Picks), string.Join(",", a.Picks)));
+        Assert.All(drawn, a => Assert.True(a.Explored && RemovalOrder.Keeps(RemovalOrder.Firsts(choice), a.Picks), string.Join(",", a.Picks)));
         // One pick is either card that goes first; two are both.
         Assert.Equal(["1", "1,3", "3"], drawn.Select(a => string.Join(",", a.Picks)).Distinct().Order(StringComparer.Ordinal));
     }
@@ -100,7 +100,7 @@ public class RemovalOrderTests
         var one = Prompt(2, 2, [Neutralize, Strike, StrikeUp, DefendUp]);
         var other = new Toy(path => Exit(Without(one.Options, path[0].Picks)));
         Assert.Equal([0, 1], new MacroBrain(V).Choose(Removal(one, other)).Picks);
-        Assert.All(Enumerable.Range(0, 100), seed => Assert.True(RemovalOrder.Keeps(choice,
+        Assert.All(Enumerable.Range(0, 100), seed => Assert.True(RemovalOrder.Keeps(RemovalOrder.Firsts(choice),
             new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Removal(choice, toy)).Picks)));
     }
 

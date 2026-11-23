@@ -179,6 +179,9 @@ public sealed class CliTests : IDisposable
     [InlineData("--macro-explore", "0.05", "--macro", "random")]
     [InlineData("--favor", "A", "--favor-by", "0.2", "--macro", "random")]
     [InlineData("--refuse", "A", "--macro", "random")]
+    [InlineData("--keep", "A", "--macro", "random")]
+    [InlineData("--upgrade-first", "A", "--macro", "random")]
+    [InlineData("--keep", "A,B", "--refuse", "B", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
     [InlineData("--favor", "A,B", "--favor-by", "0.2", "--refuse", "B", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
     [InlineData("--favor", ",", "--favor-by", "0.2", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
     [InlineData("--favor", "A", "--macro", "l0", "--value", "Fixtures/pure-v-tiny-win.json")]
@@ -250,6 +253,14 @@ public sealed class CliTests : IDisposable
         Assert.EndsWith("macro l0 pure-v-tiny-win favor 2 by 0.2 refuse 1, macro prompts l0 pure-v-tiny-win favor 2 by 0.2 refuse 1", played.Name);
         Assert.True(played.Explores);
         Assert.Null(champion.Read(command.Parse(["--macro", "l0", "--value", value])).Cards);
+        // Tyranny's runs (plans/2026-11-23-1545-sl-regent-g0.md): favored, kept and upgraded first.
+        var tyranny = champion.Read(command.Parse(["--macro", "l0", "--value", value, "--favor", "TYRANNY", "--favor-by", "10",
+            "--keep", "TYRANNY", "--upgrade-first", "TYRANNY"]));
+        Assert.Equal(new HashSet<string> { "TYRANNY" }, tyranny.Cards!.Keep);
+        Assert.Equal(new HashSet<string> { "TYRANNY" }, tyranny.Cards.UpgradeFirst);
+        Assert.EndsWith("macro l0 pure-v-tiny-win favor 1 by 10 refuse 0 keep 1 upgrade first 1, macro prompts l0 pure-v-tiny-win favor 1 by 10 refuse 0 keep 1 upgrade first 1",
+            tyranny.Name);
+        Assert.NotNull(champion.Read(command.Parse(["--macro", "l0", "--value", value, "--keep", "TYRANNY"])).Cards);
     }
 
     [Fact]

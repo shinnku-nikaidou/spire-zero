@@ -238,6 +238,10 @@ internal sealed class ChampionArgs(bool file)
     private readonly Option<double?> _favorBy = Opt.Maybe<double?>("--favor-by", "self-play only: --favor's bonus in log V a card, above 0");
     private readonly Option<string?> _refuse = Opt.Maybe<string?>("--refuse",
         "self-play only: card ids, comma-separated, that l0 never lets into the deck by an answer");
+    private readonly Option<string?> _keep = Opt.Maybe<string?>("--keep",
+        "self-play only: card ids, comma-separated, that l0 never lets out of the deck by an answer (a removal or a transformation)");
+    private readonly Option<string?> _upgradeFirst = Opt.Maybe<string?>("--upgrade-first",
+        "self-play only: card ids, comma-separated, that an upgrade's prompt outside combat takes first while one is not upgraded");
 
     /// <summary>The champion a champion file names, with <paramref name="given"/> options over the file's (as <c>run
     /// --champion FILE OPTION...</c> would play it), and <paramref name="character"/>'s own nets over the file's.</summary>
@@ -254,7 +258,7 @@ internal sealed class ChampionArgs(bool file)
     }
 
     /// <summary>The options that make the champion, without --champion FILE.</summary>
-    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore, _favor, _favorBy, _refuse];
+    public IEnumerable<Option> Champion => [_policy, _macro, .. _budget.Options, _workers, _afterstates, .. _leaf.Options, _explore, _macroExplore, _favor, _favorBy, _refuse, _keep, _upgradeFirst];
 
     public IEnumerable<Option> Options => _file != null ? [_file, .. Champion] : Champion;
 
@@ -273,8 +277,8 @@ internal sealed class ChampionArgs(bool file)
         double macroExplore = r.GetValue(_macroExplore);
         if (macroExplore is not >= 0) throw new CliException("--macro-explore is a temperature, from 0");
         if (macroExplore > 0 && macro != "l0") throw new CliException("--macro-explore is l0's; it needs --macro l0");
-        var cards = Lock(r.GetValue(_favor), r.GetValue(_favorBy), r.GetValue(_refuse));
-        if (cards != null && macro != "l0") throw new CliException("--favor and --refuse are l0's; they need --macro l0");
+        var cards = Lock(r.GetValue(_favor), r.GetValue(_favorBy), r.GetValue(_refuse), r.GetValue(_keep), r.GetValue(_upgradeFirst));
+        if (cards != null && macro != "l0") throw new CliException("--favor, --refuse, --keep and --upgrade-first are l0's; they need --macro l0");
         var leaf = _leaf.Read(r);
         if ((leaf.Net != null) != (policy is "pimc" or "plan")) throw new CliException("--combat-net and --policy pimc or plan go together");
         if ((leaf.Value != null) != (macro == "l0" || leaf.Net != null)) throw new CliException("--value goes with --macro l0 or --combat-net, which need it");
@@ -282,16 +286,18 @@ internal sealed class ChampionArgs(bool file)
         return new(policy, macro, budget, r.GetValue(_workers) ?? budget.Worlds, leaf.Value, leaf.ValuePath, leaf, clone, explore, macroExplore, cards);
     }
 
-    /// <summary>The card lock --favor (by --favor-by) and --refuse give, or null with neither.</summary>
-    private static CardLock? Lock(string? favor, double? by, string? refuse)
+    /// <summary>The card lock --favor (by --favor-by), --refuse, --keep and --upgrade-first give, or null with none.</summary>
+    private static CardLock? Lock(string? favor, double? by, string? refuse, string? keep, string? upgradeFirst)
     {
         if ((favor == null) != (by == null)) throw new CliException("--favor and --favor-by go together");
-        if (favor == null && refuse == null) return null;
+        if (favor == null && refuse == null && keep == null && upgradeFirst == null) return null;
         if (by is not (null or > 0)) throw new CliException("--favor-by is a bonus in log V, above 0");
         static HashSet<string> Ids(string? list) => [.. (list ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
-        var (favored, refused) = (Ids(favor), Ids(refuse));
-        if (favored.Count + refused.Count == 0) throw new CliException("--favor and --refuse name card ids, comma-separated");
+        var (favored, refused, kept, first) = (Ids(favor), Ids(refuse), Ids(keep), Ids(upgradeFirst));
+        if (favored.Count + refused.Count + kept.Count + first.Count == 0)
+            throw new CliException("--favor, --refuse, --keep and --upgrade-first name card ids, comma-separated");
         if (favored.Intersect(refused).FirstOrDefault() is { } both) throw new CliException($"{both} is both favored and refused");
-        return new(favored, by ?? 0, refused);
+        if (kept.Intersect(refused).FirstOrDefault() is { } neither) throw new CliException($"{neither} is both kept and refused");
+        return new(favored, by ?? 0, refused, kept, first);
     }
 }

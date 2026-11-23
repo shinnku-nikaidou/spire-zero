@@ -57,9 +57,10 @@ a net's name is used once, so every machine plays the same thing.
 
 A self-play dataset is one file, `eval/datasets/NAME.toml` (`eval/datasets/example.toml` shows every key): the block of
 seeds, the characters, the champion file it plays, the exploration tiers (each a uniform draw's chance ε and a softmax
-temperature τ on log V, and it may tilt a run's cards: `favor` with `favor_by` and `refuse` name card families of the
-file's `[families]`; l0 weighs each afterstate with a bonus of `favor_by` in log V for each favored card it adds, and
-never lets a refused one in; run's `--favor`, `--favor-by` and `--refuse`), the games (which acts win their plain monster fights at their start, a fight's effort by
+temperature τ on log V, and it may tilt a run's cards: `favor` with `favor_by`, `refuse`, `keep` and `upgrade_first` name
+card families of the file's `[families]`; l0 weighs each afterstate with a bonus of `favor_by` in log V for each favored
+card it adds, never lets a refused one in nor a kept one out, and an upgrade's prompt takes a card to upgrade first
+first; run's `--favor`, `--favor-by`, `--refuse`, `--keep` and `--upgrade-first`), the games (which acts win their plain monster fights at their start, a fight's effort by
 its room: monster, elite, boss, and the game mode: `mode = "dread"` for the Dread mode, played at ascension 10 only, or
 none for the standard game; `env = "nosl"` for a NoSL game, played by the file's `nosl_champion`, with no effort), and
 rows of runs, each a game, ascensions and counts, for every character or for the ones it names. SL's jobs go to `CHAR/sl/selfplay/NAME/...`, NoSL's to `CHAR/nosl/selfplay/NAME/...`, one step.
@@ -74,8 +75,8 @@ pool/box.py launch eval/datasets/NAME.toml REV          # the step NAME
 the file says. Character k of SILENT, IRONCLAD, DEFECT, REGENT, NECROBINDER, FOOL plays seeds from `seeds + 100000 k`, a
 ledger block of 100,000 each (so a file takes six blocks), its rows
 back to back in the file's order, each row's ascensions in order, each ascension's runs split evenly over the tiers; the
-last 1,000 of a character's block are the smoke's, so a character plays at most 99,000 runs. A job is `CHAR/sl/selfplay/NAME/aNN-GAME-eEEE[-tTTT][-fA.B-bBBB][-rC]` (ε and τ in
-hundredths, then the families favored with their bonus in hundredths, and refused). The smoke plays one more run for each
+last 1,000 of a character's block are the smoke's, so a character plays at most 99,000 runs. A job is `CHAR/sl/selfplay/NAME/aNN-GAME-eEEE[-tTTT][-fA.B-bBBB][-rC][-kD][-uE]` (ε and τ in
+hundredths, then the families favored with their bonus in hundredths, refused, kept and upgraded first). The smoke plays one more run for each
 other card lock a row's tiers have. The file then lies beside the data, its first line `rev = "REV"`, as `CHAR/sl/selfplay/NAME/dataset.toml`
 in each character's folder, here and on the hub.
 

@@ -87,8 +87,9 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
     private static bool Inside(Afterstate after) => after.Surface is not (null or Surfaces.Map or Surfaces.Combat);
 
     /// <summary>The answers searched at a screen of the node: its actions as a decision there offers them, or a card prompt's
-    /// single picks, a removal's as its rule allows them (<see cref="RemovalOrder"/>).</summary>
-    private static IEnumerable<MacroAction> Answers(Afterstate after)
+    /// single picks, the cards that go first first (a removal's basic cards, <see cref="RemovalOrder"/>, or an upgrade's
+    /// under the card lock, <see cref="CardLock.Firsts"/>).</summary>
+    private IEnumerable<MacroAction> Answers(Afterstate after)
     {
         if (after.Screen is not CardChoiceScreen { Choice: var choice })
         {
@@ -98,8 +99,9 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
         if (choice.Min > 1) yield break;
         if (choice.Min == 0) yield return MacroAction.Pick([]);
         if (choice.Max < 1) yield break;
+        var firsts = CardLock.Firsts(cards, choice);
         foreach (var group in choice.Groups())
-            if (RemovalOrder.Opens(choice, [], group[0])) yield return MacroAction.Pick([group[0]]);
+            if (RemovalOrder.Opens(firsts, [], group[0])) yield return MacroAction.Pick([group[0]]);
     }
 
     public static ulong Key(Afterstate after) => ProtocolJson.Hash(after);

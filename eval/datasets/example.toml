@@ -16,8 +16,10 @@ workers = 4                         # search workers per run
 # drawn evenly; tau: the softmax temperature on log V by which the others are drawn (0 or left out: V's best).
 explore = [{ epsilon = 0.3 }, { epsilon = 0.1, tau = 0.05 }, { epsilon = 0.02, tau = 0.05 }]
 
-# Card families a tier may tilt a run by (favor = [...] with favor_by = B, refuse = [...]): l0 weighs each afterstate
-# with a bonus of B in log V for each favored card it adds; a refused family's cards never come in by an answer.
+# Card families a tier may tilt a run by (favor = [...] with favor_by = B, refuse = [...], keep = [...],
+# upgrade_first = [...]): l0 weighs each afterstate with a bonus of B in log V for each favored card it adds; a refused
+# family's cards never come in by an answer, a kept family's never go out by one; an upgrade's prompt takes a card of an
+# upgrade_first family not upgraded first.
 [families]
 shiv = ["BLADE_DANCE", "LEADING_STRIKE"]
 poison = ["SNAKEBITE", "NOXIOUS_FUMES"]
@@ -74,4 +76,5 @@ characters = ["NECROBINDER"]
 game = "gauntlet"
 asc = [5, 9]
 n = [300, 600]
-explore = [{ epsilon = 0.1, tau = 0.1 }, { epsilon = 0.01, favor = ["shiv"], favor_by = 0.2, refuse = ["poison"] }]
+explore = [{ epsilon = 0.1, tau = 0.1 }, { epsilon = 0.01, favor = ["shiv"], favor_by = 0.2, refuse = ["poison"] },
+           { epsilon = 0.01, favor = ["shiv"], favor_by = 10, keep = ["shiv"], upgrade_first = ["shiv"] }]

@@ -39,20 +39,15 @@ public static class RemovalOrder
     public static IReadOnlyList<int> Firsts(CardChoice choice) =>
         Covers(choice) ? [.. Enumerable.Range(0, choice.Options.Count).Where(i => First(choice.Options[i]))] : [];
 
-    /// <summary>Whether <paramref name="picks"/> keep the rule: as many of the cards that go first as they can hold.</summary>
-    public static bool Keeps(CardChoice choice, IReadOnlyCollection<int> picks)
-    {
-        var firsts = Firsts(choice);
-        return picks.Count(firsts.Contains) == Math.Min(picks.Count, firsts.Count);
-    }
+    /// <summary>Whether <paramref name="picks"/> keep the order of the options that go first, <paramref name="firsts"/>
+    /// (<see cref="Firsts"/>, or a run's card lock's, <see cref="CardLock.Firsts"/>): as many of them as they can hold.</summary>
+    public static bool Keeps(IReadOnlyList<int> firsts, IReadOnlyCollection<int> picks) =>
+        picks.Count(firsts.Contains) == Math.Min(picks.Count, firsts.Count);
 
-    /// <summary>Whether a pick after <paramref name="picks"/> may take option <paramref name="option"/>: one that goes first,
-    /// or any once those are all picked.</summary>
-    public static bool Opens(CardChoice choice, IReadOnlyCollection<int> picks, int option)
-    {
-        var firsts = Firsts(choice);
-        return firsts.Contains(option) || firsts.All(picks.Contains);
-    }
+    /// <summary>Whether a pick after <paramref name="picks"/> may take option <paramref name="option"/>: one of the options
+    /// that go first, <paramref name="firsts"/>, or any once those are all picked.</summary>
+    public static bool Opens(IReadOnlyList<int> firsts, IReadOnlyCollection<int> picks, int option) =>
+        firsts.Contains(option) || firsts.All(picks.Contains);
 
     /// <summary>Of the cards a removal could take, those the rule lets it: the ones that go first, if there are any.</summary>
     public static IReadOnlyList<CardView> Removable(IEnumerable<CardView> cards)

@@ -3,9 +3,9 @@
 # Played by the bundle v-sl-regent-0 (sl-regent-g0.bundle.json beside this file): d2's V with REGENT's 24 card ids reset
 # to about a site-B card (eval/resets/2026-11-22-cards.toml), d2's combat net and f; REGENT's entry in eval/champions/sl.json.
 # Every fight at xhigh, as sl-silent-g0. Each place split 20 / 40 / 30 / 10 (the user, 2026-11-23: "20%的局有白卡傾向, 40%的局
-# 看見暴政就拿, 30%完全不管, 10%鑄劍傾向"; of Tyranny: "暴政就拿, 優先敲, 不准刪卡"): the colorless tilt, Tyranny taken on
-# sight, upgraded first and no card removed once it is in the deck, the untouched runs at the last SL datasets' tiers, the
-# forge tilt. The tilted runs at a low epsilon so that their decks take shape, as sl-silent-g0's.
+# 看見暴政就拿, 30%完全不管, 10%鑄劍傾向"; of Tyranny: "暴政就拿, 優先敲, 不准刪卡", then "不准刪暴政"): the colorless tilt,
+# Tyranny taken on sight, upgraded first and never removed, the untouched runs at the last SL datasets' tiers, the forge
+# tilt. The tilted runs at a low epsilon so that their decks take shape, as sl-silent-g0's.
 # A10 10,000, the Dread mode 10,000, A0-A9 10,000 (1,000 each): 30,000 runs (the user: "30000場, 1:1:1 A0-9, 10 恐懼").
 #
 # The bundle names weights/all/v-sl-regent-0.json, which box.py launch takes from this checkout and sends through the hub
@@ -55,7 +55,7 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }
 game = "full"
 asc = 10
 n = 4000
-explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, keep = ["tyranny"], upgrade_first = ["tyranny"] }]
 
 [[runs]]
 game = "full"
@@ -78,7 +78,7 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }
 game = "dread"
 asc = 10
 n = 4000
-explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, keep = ["tyranny"], upgrade_first = ["tyranny"] }]
 
 [[runs]]
 game = "dread"
@@ -101,7 +101,7 @@ explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 n = [400, 400, 400, 400, 400, 400, 400, 400, 400, 400]
-explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, keep = ["tyranny"], upgrade_first = ["tyranny"] }]
 
 [[runs]]
 game = "full"

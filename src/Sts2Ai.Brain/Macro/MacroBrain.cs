@@ -28,9 +28,10 @@ namespace Sts2Ai.Brain.Macro;
 /// <see cref="EventLines"/>, <see cref="MacroAnswer.Event"/>); null for none. The lines are logged, never valued for the
 /// answer.</param>
 /// <param name="cards">Self-play only: a run tilted toward card families (<see cref="CardLock"/>): every afterstate weighed
-/// as the lock weighs it (a bonus for the favored cards it adds, −∞ for a refused one), at every decision, card prompt
-/// and state the clone's search reaches, and an answer the draws took that brings a refused card in gives way to the best
-/// that does not. Null for none.</param>
+/// as the lock weighs it (a bonus for the favored cards it adds, −∞ for one that brings a refused card in or takes a kept
+/// one out), at every decision, card prompt and state the clone's search reaches, and an answer the draws took that breaks
+/// the lock gives way to the best that does not; an upgrade's prompt takes its cards to upgrade first first, as a removal
+/// does its basic cards. Null for none.</param>
 public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombatLeaf? fights = null, Softmax? softmax = null,
     bool hostSaysPlayed = false, IRunValue? eventLines = null, CardLock? cards = null)
     : IMacroPolicy, IChoicePolicy
@@ -78,7 +79,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         else pick = _draws.Pick(values, ref explored);
         if (cards != null)
         {
-            int kept = cards.Keep(pick, obs.Run.Deck, [.. options.Select(o => o.After.Deck)], values);
+            int kept = cards.Kept(pick, obs.Run.Deck, [.. options.Select(o => o.After.Deck)], values);
             explored |= kept != pick;
             pick = kept;
         }
@@ -246,7 +247,8 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         _opened = false;
         // A prompt asked in a fight the run's rule wins picks among the fight's cards: nothing of the run changes by it.
         RunView Picked(RunView from, int i) => choice.Context.InCombat ? from : ScreenAfterstates.Picked(from, choice.Options[i], choice.Context.Purpose);
-        if (_draws.Even(choice, min) is { } even && !Breaks(run, even, Picked)) return new(even, Explored: true);
+        var firsts = CardLock.Firsts(cards, choice);
+        if (_draws.Even(choice, min, firsts) is { } even && !Breaks(run, even, Picked)) return new(even, Explored: true);
         bool explored = false;
         var picks = new List<int>();
         var state = run;
@@ -255,7 +257,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var first = new List<(MacroAction Action, double Value)>();
         while (picks.Count < Math.Min(choice.Max, choice.Options.Count))
         {
-            var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i) && RemovalOrder.Opens(choice, picks, i))
+            var options = Enumerable.Range(0, choice.Options.Count).Where(i => !picks.Contains(i) && RemovalOrder.Opens(firsts, picks, i))
                 .Select(i =>
                 {
                     var next = Picked(state, i);
@@ -295,14 +297,14 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         var root = new Afterstate(obs.Run, Surfaces.CardChoice, obs.Screen, []);
         // A draw is checked against the lock where the clone plays it: what a transformation or a grant brings is the
         // game's, which the screen cannot predict.
-        if (_draws.Even(choice, min) is { } even && (cards == null || !cards.Breaks(obs.Run.Deck, clone.After([(IReadOnlyList<MacroAction>)[MacroAction.Pick(even.Order())]])[0].Run.Deck)))
+        var firsts = CardLock.Firsts(cards, choice);
+        if (_draws.Even(choice, min, firsts) is { } even && (cards == null || !cards.Breaks(obs.Run.Deck, clone.After([(IReadOnlyList<MacroAction>)[MacroAction.Pick(even.Order())]])[0].Run.Deck)))
             return new(even, Explored: true, State: Answered(CloneSearch.Key(root)));
         bool explored = false;
         var groups = choice.Groups();
-        // An answer is how many of each group it picks. The first one picks a removal's cards that go first before any
-        // other (RemovalOrder: the cards of a group are the same card, so a group goes first or not), and every answer
-        // weighed keeps that rule.
-        var firsts = RemovalOrder.Firsts(choice);
+        // An answer is how many of each group it picks. The first one picks the cards that go first before any other (a
+        // removal's basic cards, RemovalOrder, or an upgrade's under the card lock; the cards of a group are the same card,
+        // so a group goes first or not), and every answer weighed keeps that rule.
         var counts = new int[groups.Count];
         var filled = Enumerable.Range(0, groups.Count).OrderBy(g => firsts.Contains(groups[g][0]) ? 0 : 1).ToList();
         for (int left = Math.Min(min, choice.Options.Count), k = 0; left > 0; k++)
@@ -319,7 +321,7 @@ public sealed class MacroBrain(IRunValue value, Uniform? uniform = null, ICombat
         for (int step = 0; step < 4 * Math.Max(choice.Max, 1); step++)
         {
             var current = counts;
-            var near = Near(current, groups, min, choice.Max).Where(c => RemovalOrder.Keeps(choice, Picks(c))).Prepend(current).ToList();
+            var near = Near(current, groups, min, choice.Max).Where(c => RemovalOrder.Keeps(firsts, Picks(c))).Prepend(current).ToList();
             var fresh = near.Select(Answer).Where(a => !worth.ContainsKey(a)).Distinct().ToList();
             if (fresh.Count > 0)
             {

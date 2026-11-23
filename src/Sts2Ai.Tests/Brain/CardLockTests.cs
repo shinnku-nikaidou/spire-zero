@@ -22,7 +22,10 @@ public class CardLockTests
     private static readonly Worth V = new(new() { ["A"] = 1, ["B"] = 3, ["C"] = 2.9, ["BAD"] = -1, ["J"] = -1.2 });
 
     /// <summary>K and J favored, B refused.</summary>
-    private static CardLock Lock(double by) => new(new HashSet<string> { "K", "J" }, by, new HashSet<string> { "B" });
+    private static CardLock Lock(double by) => new(new HashSet<string> { "K", "J" }, by, new HashSet<string> { "B" }, new HashSet<string>(), new HashSet<string>());
+
+    /// <summary>The Regent's Tyranny runs as a lock (plans/2026-11-23-1545-sl-regent-g0.md): T favored by 10, kept and upgraded first.</summary>
+    private static CardLock Tyranny() => new(new HashSet<string> { "T" }, 10, new HashSet<string>(), new HashSet<string> { "T" }, new HashSet<string> { "T" });
 
     private static List<CardView> Cards(params string[] ids) => [.. ids.Select(id => new CardView { Id = id })];
 
@@ -145,5 +148,110 @@ public class CardLockTests
         Assert.Equal(double.NegativeInfinity, options.Single(o => o.Action.ToString() == "buy:0").Value);
         Assert.Equal(11.7 * Math.Exp(0.2), options.Single(o => o.Action.ToString() == "buy:1").Value, 9);
         Assert.Equal(MacroAction.Of(MacroAction.Buy, 1), new MacroBrain(V, cards: Lock(0.2)).Choose(shop).Action);
+    }
+
+    [Fact]
+    public void AKeptCardNeverLeavesTheDeckByAnAnswer()
+    {
+        var keep = Tyranny();
+        Assert.True(keep.Breaks(Cards("T", "A"), Cards("A")));
+        Assert.True(keep.Breaks(Cards("T", "A"), Cards("C", "A")));
+        Assert.False(keep.Breaks(Cards("T", "A"), [new CardView { Id = "T", Up = 1 }, new CardView { Id = "A" }]));
+        Assert.False(keep.Breaks(Cards("T", "T"), Cards("T", "T", "A")));
+        Assert.Equal(double.NegativeInfinity, keep.Worth(Cards("T", "BAD"), Cards("BAD"), 5));
+        // V would remove T (worth -2) over BAD (-1); kept, the removal takes BAD, also when a draw picks T, and a prompt
+        // that allows no pick takes none.
+        var v = new Worth(new() { ["T"] = -2, ["BAD"] = -1 });
+        var deck = Cards("T", "BAD");
+        Assert.Equal([0], new MacroBrain(v).Choose(Removal(deck, "T", "BAD")).Picks);
+        Assert.Equal([1], new MacroBrain(v, cards: keep).Choose(Removal(deck, "T", "BAD")).Picks);
+        Assert.All(Enumerable.Range(0, 200), seed => Assert.Equal([1],
+            new MacroBrain(v, uniform: new Uniform(1, new Random(seed)), cards: keep).Choose(Removal(deck, "T", "BAD")).Picks));
+        var optional = new ChoiceDecision(new CardChoice
+        {
+            Options = Cards("T"),
+            Min = 0,
+            Max = 1,
+            Context = new ChoiceContext { Purpose = "deck_for_removal", Cancelable = true, InCombat = false },
+        }, () => new Observation { Run = Fixtures.Floor1() with { Deck = Cards("T") }, Screen = new TreasureScreen { Relics = [] } });
+        Assert.Equal([0], new MacroBrain(v).Choose(optional).Picks);
+        Assert.Empty(new MacroBrain(v, cards: keep).Choose(optional).Picks);
+    }
+
+    [Fact]
+    public void AFavorOfTenTakesTheCardWhereverAnAnswerCan()
+    {
+        // V would take A (10 + 1) or even skip (10) over T (10 - 2): e^10 makes T worth some 176,000.
+        var v = new Worth(new() { ["A"] = 1, ["T"] = -2 });
+        Assert.Equal(MacroAction.Of(MacroAction.Card, 1), new MacroBrain(v).Choose(CardReward([], "T", "A")).Action);
+        Assert.Equal(MacroAction.Of(MacroAction.Card, 0), new MacroBrain(v, cards: Tyranny()).Choose(CardReward([], "T", "A")).Action);
+        Assert.Equal(MacroAction.Of(MacroAction.Card, 0), new MacroBrain(v, softmax: new Softmax(0.01, new Random(1)), cards: Tyranny())
+            .Choose(CardReward([], "T", "A")).Action);
+    }
+
+    /// <summary>A card with an upgrade's preview.</summary>
+    private static CardView Upgradable(string id) => new() { Id = id, Upgraded = new CardView { Id = id, Up = 1 } };
+
+    /// <summary>A V of 10 plus 3 for an upgraded A, 1 for an upgraded T.</summary>
+    private sealed class Upgrades : IRunValue
+    {
+        public string Name => "test";
+        public double Value(RunView run) => 10 + run.Deck.Sum(c => c.Up == null ? 0 : c.Id == "A" ? 3 : c.Id == "T" ? 1 : 0);
+    }
+
+    private static CardChoice Upgrade(int min, params CardView[] options) => new()
+    {
+        Options = options,
+        Min = min,
+        Max = 1,
+        Context = new ChoiceContext { Purpose = "deck_for_upgrade", Cancelable = min == 0, InCombat = false },
+    };
+
+    private static ChoiceDecision Smith(CardChoice choice, IMacroClone? clone = null) =>
+        new(choice, () => new Observation { Run = Fixtures.Floor1() with { Deck = choice.Options }, Screen = new TreasureScreen { Relics = [] } }, clone);
+
+    [Fact]
+    public void AnUpgradesPromptTakesACardToUpgradeFirstWhateverVSays()
+    {
+        var choice = Upgrade(1, Upgradable("A"), Upgradable("T"));
+        Assert.Equal([0], new MacroBrain(new Upgrades()).Choose(Smith(choice)).Picks);
+        Assert.Equal([1], new MacroBrain(new Upgrades(), cards: Tyranny()).Choose(Smith(choice)).Picks);
+        Assert.Equal([1], CardLock.Firsts(Tyranny(), choice));
+        // Only at an upgrade's prompt outside combat, and only a card not upgraded; elsewhere a removal's rule holds.
+        Assert.Empty(CardLock.Firsts(Tyranny(), choice with { Context = choice.Context with { InCombat = true } }));
+        Assert.Empty(CardLock.Firsts(Tyranny(), Upgrade(1, Upgradable("A"), new CardView { Id = "T", Up = 1 })));
+        Assert.Empty(CardLock.Firsts(Lock(0.2), choice));
+        // Even draws upgrade T, and a prompt that allows no pick may still take none.
+        Assert.All(Enumerable.Range(0, 200), seed => Assert.Equal([1],
+            new MacroBrain(new Upgrades(), uniform: new Uniform(1, new Random(seed)), cards: Tyranny()).Choose(Smith(choice)).Picks));
+        var none = new Worth(new());
+        Assert.Empty(new MacroBrain(none, cards: Tyranny()).Choose(Smith(Upgrade(0, Upgradable("A"), Upgradable("T")))).Picks);
+    }
+
+    [Fact]
+    public void OnTheClonesSearchAnUpgradeIsValuedByTheCardToUpgradeFirst()
+    {
+        // A rest site whose smithing opens the prompt on the clone; the clone's search answers it with T alone.
+        CardView[] deck = [Upgradable("A"), Upgradable("T")];
+        var prompt = Upgrade(1, deck);
+        Afterstate Upgraded(string pick) => new(Fixtures.Floor1() with
+        {
+            Deck = [.. deck.Select((c, i) => pick == $"pick:{i}" ? c.Upgraded! : c)],
+        }, Surfaces.Map, null, []);
+        var toy = new Toy(path => path switch
+        {
+            [] => new(Fixtures.Floor1() with { Deck = deck }, Surfaces.Rest, new RestScreen { Options = [new("SMITH", true)] }, Fixtures.Acts("rest:SMITH")),
+            ["rest:SMITH"] => new(Fixtures.Floor1() with { Deck = deck }, Surfaces.CardChoice, new CardChoiceScreen { Choice = prompt }, []),
+            ["rest:SMITH", var pick] => Upgraded(pick),
+            _ => throw new InvalidOperationException("no more answers"),
+        });
+        var root = toy.After([[]])[0];
+        var rest = new MacroDecision(root.Surface!, root.Legal, () => new Observation { Run = root.Run, Screen = root.Screen! }, toy);
+        Assert.Equal(13, new MacroBrain(new Upgrades()).Options(rest).Single().Value, 9);
+        Assert.Equal(11, new MacroBrain(new Upgrades(), cards: Tyranny()).Options(rest).Single().Value, 9);
+        // The prompt itself answered on the clone: its local search weighs only answers that upgrade T.
+        var smith = new Toy(path => path is [var pick] ? Upgraded(pick) : throw new InvalidOperationException("one pick a path"));
+        Assert.Equal([0], new MacroBrain(new Upgrades()).Choose(Smith(prompt, smith)).Picks);
+        Assert.Equal([1], new MacroBrain(new Upgrades(), cards: Tyranny()).Choose(Smith(prompt, smith)).Picks);
     }
 }
