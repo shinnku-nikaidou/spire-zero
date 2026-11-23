@@ -263,8 +263,9 @@ internal sealed class RunSession : IDisposable
             AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
             RunManager.Instance.Launch();
             session.Await(RunManager.Instance.GenerateMap());
-            session.Enter(RunManager.Instance.LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, run)));
-            Checkpoint.RestoreDominion(opened, run);
+            var room = AbstractRoom.FromSerializable(save.PreFinishedRoom, run);
+            session.Enter(RunManager.Instance.LoadIntoLatestMapCoord(room));
+            Checkpoint.RestoreDominion(run, room);
             while (replay.Pending > 0 && !session.IsOver) session.Step();
             if (!session.AtHorizon) session.Settle();
             if (replay.Pending > 0) throw new InvalidOperationException($"replay diverged: {replay.Pending} decisions never asked for");

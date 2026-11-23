@@ -19,7 +19,7 @@ public static class Checkpoint
 {
     /// <summary>A checkpoint read (<see cref="Open"/>): the game's save, to load as the game's Continue loads one, and the
     /// relics' plain fields.</summary>
-    public sealed record Opened(string Save, IReadOnlyList<RelicFields> Relics, string? Dominion);
+    public sealed record Opened(string Save, IReadOnlyList<RelicFields> Relics);
 
     public sealed record RelicFields(string Id, Dictionary<string, string> Fields);
 
@@ -33,8 +33,7 @@ public static class Checkpoint
     /// read back), with <paramref name="player"/>'s relics.</summary>
     public static string Of(SerializableRun save, Player player) => JsonSerializer.Serialize(new Opened(
         SaveManager.ToJson(save),
-        [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))],
-        player.RunState.Dominion?.Id.Entry));
+        [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))]));
 
     /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>
     public static Opened Open(string checkpoint) =>
@@ -52,16 +51,17 @@ public static class Checkpoint
     }
 
     /// <summary>
-    /// Takes the Dread mode's dominion off the run loaded from <paramref name="checkpoint"/> where the run it came from had
-    /// none: entering the act's boss room takes it off (DreadRunModel.RemoveDominionIfRoomIsBoss), but a load gives the
-    /// act's back (AfterRunLoaded) and enters a finished boss room without taking it off, so the clone of a checkpoint after
-    /// the boss's fight read a dominion the run no longer had, and no state of its afterstates was ever the decision's (a
-    /// card reward skipped there was opened again, 2026-11-23). A checkpoint on arrival at the boss's point still has the
-    /// act's: the clone enters the room after the load and takes it off there, as the run did.
+    /// Takes the Dread mode's dominion off a run loaded into <paramref name="preFinishedRoom"/>, the act's boss room after
+    /// its fight: entering the boss room took it off (DreadRunModel.RemoveDominionIfRoomIsBoss), but a load gives the act's
+    /// back (AfterRunLoaded) and enters a finished room without its hooks, so the clone read a dominion the run no longer
+    /// had, and no state of its afterstates was ever the decision's (a card reward skipped there was opened again,
+    /// 2026-11-23). Every other load has the dominion the run had: the act's, given when the act was entered, and taken
+    /// off as the clone enters the boss's room on arrival.
     /// </summary>
-    public static void RestoreDominion(Opened checkpoint, RunState run)
+    public static void RestoreDominion(RunState run, AbstractRoom? preFinishedRoom)
     {
-        if (checkpoint.Dominion == null && run.Dominion != null) run.SetDominion(null);
+        if (preFinishedRoom is CombatRoom { Encounter.Id: var boss } && (boss == run.Act.BossEncounter.Id || boss == run.Act.SecondBossEncounter?.Id))
+            run.SetDominion(null);
     }
 
     /// <summary>The relic's writable fields of a number, flag or enum type, from its own class up to RelicModel.</summary>
