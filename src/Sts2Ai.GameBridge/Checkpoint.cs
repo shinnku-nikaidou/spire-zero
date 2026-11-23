@@ -50,20 +50,6 @@ public static class Checkpoint
                 field.SetValue(relic, Parse(saved.Fields[Key(field)], field.FieldType));
     }
 
-    /// <summary>
-    /// Takes the Dread mode's dominion off a run loaded into <paramref name="preFinishedRoom"/>, the act's boss room after
-    /// its fight: entering the boss room took it off (DreadRunModel.RemoveDominionIfRoomIsBoss), but a load gives the act's
-    /// back (AfterRunLoaded) and enters a finished room without its hooks, so the clone read a dominion the run no longer
-    /// had, and no state of its afterstates was ever the decision's (a card reward skipped there was opened again,
-    /// 2026-11-23). Every other load has the dominion the run had: the act's, given when the act was entered, and taken
-    /// off as the clone enters the boss's room on arrival.
-    /// </summary>
-    public static void RestoreDominion(RunState run, AbstractRoom? preFinishedRoom)
-    {
-        if (preFinishedRoom is CombatRoom { Encounter.Id: var boss } && (boss == run.Act.BossEncounter.Id || boss == run.Act.SecondBossEncounter?.Id))
-            run.SetDominion(null);
-    }
-
     /// <summary>The relic's writable fields of a number, flag or enum type, from its own class up to RelicModel.</summary>
     private static IEnumerable<FieldInfo> Plain(RelicModel relic)
     {

@@ -89,16 +89,24 @@ public class RemovalOrderTests
 
     private static Afterstate Exit(IReadOnlyList<CardView> deck) => new(Fixtures.Floor1() with { Deck = deck }, Surfaces.Map, null, []);
 
+    /// <summary>A removal's prompt of these tests (<see cref="Removal"/>), as its clone shows it.</summary>
+    private static Afterstate Asked(CardChoice choice) => new(Fixtures.Floor1() with { Deck = choice.Options }, Surfaces.CardChoice, new TreasureScreen { Relics = [] }, []);
+
     private static IReadOnlyList<CardView> Without(IReadOnlyList<CardView> deck, IReadOnlyList<int> picks) => [.. deck.Where((_, i) => !picks.Contains(i))];
 
     [Fact]
     public void OnTheClonesLocalSearchEveryAnswerKeepsTheRule()
     {
         var choice = Prompt(2, 2, [Neutralize, Strike, Strike, StrikeUp, DefendUp]);
-        var toy = new Toy(path => path is [var pick] ? Exit(Without(choice.Options, pick.Picks)) : throw new InvalidOperationException("one pick a path"));
+        var toy = new Toy(path => path switch
+        {
+            [] => Asked(choice),
+            [var pick] => Exit(Without(choice.Options, pick.Picks)),
+            _ => throw new InvalidOperationException("one pick a path"),
+        });
         Assert.Equal([1, 2], new MacroBrain(V).Choose(Removal(choice, toy)).Picks);
         var one = Prompt(2, 2, [Neutralize, Strike, StrikeUp, DefendUp]);
-        var other = new Toy(path => Exit(Without(one.Options, path[0].Picks)));
+        var other = new Toy(path => path is [] ? Asked(one) : Exit(Without(one.Options, path[0].Picks)));
         Assert.Equal([0, 1], new MacroBrain(V).Choose(Removal(one, other)).Picks);
         Assert.All(Enumerable.Range(0, 100), seed => Assert.True(RemovalOrder.Keeps(RemovalOrder.Firsts(choice),
             new MacroBrain(V, uniform: new Uniform(1, new Random(seed))).Choose(Removal(choice, toy)).Picks)));

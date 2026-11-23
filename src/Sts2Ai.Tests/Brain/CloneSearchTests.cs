@@ -117,14 +117,26 @@ public class CloneSearchTests
     }
 
     [Fact]
+    public void AClonesValuesAreNotTakenWhereTheCloneIsNotTheRunAtTheDecision()
+    {
+        // The decision's shop holds 5 gold where its clone's holds 10: nothing found on the clone is the decision's.
+        var toy = new Toy(Shop);
+        var root = toy.After([[]])[0];
+        var decision = new MacroDecision(root.Surface!, root.Legal, () => new Observation { Run = root.Run with { Gold = 5 }, Screen = root.Screen! }, toy);
+        var e = Assert.Throws<InvalidOperationException>(() => new MacroBrain(V).Choose(decision));
+        Assert.Equal("the clone is not the run at this decision: .run.gold is 5 in the game and 10 in the clone", e.Message);
+    }
+
+    [Fact]
     public void AMoveOnTheMapIsNotPlayed()
     {
         var run = Fixtures.Floor1();
         var next = run.Map.Points.First(p => p.Row == 1);
         var map = new Afterstate(run, Surfaces.Map, new MapScreen { Travelable = [new(next.Col, next.Row)] }, [MacroAction.Of(MacroAction.Map, next.Col, next.Row)]);
-        var toy = new Toy(path => throw new InvalidOperationException($"played {string.Join(" ", path)}"));
+        // The clone is probed for the decision itself, as at every decision, and nothing else.
+        var toy = new Toy(path => path is [] ? map : throw new InvalidOperationException($"played {string.Join(" ", path)}"));
         Assert.Equal($"map:{next.Col},{next.Row}", Chosen(Root(toy, map)));
-        Assert.Equal(0, toy.Probes);
+        Assert.Equal(1, toy.Probes);
     }
 
     [Fact]
@@ -139,6 +151,7 @@ public class CloneSearchTests
         };
         var toy = new Toy(path => path switch
         {
+            [] => new(Start, Surfaces.CardChoice, new CardChoiceScreen { Choice = choice }, []),
             [var pick] => Exit(Start with { Deck = [.. pick["pick:".Length..].Split(',').Select(i => choice.Options[int.Parse(i)])] }),
             _ => throw new InvalidOperationException(string.Join(" ", path)),
         });
@@ -278,7 +291,7 @@ public class CloneSearchTests
         });
         var search = new CloneSearch(new MacroLeaf(V), toy);
         search.Search(toy.After([[]])[0], Paths("event:0", "event:1"));
-        Assert.Equal(3, search.Probes);
+        Assert.Equal(4, search.Probes);
     }
 
     /// <summary>A V that is the sum of what each potion held is worth.</summary>

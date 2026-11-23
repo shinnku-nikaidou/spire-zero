@@ -24,10 +24,6 @@ internal static partial class HeadlessPatches
     /// <summary>The game saving on arrival at a map point: its state is a node checkpoint.</summary>
     public static Action? NodeEntered;
 
-    /// <summary>The game saving inside a room it marked finished (after a won fight, after an ancient): a load of that save
-    /// enters the room as finished.</summary>
-    public static Action<AbstractRoom>? RoomSaved;
-
     public static void Apply()
     {
         var harmony = new Harmony("sts2ai.simworker");

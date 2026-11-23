@@ -120,7 +120,7 @@ public class CardLockTests
     {
         // A transformation: the screen predicts the card gone, the game turns A into B (refused) and BAD into C.
         var deck = Cards("A", "BAD");
-        var toy = new Toy(path => new Afterstate(Fixtures.Floor1() with
+        var toy = new Toy(path => path is [] ? Asked(deck) : new Afterstate(Fixtures.Floor1() with
         {
             Deck = path switch { ["pick:0"] => Cards("B", "BAD"), ["pick:1"] => Cards("A", "C"), _ => deck },
         }, Surfaces.Map, null, []));
@@ -210,6 +210,9 @@ public class CardLockTests
     private static ChoiceDecision Smith(CardChoice choice, IMacroClone? clone = null) =>
         new(choice, () => new Observation { Run = Fixtures.Floor1() with { Deck = choice.Options }, Screen = new TreasureScreen { Relics = [] } }, clone);
 
+    /// <summary>A card prompt of these tests over <paramref name="deck"/>, as its clone shows it.</summary>
+    private static Afterstate Asked(IReadOnlyList<CardView> deck) => new(Fixtures.Floor1() with { Deck = deck }, Surfaces.CardChoice, new TreasureScreen { Relics = [] }, []);
+
     [Fact]
     public void AnUpgradesPromptTakesACardToUpgradeFirstWhateverVSays()
     {
@@ -250,7 +253,12 @@ public class CardLockTests
         Assert.Equal(13, new MacroBrain(new Upgrades()).Options(rest).Single().Value, 9);
         Assert.Equal(11, new MacroBrain(new Upgrades(), cards: Tyranny()).Options(rest).Single().Value, 9);
         // The prompt itself answered on the clone: its local search weighs only answers that upgrade T.
-        var smith = new Toy(path => path is [var pick] ? Upgraded(pick) : throw new InvalidOperationException("one pick a path"));
+        var smith = new Toy(path => path switch
+        {
+            [] => Asked(deck),
+            [var pick] => Upgraded(pick),
+            _ => throw new InvalidOperationException("one pick a path"),
+        });
         Assert.Equal([0], new MacroBrain(new Upgrades()).Choose(Smith(prompt, smith)).Picks);
         Assert.Equal([1], new MacroBrain(new Upgrades(), cards: Tyranny()).Choose(Smith(prompt, smith)).Picks);
     }

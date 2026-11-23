@@ -61,6 +61,7 @@ internal static class Host
             DrawPileLog.Patch(harmony);
             CombatOpening.Patch(harmony);
             NodeRecord.Patch(harmony);
+            Settle.Patch(harmony);
             Executor.Patch(harmony);
             SettingsTab.Patch(harmony);
             DesktopWindow.Patch(harmony);

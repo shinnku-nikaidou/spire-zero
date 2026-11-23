@@ -161,10 +161,9 @@ internal static class Executor
     /// </summary>
     public static string? Nudge()
     {
-        // While a room changes (the travel from the map, a fight being set up) the last room's buttons are still on the
-        // screen: its proceed would open the map again over the new room, and the map's next point would be voted for
-        // in the fight (seen 2026-11-23 with the game's animations at normal speed).
-        if (RunManager.Instance.IsChangingRooms || CombatManager.Instance.IsStarting) return null;
+        // Only while the game waits for the player: while a room changes (the travel from the map, a fight being set up)
+        // the last room's buttons are still on the screen.
+        if (!Settle.Idle) return null;
         switch (ActiveScreenContext.Instance.GetCurrentScreen())
         {
             case NTreasureRoom room:

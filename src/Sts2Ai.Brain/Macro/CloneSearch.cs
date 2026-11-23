@@ -14,6 +14,11 @@ namespace Sts2Ai.Brain.Macro;
 /// The decision itself and the states <paramref name="decided"/> before it are never searched: an answer that comes back
 /// to one goes round in a cycle (a card reward skipped returns to the rewards screen that opened it, where the same
 /// answer comes again). Such an option is worth −∞, so it is never taken; deeper, such an answer adds nothing.
+/// That compares the decision as its host saw it with states the clone reached, so the clone is checked first: a probe of
+/// no answers must show the decision itself. A clone that does not is not the run at the decision, and nothing found on
+/// it is the decision's (the clone of a Dread act's boss rewards had the dominion back, so no state it reached was the
+/// decision, and a card reward skipped there was opened again and again, 2026-11-23): the search throws, naming the
+/// first field that differs.
 /// </summary>
 /// <param name="leaf">What a state is worth where the search stops.</param>
 /// <param name="decided">The keys (<see cref="Key"/>) of the states decided before this decision.</param>
@@ -27,7 +32,7 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
     /// <summary>The probes the last search played.</summary>
     public int Probes { get; private set; }
 
-    /// <param name="root">The decision itself, as a probe of no answers would show it.</param>
+    /// <param name="root">The decision itself, as its host saw it, which a probe of no answers must show.</param>
     /// <param name="options">Each option, as the answers it plays from the decision.</param>
     /// <returns>Each option's afterstate, worth and line, in order.</returns>
     public IReadOnlyList<(Afterstate After, double Value, IReadOnlyList<MacroAction> Line)> Search(Afterstate root, IReadOnlyList<IReadOnlyList<MacroAction>> options)
@@ -36,8 +41,11 @@ public sealed class CloneSearch(MacroLeaf leaf, IMacroClone clone, IReadOnlySet<
         foreach (var key in decided ?? new HashSet<ulong>()) seen.TryAdd(key, null);
         var firsts = new List<Node>();
         var frontier = new List<Node>();
-        var afters = clone.After(options);
-        Probes = options.Count;
+        var probed = clone.After([[], .. options]);
+        if (Key(probed[0]) != Key(root))
+            throw new InvalidOperationException($"the clone is not the run at this decision: {ProtocolJson.Difference(root, probed[0])}");
+        var afters = probed.Skip(1).ToList();
+        Probes = options.Count + 1;
         bool Broken(Afterstate after) => cards?.Breaks(root.Run.Deck, after.Run.Deck) == true;
         double Value(Afterstate after) => cards?.Worth(root.Run.Deck, after.Run.Deck, leaf.Value(after)) ?? leaf.Value(after);
         for (int i = 0; i < options.Count; i++)

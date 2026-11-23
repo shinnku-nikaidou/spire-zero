@@ -127,14 +127,6 @@ internal sealed class RunSession : IDisposable
     /// <summary>A sealed clone has left its node: it travelled. It cannot step any more.</summary>
     public bool AtHorizon { get; private set; }
 
-    /// <summary>
-    /// Gets each save the game makes inside a room it marked finished (after a won fight, after an ancient), as a
-    /// checkpoint (<see cref="Checkpoint.Take"/> with that room), where the decisions after it begin in
-    /// <see cref="Trace"/>, and the room's kind. A load of such a checkpoint enters the room as finished, as the game's
-    /// Continue does. Null: none are taken.
-    /// </summary>
-    public Action<string, int, string>? RoomSaved { get; set; }
-
     /// <summary>Called as the run enters a map point, before the room is rolled and its checkpoint taken: a rollout draws
     /// the run's chance anew there (<see cref="Redraw"/>), so the node's checkpoint and its clones hold the new streams.</summary>
     public Action? Entering { get; set; }
@@ -180,21 +172,12 @@ internal sealed class RunSession : IDisposable
             (_checkpoint, NodeStart) = (Checkpoint.Take(player), _trace.Count);
             _selector.RestartPrompts();
         };
-        HeadlessPatches.RoomSaved = room => RoomSaved?.Invoke(Checkpoint.Take(player, room), _trace.Count, KindOf(room));
         CombatOpening.Starting = () =>
         {
             _written = null;
             _written = (LiveCombat.Export(player, View(previews: false)), true, _trace.Count);
         };
     }
-
-    /// <summary>A finished room's kind as a save names it: a fight by its room type, a fight inside an event, an event.</summary>
-    private static string KindOf(AbstractRoom room) => room switch
-    {
-        CombatRoom { ParentEventId: not null } => "event fight",
-        CombatRoom combat => combat.RoomType.ToString().ToLowerInvariant(),
-        _ => room.GetType().Name,
-    };
 
     /// <summary>
     /// Starts the run and pumps it to the first decision (normally Neow). <paramref name="observed"/>, if given, gets
@@ -265,7 +248,6 @@ internal sealed class RunSession : IDisposable
             session.Await(RunManager.Instance.GenerateMap());
             var room = AbstractRoom.FromSerializable(save.PreFinishedRoom, run);
             session.Enter(RunManager.Instance.LoadIntoLatestMapCoord(room));
-            Checkpoint.RestoreDominion(run, room);
             while (replay.Pending > 0 && !session.IsOver) session.Step();
             if (!session.AtHorizon) session.Settle();
             if (replay.Pending > 0) throw new InvalidOperationException($"replay diverged: {replay.Pending} decisions never asked for");
@@ -754,7 +736,6 @@ internal sealed class RunSession : IDisposable
         RewardsSet.testSelector = null;
         HeadlessPatches.CrystalSphereShown = null;
         HeadlessPatches.NodeEntered = null;
-        HeadlessPatches.RoomSaved = null;
         _selectorScope?.Dispose();
         if (_treasure != null) _treasure.RelicsAwarded -= Award;
         // Nothing runs while a prompt waits: the game stands where it asked until its run is cleaned up.

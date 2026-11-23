@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Sts2Ai.Protocol;
@@ -53,4 +54,31 @@ public static class ProtocolJson
 
     /// <summary>The card's identity as the player sees it: its serialization without the uid.</summary>
     public static string CardKey(CardView card) => Serialize(card.Uid == null ? card : card with { Uid = null });
+
+    /// <summary>The first path where the JSON of <paramref name="game"/> and <paramref name="clone"/> differ, with both
+    /// values: ".run.dominion is absent in the game and "X" in the clone".</summary>
+    public static string Difference<T>(T game, T clone)
+    {
+        return Walk(JsonNode.Parse(Serialize(game)), JsonNode.Parse(Serialize(clone)), "") ?? "the same JSON with another hash";
+
+        static string? Walk(JsonNode? a, JsonNode? b, string path)
+        {
+            switch (a, b)
+            {
+                case (JsonObject x, JsonObject y):
+                    foreach (var key in x.Select(p => p.Key).Union(y.Select(p => p.Key)))
+                        if (Walk(x[key], y[key], $"{path}.{key}") is { } found) return found;
+                    return null;
+                case (JsonArray x, JsonArray y):
+                    for (int i = 0; i < Math.Max(x.Count, y.Count); i++)
+                        if (Walk(i < x.Count ? x[i] : null, i < y.Count ? y[i] : null, $"{path}[{i}]") is { } found) return found;
+                    return null;
+                default:
+                    string sa = a?.ToJsonString() ?? "absent", sb = b?.ToJsonString() ?? "absent";
+                    return sa == sb ? null : $"{path} is {Short(sa)} in the game and {Short(sb)} in the clone";
+            }
+        }
+
+        static string Short(string value) => value.Length > 200 ? value[..200] + "…" : value;
+    }
 }

@@ -267,7 +267,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
             if (_goal != Goal.Off) Stop(L10n.T("you acted"));
         }
         // The screen does not show a step's result before the step ends.
-        if (asking != null && NodeRecord.Running(asking.Surface)) asking = null;
+        if (asking != null && Settle.Playing(run!, asking.Surface)) asking = null;
 
         if (!settings.Assist)
         {
@@ -344,7 +344,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         if (_env == PlayEnvironment.SL && !_coop && (NodeRecord.Checkpoint == null || NodeRecord.Broken != null))
         {
             (_key, _stable) = (null, 0);
-            // Auto-play hands the room over, rather than wait on it: nothing plays it until the game's next save.
+            // Auto-play hands the room over, rather than wait on it: nothing plays it until the next checkpoint.
             if (_goal != Goal.Off) Stop(L10n.T("no SL clone of this room"));
             panel.Show(champion, status, L10n.T("No SL clone of this room"),
                 L10n.T("{0} · the next room has one", NodeRecord.Broken ?? L10n.T("no checkpoint")), Tone.Warn, Drive());

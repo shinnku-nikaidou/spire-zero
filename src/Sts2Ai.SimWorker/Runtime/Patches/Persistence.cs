@@ -10,15 +10,13 @@ internal static partial class HeadlessPatches
 {
     // ---- persistence: nothing is ever saved; the user's real saves must stay untouched ----
 
-    /// <summary>Also tells <see cref="NodeEntered"/> (the save with no finished room is the one on arrival at a map point),
-    /// or <see cref="RoomSaved"/> (one with its finished room).</summary>
+    /// <summary>Also tells <see cref="NodeEntered"/>: the save with no finished room is the one on arrival at a map point.</summary>
     [HarmonyPatch(typeof(SaveManager), nameof(SaveManager.SaveRun))]
     private static class NoRunSave
     {
         private static bool Prefix(AbstractRoom? preFinishedRoom, ref Task __result)
         {
             if (preFinishedRoom == null) NodeEntered?.Invoke();
-            else RoomSaved?.Invoke(preFinishedRoom);
             __result = Task.CompletedTask;
             return false;
         }

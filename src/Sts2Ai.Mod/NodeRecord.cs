@@ -27,12 +27,13 @@ namespace Sts2Ai.Mod;
 /// The SL record: a checkpoint, and every step taken since that took effect, in the order it did, as the simulator's
 /// trace names them ("surface action"). With the checkpoint the steps are the clone the brain plans and values on.
 ///
-/// The checkpoint is one of the game's own saves, read back from the file the game wrote (the save is what a continued
-/// run loads, so playing on and coming back meet the same checkpoint): on arrival at a map point, as the simulator takes
-/// it; after a won fight and after an ancient, inside the room the game marked finished, which a load enters as finished;
-/// and the save a continued run loads, whichever it was. The game saves nowhere else, so the record restarts at each of
-/// these, from the game's own event (<see cref="Saved"/>). A fight inside an event is the exception, until a clone of
-/// its save is checked: see <see cref="Enter"/>.
+/// The checkpoint is one of the game's own saves, read back from the file the game wrote: while the player plays on, the
+/// save on arrival at a map point, as the simulator takes it, so the clone enters the room as the run did and follows the
+/// run's own path through it; and the save a continued run loads, whichever it was, so the clone loads what the game
+/// loaded. The game also saves after a won fight and after an ancient, inside the room it marked finished, which a load
+/// enters as finished, by the game's Continue: no state the run that played on was ever in (a Dread act's boss room had
+/// its dominion back, 2026-11-23). So the record restarts at an arrival's save, from the game's own event
+/// (<see cref="Saved"/>), and at a continued run's load, and nowhere else.
 ///
 /// A step is taken where it takes effect, not where it is asked for: a card, a potion, a potion thrown away and the
 /// turn's end once their action passed its own checks and acts, so an action the game cancels in its queue (at the
@@ -44,7 +45,7 @@ namespace Sts2Ai.Mod;
 /// reward closed unanswered takes back the step that opened it, a potion thrown away in combat is a step of its own
 /// ("combat discard_potion:S", which a clone replays but the brain is never offered), and taking back a turn's end is
 /// no step (alone in the game, it cannot stop the turn's end). Anything else it cannot follow breaks the record until
-/// the game's next save. Each step says whether the AI took it (<see cref="Expect"/>), so auto-play can stop when the
+/// the next checkpoint. Each step says whether the AI took it (<see cref="Expect"/>), so auto-play can stop when the
 /// player acts (<see cref="PlayerActs"/>).
 ///
 /// The record is kept in both environments, so switching to SL works in the room the player is in; only SL sends it.
@@ -55,17 +56,10 @@ internal static class NodeRecord
     private static readonly AccessTools.FieldRef<VoteForMapCoordAction, MapVote?> Destination = AccessTools.FieldRefAccess<VoteForMapCoordAction, MapVote?>("_destination");
     private static readonly AccessTools.FieldRef<DiscardPotionGameAction, uint> DiscardedSlot = AccessTools.FieldRefAccess<DiscardPotionGameAction, uint>("_potionSlotIndex");
 
-    private static readonly AccessTools.FieldRef<EventSynchronizer, List<Task>> EventOptionTasks = AccessTools.FieldRefAccess<EventSynchronizer, List<Task>>("_pendingOptionTasks");
-
     /// <param name="Ai">Whether the AI took it (<see cref="Expect"/>).</param>
-    /// <param name="InSave">Taken while the game was writing a save, after the run it saves: it follows that save
-    /// (<see cref="Saved"/>).</param>
-    private sealed record Step(string Text, bool Ai, bool InSave);
+    private sealed record Step(string Text, bool Ai);
 
     private static readonly List<Step> _steps = [];
-
-    /// <summary>The game's tasks for the steps the player took, by the surface they were taken on.</summary>
-    private static readonly List<(string Surface, Task Task)> _running = [];
     private static RunState? _run;
 
     /// <summary>The decision last on screen, which the player's next answer is read against.</summary>
@@ -162,42 +156,10 @@ internal static class NodeRecord
         Prefix(harmony, typeof(TreasureRoomRelicSynchronizer), nameof(TreasureRoomRelicSynchronizer.PickRelicLocally), nameof(RelicPicked));
         Prefix(harmony, typeof(MerchantSynchronizer), nameof(MerchantSynchronizer.PurchaseLocalEntry), nameof(Bought));
         Prefix(harmony, typeof(CrystalSphereMinigame), nameof(CrystalSphereMinigame.CellClicked), nameof(Divined));
-        Postfix(harmony, typeof(EventSynchronizer), nameof(EventSynchronizer.ChooseLocalOption), nameof(EventRunning));
-        Postfix(harmony, typeof(RestSiteSynchronizer), nameof(RestSiteSynchronizer.ChooseLocalOption), nameof(RestRunning));
-        Postfix(harmony, typeof(RewardsSetSynchronizer), nameof(RewardsSetSynchronizer.SelectLocalReward), nameof(RewardRunning));
-        Postfix(harmony, typeof(MerchantSynchronizer), nameof(MerchantSynchronizer.PurchaseLocalEntry), nameof(PurchaseRunning));
-        Postfix(harmony, typeof(CrystalSphereMinigame), nameof(CrystalSphereMinigame.CellClicked), nameof(DivinationRunning));
     }
 
     private static void Prefix(Harmony harmony, Type type, string method, string prefix) =>
         harmony.Patch(AccessTools.DeclaredMethod(type, method), prefix: new HarmonyMethod(typeof(NodeRecord), prefix));
-
-    private static void Postfix(Harmony harmony, Type type, string method, string postfix) =>
-        harmony.Patch(AccessTools.DeclaredMethod(type, method), postfix: new HarmonyMethod(typeof(NodeRecord), postfix));
-
-    /// <summary>
-    /// Whether a step the player took on <paramref name="surface"/> still plays out (an event option, a rest option, a
-    /// reward, a purchase, a divination): until it ends, the screen still shows the decision it answered. The simulator
-    /// waits for the same tasks before its next decision.
-    /// </summary>
-    public static bool Running(string surface)
-    {
-        _running.RemoveAll(r => r.Task.IsCompleted);
-        return _running.Any(r => r.Surface == surface);
-    }
-
-    private static void EventRunning(EventSynchronizer __instance)
-    {
-        foreach (var task in EventOptionTasks(__instance)) _running.Add((Surfaces.Event, task));
-    }
-
-    private static void RestRunning(Task __result) => _running.Add((Surfaces.Rest, __result));
-
-    private static void RewardRunning(Task __result) => _running.Add((Surfaces.Rewards, __result));
-
-    private static void PurchaseRunning(Task __result) => _running.Add((Surfaces.Shop, __result));
-
-    private static void DivinationRunning(Task __result) => _running.Add((Surfaces.CrystalSphere, __result));
 
     /// <summary>
     /// The AI is asking the game for <paramref name="action"/> (a decision's action, as the record names it), or asked for
@@ -255,52 +217,43 @@ internal static class NodeRecord
     // ---- checkpoints ----
 
     /// <summary>
-    /// The game saved the run, on arrival at a map point (no finished room), after a won fight or an ancient (that
-    /// room): the save it wrote, read back as a continued run reads it, is the checkpoint. Read off the game's own event,
-    /// with no patch to lose: a Harmony prefix on <c>SaveManager.SaveRun</c> stopped being called after its 30th call in
-    /// two real games (0.3.11, 0.3.13), with nothing in any log, and every room after it had no clone. The event comes
-    /// once the save is written, and the game does not wait for an ancient's: a step taken in the meantime follows the
-    /// save, and stays.
+    /// The game saved the run. On arrival at a map point (no finished room), the save it wrote, read back as a continued
+    /// run reads it, is the checkpoint; a save after a won fight or an ancient (that room) is none, and the arrival's
+    /// record goes on through the room. Read off the game's own event, with no patch to lose: a Harmony prefix on
+    /// <c>SaveManager.SaveRun</c> stopped being called after its 30th call in two real games (0.3.11, 0.3.13), with
+    /// nothing in any log, and every room after it had no clone. The game waits for an arrival's save before it rolls and
+    /// enters the room, so no step is taken while it is written.
     /// </summary>
     private static void Saved() => Guard(() =>
     {
         if (RunManager.Instance.DebugOnlyGetState() is not { Players.Count: 1 } run || LocalContext.GetMe(run) is null) return;
         var read = SaveManager.Instance.LoadRunSave();
         if (!read.Success || read.SaveData is not { } save) throw new InvalidDataException($"the game's save does not read back: {read.Status}");
-        Enter(save.PreFinishedRoom != null ? run.CurrentRoom : null, continued: false, save);
+        if (save.PreFinishedRoom != null)
+        {
+            ModLog.Write("record", $"a save in the finished room, floor {run.TotalFloor}: no checkpoint, checkpoint {Node} goes on");
+            return;
+        }
+        Enter(null, continued: false, save);
     });
 
     /// <summary>A continued run enters the point its save was made at, without saving: the save it loaded is the checkpoint.</summary>
     private static void Continuing(AbstractRoom? preFinishedRoom) => Guard(() => Enter(preFinishedRoom, continued: true));
 
+    /// <param name="room">A continued run's finished room, which its save was made in; null for an arrival.</param>
     /// <param name="save">The save the game wrote, read back; null for the run as it is now (a continued run's).</param>
     private static void Enter(AbstractRoom? room, bool continued, SerializableRun? save = null)
     {
         if (RunManager.Instance.DebugOnlyGetState() is not { Players.Count: 1 } run || LocalContext.GetMe(run) is not { } me) return;
-        // A fight inside an event: no clone of its save has been checked yet (run --check met none), so playing on keeps
-        // the arrival's record, and a run continued from it has none.
-        bool eventFight = room is CombatRoom { ParentEventId: not null };
-        if (eventFight && !continued)
-        {
-            // The arrival's record goes on: the steps taken while this save was written are its own.
-            for (int i = 0; i < _steps.Count; i++) _steps[i] = _steps[i] with { InSave = false };
-            return;
-        }
         bool sameRun = ReferenceEquals(run, _run);
-        if (!sameRun)
-        {
-            (_run, Node) = (run, -1);
-            // A step of the last run that never ended (an event left by abandoning the run) holds no screen of this one.
-            _running.Clear();
-        }
+        if (!sameRun) (_run, Node) = (run, -1);
         Node++;
-        var following = sameRun && !continued ? _steps.Where(s => s.InSave).Select(s => s with { InSave = false }).ToList() : [];
         _steps.Clear();
-        _steps.AddRange(following);
         (_screen, _room, _leave, _actEnd) = (null, null, null, null);
         // A step the AI asked for may still be on its way.
         if (!sameRun || continued) _expected = null;
-        (Checkpoint, Broken) = eventFight
+        // A fight inside an event: no clone of its save has been checked (run --check met none).
+        (Checkpoint, Broken) = room is CombatRoom { ParentEventId: not null }
             ? ((string?)null, "the run was continued from a save after an event's fight, which no clone has been checked on")
             : (save != null ? GameBridge.Checkpoint.Of(save, me) : GameBridge.Checkpoint.Take(me, room), (string?)null);
         string kind = room switch
@@ -311,8 +264,7 @@ internal static class NodeRecord
             _ => "after an ancient",
         };
         ModLog.Write("record", $"checkpoint {Node}: {kind}{(continued ? ", the save a continued run loaded" : "")}, floor {run.TotalFloor}, " +
-                               $"{run.CurrentRoom?.GetType().Name ?? "no room yet"}, " + (Checkpoint != null ? $"{Checkpoint.Length} chars" : $"none: {Broken}") +
-                               (following.Count > 0 ? $"; {following.Count} steps taken while it was written follow it" : ""));
+                               $"{run.CurrentRoom?.GetType().Name ?? "no room yet"}, " + (Checkpoint != null ? $"{Checkpoint.Length} chars" : $"none: {Broken}"));
     }
 
     // ---- actions through the queue: logged when asked for, taken when they act ----
@@ -541,7 +493,7 @@ internal static class NodeRecord
             else _fight = null;
             return false;
         }
-        _steps.Insert(at, new($"{surface} {action}", ai, SaveManager.Instance.CurrentRunSaveTask is { IsCompleted: false }));
+        _steps.Insert(at, new($"{surface} {action}", ai));
         if (_fight != null && surface is Surfaces.Combat or Surfaces.CardChoice)
         {
             if (at == _steps.Count - 1) _fight.Add($"{surface} {action}");

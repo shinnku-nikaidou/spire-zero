@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Text.Json.Nodes;
 using Sts2Ai.Brain;
 using Sts2Ai.Protocol;
 
@@ -53,7 +52,7 @@ internal static class ClonesCommand
                     string where = $"checkpoint {node.NodeIndex} step {steps.Count}, decision {request.DecisionId} ({request.Surface})";
                     if (asked == null) Console.WriteLine($"{where}: the clone fails: {failure}");
                     else if (DecisionRequest.HashOf(asked) != request.ObsHash)
-                        Console.WriteLine($"{where}: the clone asks another decision: {Difference(ProtocolJson.Serialize(request.Obs), ProtocolJson.Serialize(asked))}");
+                        Console.WriteLine($"{where}: the clone asks another decision: {ProtocolJson.Difference(request.Obs, asked)}");
                     else equal++;
                     break;
             }
@@ -104,30 +103,6 @@ internal static class ClonesCommand
         {
             Asked ??= decision.Observation;
             return new(decision.Legal[0]);
-        }
-    }
-
-    /// <summary>The first path where two JSON documents differ, with both values.</summary>
-    private static string Difference(string expected, string actual)
-    {
-        return Walk(JsonNode.Parse(expected), JsonNode.Parse(actual), "") ?? "the same JSON with another hash";
-
-        static string? Walk(JsonNode? a, JsonNode? b, string path)
-        {
-            switch (a, b)
-            {
-                case (JsonObject x, JsonObject y):
-                    foreach (var key in x.Select(p => p.Key).Union(y.Select(p => p.Key)))
-                        if (Walk(x[key], y[key], $"{path}.{key}") is { } found) return found;
-                    return null;
-                case (JsonArray x, JsonArray y):
-                    for (int i = 0; i < Math.Max(x.Count, y.Count); i++)
-                        if (Walk(i < x.Count ? x[i] : null, i < y.Count ? y[i] : null, $"{path}[{i}]") is { } found) return found;
-                    return null;
-                default:
-                    string sa = a?.ToJsonString() ?? "absent", sb = b?.ToJsonString() ?? "absent";
-                    return sa == sb ? null : $"{path}: game {Logs.FirstLine(sa)}, clone {Logs.FirstLine(sb)}";
-            }
         }
     }
 }

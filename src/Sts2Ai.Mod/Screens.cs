@@ -58,8 +58,8 @@ internal sealed class Screens
         // a decision during one.
         if (me.Relics.Any(Flashing)) return null;
         var top = ActiveScreenContext.Instance.GetCurrentScreen();
-        // Prompts wait inside an action or a reward; every other screen waits with the action queue empty.
-        bool settled = RunManager.Instance.ActionQueueSet.IsEmpty;
+        // Prompts wait inside an action or a reward; every other screen waits with the game idle.
+        bool settled = Settle.Idle;
         // A run of several players: a card prompt in a fight after a teammate acted is the player's, and a vote cast
         // waits on the others.
         if (run.Players.Count > 1 && Waits(run, me, top) is { } waiting)
@@ -155,7 +155,7 @@ internal sealed class Screens
     private static Asking? Combat(RunState run, Player me)
     {
         var st = CombatManager.Instance.DebugOnlyGetState();
-        if (st == null || !CombatActions.WaitingForInput(me) || !RunManager.Instance.ActionQueueSet.IsEmpty
+        if (st == null || !CombatActions.WaitingForInput(me) || !Settle.Idle
             || NPlayerHand.Instance is not { CurrentMode: NPlayerHand.Mode.Play, InCardPlay: false })
             return null;
         var legal = CombatActions.Legal(st, me).Select(a => a.ToString()).ToList();
