@@ -108,23 +108,35 @@ public sealed class SolverRoute(Budget budget, bool background = false)
         long nodes = 0;
         _told = null;
         if (along && _background != null && _taken < _given) Tell(early, Given());
-        if (!along && !Begin(observation, history, start, early, ref nodes))
+        SlPlan plan;
+        try
         {
-            Drop();
-            return beam();
-        }
-        var plan = Search(history, early, hurry, ref nodes);
-        // The engine's combat is not this one: it played a step otherwise than the game.
-        if (plan.Line!.Hashes[0] != hash)
-        {
-            if (!Begin(observation, history, start, early, ref nodes))
+            if (!along && !Begin(observation, history, start, early, ref nodes))
             {
                 Drop();
                 return beam();
             }
             plan = Search(history, early, hurry, ref nodes);
+            // The engine's combat is not this one: it played a step otherwise than the game.
             if (plan.Line!.Hashes[0] != hash)
-                throw new InvalidOperationException("the combat taken in is not the combat the decision shows");
+            {
+                if (!Begin(observation, history, start, early, ref nodes))
+                {
+                    Drop();
+                    return beam();
+                }
+                plan = Search(history, early, hurry, ref nodes);
+                if (plan.Line!.Hashes[0] != hash)
+                    throw new InvalidOperationException("the combat taken in is not the combat the decision shows");
+            }
+        }
+        catch
+        {
+            // A failed solver goes with its line: kept, every decision after would go along the line to it, and the
+            // background's would throw its failure again at once (a co-op fight of 2026-11-23, every decision failed to
+            // its end after one did).
+            Drop();
+            throw;
         }
         (_line, _taken, _given) = (plan.Line, 0, plan.Result.Plan.Count + 1);
         Took(plan.Line.Actions[0]);

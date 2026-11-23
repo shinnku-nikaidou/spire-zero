@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.GameActions;
@@ -17,12 +18,18 @@ namespace Sts2Ai.GameBridge.Actions;
 public static class CombatActions
 {
     /// <summary>True when the player can act: their turn, play phase, nothing resolving, input not locked.</summary>
+    /// <remarks>The side's play phase is the synchronizer's: the game enters it once every player's turn start has run,
+    /// and until then the action queues are paused (a play waits for it). In a run of several players the local
+    /// player's own phase is Play seconds before that, while the others' turn starts run; a combat written out there
+    /// stood with its queues paused for good in the engine, where nothing played changed it (the user's 3-player run of
+    /// 2026-11-23: "the solver found no line" at a fight's first decisions).</remarks>
     public static bool WaitingForInput(Player player)
     {
         var st = CombatManager.Instance.DebugOnlyGetState();
         var pcs = player.PlayerCombatState;
         return st != null && pcs != null && CombatManager.Instance.IsInProgress
             && st.CurrentSide == CombatSide.Player && pcs.Phase == PlayerTurnPhase.Play
+            && RunManager.Instance.ActionQueueSynchronizer.CombatState == ActionSynchronizerCombatState.PlayPhase
             && !RunManager.Instance.ActionExecutor.IsRunning && !CombatManager.Instance.PlayerActionsDisabled;
     }
 
