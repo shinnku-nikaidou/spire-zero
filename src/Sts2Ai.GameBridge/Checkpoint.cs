@@ -54,16 +54,14 @@ public static class Checkpoint
     /// <summary>
     /// Takes the Dread mode's dominion off the run loaded from <paramref name="checkpoint"/> where the run it came from had
     /// none: entering the act's boss room takes it off (DreadRunModel.RemoveDominionIfRoomIsBoss), but a load gives the
-    /// act's back (AfterRunLoaded), so the clone of a checkpoint after the boss's fight read a dominion the run no longer
-    /// had, and no state of its afterstates was ever the decision's (a card reward skipped there was opened again, 2026-11-23).
+    /// act's back (AfterRunLoaded) and enters a finished boss room without taking it off, so the clone of a checkpoint after
+    /// the boss's fight read a dominion the run no longer had, and no state of its afterstates was ever the decision's (a
+    /// card reward skipped there was opened again, 2026-11-23). A checkpoint on arrival at the boss's point still has the
+    /// act's: the clone enters the room after the load and takes it off there, as the run did.
     /// </summary>
     public static void RestoreDominion(Opened checkpoint, RunState run)
     {
-        string? loaded = run.Dominion?.Id.Entry;
-        if (loaded == checkpoint.Dominion) return;
-        if (checkpoint.Dominion != null)
-            throw new InvalidOperationException($"the loaded run's dominion {loaded ?? "none"} is not the checkpoint's {checkpoint.Dominion}");
-        run.SetDominion(null);
+        if (checkpoint.Dominion == null && run.Dominion != null) run.SetDominion(null);
     }
 
     /// <summary>The relic's writable fields of a number, flag or enum type, from its own class up to RelicModel.</summary>
