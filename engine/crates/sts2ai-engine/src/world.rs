@@ -160,13 +160,17 @@ impl ffi::World for Live {
                         c.choices.next
                     );
                 }
-                // Every hook that paused for the player has run its rest.
+                // Every hook that paused for the player has run its rest, or never will: the combat's end cancels
+                // every combat action not running (ActionQueueSet.CombatEnded), a hook's that waits too.
                 if !c.x.hooks.started.is_null() || !c.x.hooks.asking.is_null() {
                     panic!("{action}: the step ended with a hook action started and not run (not ported)");
                 }
                 for &(context, _) in &c.x.hooks.waiting {
                     let waits = HookPlayerChoiceContextData::of(context, &c)._game_action;
-                    if GameActionData::of(waits, &c).state != GameActionState::Finished {
+                    if !matches!(
+                        GameActionData::of(waits, &c).state,
+                        GameActionState::Finished | GameActionState::Canceled
+                    ) {
                         panic!("{action}: the step ended with a hook that waits for the player: {waits:?} (not ported)");
                     }
                 }
