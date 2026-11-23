@@ -546,3 +546,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   intro says the Silent's row is at XHigh, in the 17 languages (make.py). The texts alone sent (`upload` without
   `--content`), all 17 OK; the public API's English description matches english.bbcode. The docs' numbers changed with
   it, not deployed.
+- 2026-11-23 17:0x: mod 1.0.13, a local build for this machine's game only (the user: 修好bug之後, 放新的mod, 以後就一直這樣),
+  not uploaded. Built at fe9bc709 with `LINUX_ONLY=1` (tmp/item/fe9bc709/Sts2Ai) and swapped into `<game>/mods/Sts2Ai`
+  with the game closed (1.0.12's copy kept in tmp/obs/mod-backup). Its two fixes, both met while recording a Dread run:
+  a new run clears the steps the last one left running (an event left by abandoning a run stalled every later event),
+  and auto-play survives the brain's restart (a segfault in sz_world_import had turned it off).
