@@ -63,6 +63,7 @@ internal static class Host
             NodeRecord.Patch(harmony);
             Executor.Patch(harmony);
             SettingsTab.Patch(harmony);
+            DesktopWindow.Patch(harmony);
             // The brain shipped beside the mod plays with the running game's own assemblies, and logs into this game
             // session's folder.
             var bundled = BundledBrain.Find(modDir, Path.GetDirectoryName(typeof(NGame).Assembly.Location)!, version, ModLog.Folder!);

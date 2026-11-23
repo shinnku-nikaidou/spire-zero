@@ -22,7 +22,7 @@ internal sealed record CombatPlan(IReadOnlyList<CombatAction> Steps)
 }
 
 /// <summary>
-/// A combat plan's marks: each card the plan plays this turn is outlined in purple with its step's
+/// A combat plan's marks, in the panel's accent: each card the plan plays this turn is outlined with its step's
 /// number, each target is ringed with the numbers of the steps aimed at it, and the end turn button is ringed with its
 /// step's number. The marks live in the mod's layer and follow the game's nodes on screen every frame, since cards
 /// move, fan out and are pooled; a card or creature that is gone has no mark. The settings pick which marks show.
@@ -32,7 +32,7 @@ internal sealed class CombatMark(CanvasLayer layer)
     private const float Pad = 10;
 
     private readonly List<Line2D> _lines = [];
-    private readonly List<(PanelContainer Box, Label Label)> _badges = [];
+    private readonly List<(PanelContainer Box, Label Label, StyleBoxFlat Style)> _badges = [];
     private int _line;
     private int _badge;
 
@@ -102,23 +102,24 @@ internal sealed class CombatMark(CanvasLayer layer)
     {
         if (_line == _lines.Count)
         {
-            var line = new Line2D { DefaultColor = Panel.Accent, Closed = true, Antialiased = true, JointMode = Line2D.LineJointMode.Round };
+            var line = new Line2D { Closed = true, Antialiased = true, JointMode = Line2D.LineJointMode.Round };
             layer.AddChild(line);
             _lines.Add(line);
         }
         var mark = _lines[_line++];
+        mark.DefaultColor = Panel.Accent;
         mark.Width = width;
         mark.Points = corners;
         mark.Visible = true;
     }
 
-    /// <summary>A purple badge centred on <paramref name="at"/>.</summary>
+    /// <summary>A badge in the accent centred on <paramref name="at"/>.</summary>
     private void Badge(string text, Vector2 at, int height)
     {
         if (_badge == _badges.Count)
         {
             var frame = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-            var style = Panel.Box(Panel.Accent, 17, Color.FromHtml("#100c18"), 3);
+            var style = Panel.Box(Panel.Accent, 17, Palette.Current.Bg, 3);
             style.ContentMarginLeft = style.ContentMarginRight = 8;
             frame.AddThemeStyleboxOverride("panel", style);
             var caption = Panel.Text("", 17, Panel.Ink);
@@ -126,10 +127,15 @@ internal sealed class CombatMark(CanvasLayer layer)
             caption.VerticalAlignment = VerticalAlignment.Center;
             frame.AddChild(caption);
             layer.AddChild(frame);
-            _badges.Add((frame, caption));
+            _badges.Add((frame, caption, style));
         }
-        var (box, label) = _badges[_badge++];
+        var (box, label, look) = _badges[_badge++];
         if (box.Theme != Fonts.Theme) box.Theme = Fonts.Theme;
+        if (look.BgColor != Panel.Accent)
+        {
+            (look.BgColor, look.BorderColor) = (Panel.Accent, Palette.Current.Bg);
+            label.AddThemeColorOverride("font_color", Panel.Ink);
+        }
         label.Text = text;
         box.CustomMinimumSize = new Vector2(height, height);
         box.Size = box.GetCombinedMinimumSize();

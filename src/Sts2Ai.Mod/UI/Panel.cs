@@ -35,27 +35,32 @@ internal sealed record Drive(bool Auto, string? Step, string? Finish, string Pil
 }
 
 /// <summary>
-/// The mod's panel over the game: a card with the champion, the mod's status and an SL/NoSL switch,
+/// The mod's panel: a card with the champion, the mod's status and an SL/NoSL switch,
 /// the toolbar that lets the AI play (auto, one step, to the end of the turn or the room) and the SL planner's effort,
 /// then either the brain's
 /// answer (the next action, the plan after it, the options it scored with their chances to win) or a message saying
 /// why there is none. It also owns the marks the answer draws on the game's own nodes (<see cref="MapMark"/>,
-/// <see cref="CombatMark"/>). F8 hides and shows all of it; the settings (<see cref="Settings"/>) pick which parts show.
-/// A small orb opens and closes the card, which opens under it, and the marks with it; the orb or the card's head drags
-/// both (kept where they were let go), and a button in the head steps the card's opacity down.
-/// The card's content is built again only when what it shows changes, not every frame.
+/// <see cref="CombatMark"/>). F8 hides and shows all of it over the game; the settings (<see cref="Settings"/>) pick
+/// which parts show.
+/// The panel is over the game, or in its own desktop window (<see cref="DesktopWindow"/>, <see cref="Settings.InGame"/>),
+/// in two columns there, the toolbar's on the left, the answer and the fight's details on the right; then the game
+/// keeps only the marks and the orb, or nothing.
+/// Over the game a small orb opens and closes the card, which opens under it, and the marks with it; the orb or the
+/// card's head drags both (kept where they were let go), and a button in the head steps the card's opacity down.
+/// The colours are the run's character's (<see cref="Palette"/>): the content is built again when they change, or the
+/// panel moves; the body only when what it shows changes, not every frame.
 /// </summary>
 internal sealed class Panel
 {
-    public static readonly Color Accent = new(0.75f, 0.35f, 1f);
-    public static readonly Color Ink = Color.FromHtml("#14081f");
-    internal static readonly Color Fg = Color.FromHtml("#f3effa");
-    internal static readonly Color Lead = Color.FromHtml("#d9a6ff");
-    internal static readonly Color Muted = Color.FromHtml("#b5abc8");
-    internal static readonly Color Rule = Color.FromHtml("#2e2540");
-    internal static readonly Color Track = Color.FromHtml("#221b30");
-    private static readonly Color StripFill = Color.FromHtml("#17111f");
-    internal static readonly Color Dim = Color.FromHtml("#5a4d72");
+    private static Palette P => Palette.Current;
+    public static Color Accent => P.Accent;
+    public static Color Ink => P.Ink;
+    internal static Color Fg => P.Fg;
+    internal static Color Lead => P.Strong;
+    internal static Color Muted => P.Muted;
+    internal static Color Rule => P.Rule;
+    internal static Color Track => P.Hover;
+    internal static Color Dim => P.Dim;
     internal static readonly Color Warn = Color.FromHtml("#f5b544");
     internal static readonly Color Error = Color.FromHtml("#ff8a70");
 
@@ -64,30 +69,44 @@ internal sealed class Panel
     /// <summary>The orb's width, and the gap between it and the card.</summary>
     private const int OrbSize = 40, Gap = 6;
 
+    /// <summary>The toolbar's column in the desktop window.</summary>
+    private const int ControlsWidth = 340;
+
     /// <summary>The opacities the head's button steps down through, then back to the first.</summary>
     private static readonly float[] Opacities = [1f, 0.75f, 0.5f, 0.3f];
 
+    private readonly SceneTree _tree;
     private readonly PanelContainer _card;
-    private readonly Label _champion;
-    private readonly Label _status;
-    private readonly (Button Button, PlayEnvironment Env)[] _switch;
-    private readonly Control _toolbar;
-    private readonly Button _auto, _step, _finish;
-    private readonly Control _options;
-    private readonly List<(Button Button, AutoSpeed Speed)> _speeds = [];
-    private readonly Button _stopElites, _stopAncients, _stopRewards;
-    private readonly Label _speedLabel, _stopLabel, _effortLabel;
-    private readonly Control _effortRow;
-    private readonly List<(Button Button, SearchEffort Effort)> _efforts = [];
-    private readonly VBoxContainer _body;
+    private readonly StyleBoxFlat _cardStyle;
     private readonly MapMark _map;
     private readonly CombatMark _combat;
     private readonly Details _details;
     private readonly Action<Command>? _pressed;
     private readonly PanelContainer _orb;
     private readonly Label _orbLabel;
-    private readonly Button _opacity;
     private readonly HashSet<Key> _down = [];
+    private DesktopWindow? _window;
+
+    // The content, built again for new colours or in its other place (Compose); in the card or in the window.
+    private Control? _content;
+    private Label _champion = null!;
+    private Label _status = null!;
+    private (Button Button, PlayEnvironment Env)[] _switch = [];
+    private (Button Button, InGame Mode)[] _places = [];
+    private Control _toolbar = null!;
+    private Button _auto = null!, _step = null!, _finish = null!;
+    private Control _options = null!;
+    private readonly List<(Button Button, AutoSpeed Speed)> _speeds = [];
+    private Button _stopElites = null!, _stopAncients = null!, _stopRewards = null!;
+    private Label _speedLabel = null!, _stopLabel = null!, _effortLabel = null!;
+    private Label? _placeLabel;
+    private Control _effortRow = null!;
+    /// <summary>The window's left column, which holds the toolbar and the effort row; null over the game.</summary>
+    private Control? _controls;
+    private readonly List<(Button Button, SearchEffort Effort)> _efforts = [];
+    private VBoxContainer _body = null!;
+    private Button? _opacity, _open;
+
     private bool _hidden;
     private bool? _orbStyled;
     /// <summary>While the orb or the head is held: where the mouse is from the orb's corner.</summary>
@@ -105,24 +124,26 @@ internal sealed class Panel
     /// <summary>The run on screen is NoSL's whatever the setting says (a run of more than one player without the hidden
     /// <c>ai mp sl</c>), and the SL/NoSL switch is held there. Set by the assist every frame.</summary>
     public bool HeldAtNoSl { get; set; }
+
+    /// <summary>The run's character (its id), whose colours the panel takes; null out of a run. Set by the assist every frame.</summary>
+    public string? Character { get; set; }
     private PlayEnvironment? _envStyled;
+    private InGame? _placeStyled;
     private (bool, AutoSpeed, bool, bool, bool, SearchEffort)? _toolStyled;
 
     /// <param name="pressed">What the toolbar and its keys do; null leaves the toolbar out (the mod is off).</param>
     public Panel(SceneTree tree, Action<Command>? pressed)
     {
-        _pressed = pressed;
+        (_tree, _pressed) = (tree, pressed);
         var layer = new CanvasLayer { Layer = 100 };
-        var cardStyle = Box(Color.FromHtml("#100c18") with { A = 0.92f }, 14, Rule);
-        cardStyle.SetContentMarginAll(12);
-        cardStyle.ContentMarginLeft = cardStyle.ContentMarginRight = 14;
-        cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
-        cardStyle.ShadowSize = 12;
+        _cardStyle = Box(P.Bg with { A = 0.92f }, 14, Rule);
+        _cardStyle.SetContentMarginAll(12);
+        _cardStyle.ContentMarginLeft = _cardStyle.ContentMarginRight = 14;
+        _cardStyle.ShadowColor = new Color(0, 0, 0, 0.4f);
+        _cardStyle.ShadowSize = 12;
         // Wide enough for the champion's name in the head ("v-sl-td4-12-1-d2") beside the switch.
         _card = Quiet(new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY + OrbSize + Gap), CustomMinimumSize = new Vector2(380, 0) });
-        _card.AddThemeStyleboxOverride("panel", cardStyle);
-        var column = Column(10);
-        _card.AddChild(column);
+        _card.AddThemeStyleboxOverride("panel", _cardStyle);
 
         // The orb: a click opens or closes the card, a drag moves both. It takes the mouse, unlike the card.
         _orb = new PanelContainer { Position = new Vector2(Settings.Current.PanelX, Settings.Current.PanelY), CustomMinimumSize = new Vector2(OrbSize, OrbSize),
@@ -133,21 +154,51 @@ internal sealed class Panel
         _orb.AddChild(_orbLabel);
         _orb.GuiInput += e => Drag(e, toggle: true);
 
-        // The head is the card's handle too: it takes the mouse there, unlike the rest of the card.
+        layer.AddChild(_card);
+        layer.AddChild(_orb);
+        _map = new MapMark(layer);
+        _combat = new CombatMark(layer);
+        _details = new Details(layer);
+        tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
+    }
+
+    /// <summary>
+    /// Builds the content anew, in the colours in use: over the game, in the card in one column; in the desktop window,
+    /// in two, with the fight's details under the answer. Whatever it showed before is shown again from scratch.
+    /// </summary>
+    private void Compose()
+    {
+        bool window = _window != null;
+        _details.Dock(null);
+        if (_content != null && GodotObject.IsInstanceValid(_content))
+        {
+            _content.GetParent()?.RemoveChild(_content);
+            _content.QueueFree();
+        }
+        (_orbStyled, _envStyled, _placeStyled, _toolStyled, _built) = (null, null, null, null, null);
+        _speeds.Clear();
+        _efforts.Clear();
+        _cardStyle.BgColor = P.Bg with { A = 0.92f };
+        _cardStyle.BorderColor = Rule;
+
+        // Over the game the head is the card's handle too: it takes the mouse there, unlike the rest of the card.
         var head = Row(8);
-        head.MouseFilter = Control.MouseFilterEnum.Stop;
-        head.MouseDefaultCursorShape = Control.CursorShape.Move;
-        head.GuiInput += e => Drag(e, toggle: false);
+        if (!window)
+        {
+            head.MouseFilter = Control.MouseFilterEnum.Stop;
+            head.MouseDefaultCursorShape = Control.CursorShape.Move;
+            head.GuiInput += e => Drag(e, toggle: false);
+        }
         // The champion's name (its nets and search size) takes the head's free width and is cut there.
         var names = Column(0);
         names.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        names.AddChild(_champion = Clipped(Text("", 13, Fg)));
-        names.AddChild(_status = Clipped(Text("", 11, Muted)));
+        names.AddChild(_champion = Clipped(Text("", window ? 15 : 13, Fg)));
+        names.AddChild(_status = Clipped(Text("", window ? 12 : 11, Muted)));
         head.AddChild(names);
         // SL or NoSL: the same setting as Environment in Settings → AI; a change starts the run anew for the brain.
-        if (pressed != null)
+        if (_pressed != null)
         {
-            var frame = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
+            var frame = Frame(Colors.Transparent, P.Border, 3);
             var pair = Row(2);
             frame.AddChild(pair);
             _switch = [(Toggle("SL"), PlayEnvironment.SL), (Toggle("NoSL"), PlayEnvironment.NoSL)];
@@ -159,16 +210,37 @@ internal sealed class Panel
             head.AddChild(frame);
         }
         else _switch = [];
-        head.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
+        if (window)
         {
-            float now = Settings.Current.Opacity;
-            float next = Opacities.FirstOrDefault(o => o < now - 0.01f, Opacities[0]);
-            Settings.Set(Settings.Current with { Opacity = next });
-        }));
-        column.AddChild(head);
+            // What the game keeps: the panel back over it (this window closes), the marks only, or nothing.
+            head.AddChild(_placeLabel = Text("", 11, Muted));
+            _placeLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            var frame = Frame(Colors.Transparent, P.Border, 3);
+            var three = Row(2);
+            frame.AddChild(three);
+            _places = [(Toggle(""), InGame.Panel), (Toggle(""), InGame.Marks), (Toggle(""), InGame.Nothing)];
+            foreach (var (button, mode) in _places)
+            {
+                button.Pressed += () => Settings.Set(Settings.Current with { InGame = mode });
+                three.AddChild(button);
+            }
+            head.AddChild(frame);
+            (_opacity, _open) = (null, null);
+        }
+        else
+        {
+            (_places, _placeLabel) = ([], null);
+            head.AddChild(_open = HeadButton(Icons.Window, () => Settings.Set(Settings.Current with { InGame = InGame.Marks })));
+            head.AddChild(_opacity = HeadButton(Icons.Opacity, () =>
+            {
+                float now = Settings.Current.Opacity;
+                float next = Opacities.FirstOrDefault(o => o < now - 0.01f, Opacities[0]);
+                Settings.Set(Settings.Current with { Opacity = next });
+            }));
+        }
 
         // The toolbar, in the style of a debugger's: continue / pause, step, step out.
-        var bar = Frame(Color.FromHtml("#0b0812"), Rule, 3);
+        var bar = Frame(P.Deep, Rule, 3);
         var buttons = Row(2);
         bar.AddChild(buttons);
         _auto = Tool(Command.Auto);
@@ -179,12 +251,11 @@ internal sealed class Panel
         buttons.AddChild(_finish);
         _toolbar = bar;
         _toolbar.Visible = false;
-        column.AddChild(_toolbar);
 
         // How hard the SL planner searches: one of its presets, switched in the run.
         var effort = Row(8);
         effort.AddChild(_effortLabel = Text("", 11, Muted));
-        var efforts = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
+        var efforts = Frame(Colors.Transparent, P.Border, 3);
         var presets = Row(2);
         efforts.AddChild(presets);
         foreach (var value in Enum.GetValues<SearchEffort>())
@@ -197,20 +268,19 @@ internal sealed class Panel
         effort.AddChild(efforts);
         _effortRow = effort;
         _effortRow.Visible = false;
-        column.AddChild(_effortRow);
 
         // While auto-play runs: its speed and where it stops.
         var options = Column(5);
         var speed = Row(8);
         speed.AddChild(_speedLabel = Text("", 11, Muted));
-        var speeds = Frame(Colors.Transparent, Color.FromHtml("#3a3050"), 3);
-        var three = Row(2);
-        speeds.AddChild(three);
+        var speeds = Frame(Colors.Transparent, P.Border, 3);
+        var fast = Row(2);
+        speeds.AddChild(fast);
         foreach (var value in new[] { AutoSpeed.Slow, AutoSpeed.Medium, AutoSpeed.Fast })
         {
             var button = Toggle("");
             button.Pressed += () => Settings.Set(Settings.Current with { Speed = value });
-            three.AddChild(button);
+            fast.AddChild(button);
             _speeds.Add((button, value));
         }
         speed.AddChild(speeds);
@@ -229,16 +299,69 @@ internal sealed class Panel
         options.AddChild(stops);
         _options = options;
         _options.Visible = false;
-        column.AddChild(_options);
 
         _body = Column(8);
-        column.AddChild(_body);
-        layer.AddChild(_card);
-        layer.AddChild(_orb);
-        _map = new MapMark(layer);
-        _combat = new CombatMark(layer);
-        _details = new Details(layer);
-        tree.Root.CallDeferred(Node.MethodName.AddChild, layer);
+        if (window)
+        {
+            var page = Column(14);
+            page.AddChild(head);
+            page.AddChild(Quiet(new ColorRect { Color = Rule, CustomMinimumSize = new Vector2(0, 1) }));
+            var columns = Row(18);
+            columns.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+            var controls = Column(12);
+            controls.CustomMinimumSize = new Vector2(ControlsWidth, 0);
+            controls.AddChild(_toolbar);
+            controls.AddChild(_effortRow);
+            controls.AddChild(_options);
+            columns.AddChild(_controls = controls);
+            // The answer and the details scroll when they are taller than the window.
+            var scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+            var answer = Column(14);
+            answer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            answer.AddChild(_body);
+            scroll.AddChild(answer);
+            columns.AddChild(scroll);
+            page.AddChild(columns);
+            _window!.Content.AddChild(page);
+            _details.Dock(answer);
+            _content = page;
+        }
+        else
+        {
+            var column = Column(10);
+            column.AddChild(head);
+            column.AddChild(_toolbar);
+            column.AddChild(_effortRow);
+            column.AddChild(_options);
+            column.AddChild(_body);
+            _card.AddChild(column);
+            (_content, _controls) = (column, null);
+        }
+    }
+
+    /// <summary>
+    /// Opens or closes the desktop window as the settings say (closed while the panel hides, <paramref name="shown"/>
+    /// false), and builds the content in its place and colours when either changed.
+    /// </summary>
+    private void Dock(bool shown)
+    {
+        bool window = shown && Settings.Current.InGame != InGame.Panel;
+        bool recolor = Palette.Use(Character);
+        if (window != (_window != null))
+        {
+            if (window) _window = new DesktopWindow(_tree);
+            else
+            {
+                // The window frees what it shows: the details' card is taken out first, the rest goes with it.
+                _details.Dock(null);
+                _window!.Close();
+                (_window, _content) = (null, null);
+            }
+            recolor = true;
+        }
+        if (recolor || _content == null) Compose();
+        _window?.Tick();
     }
 
     /// <summary>Reads the keys: F8 hides and shows, F5, F10 and F11 are the toolbar's; once per frame.</summary>
@@ -261,9 +384,10 @@ internal sealed class Panel
         return went;
     }
 
-    /// <summary>Nothing over the game: the player turned assist off.</summary>
+    /// <summary>Nothing over the game and no window: the player turned assist off.</summary>
     public void Hide()
     {
+        Dock(false);
         _card.Visible = _orb.Visible = false;
         _map.Show(null, false);
         _combat.Show(null, false);
@@ -303,21 +427,25 @@ internal sealed class Panel
         });
         Marks(route, plan);
         var settings = Settings.Current;
-        _details.Show(table, !_hidden && settings.Panel && settings.Details, new Rect2(_card.Position, _card.Size), settings.Opacity, Coop);
+        // In the window, the details are under the answer, whatever the game shows.
+        if (_window != null) _details.Show(table, settings.Details, default, 1, Coop);
+        else _details.Show(table, !_hidden && settings.Panel && settings.Details, new Rect2(_card.Position, _card.Size), settings.Opacity, Coop);
     }
 
     private void Head(string champion, string status, Drive? drive)
     {
+        Dock(true);
         var settings = Settings.Current;
-        _orb.Visible = !_hidden;
-        _card.Visible = !_hidden && settings.Panel;
+        bool window = _window != null;
+        _orb.Visible = !_hidden && settings.InGame != InGame.Nothing;
+        _card.Visible = !_hidden && settings.Panel && !window;
         if (_card.Theme != Fonts.Theme) _card.Theme = _orb.Theme = Fonts.Theme;
         if (_card.Modulate.A != settings.Opacity) _card.Modulate = Colors.White with { A = settings.Opacity };
         if (_orbStyled != settings.Panel)
         {
             // Open: filled; closed: a ring.
             _orbStyled = settings.Panel;
-            var style = Box(settings.Panel ? Accent : Color.FromHtml("#100c18"), OrbSize / 2, Accent, 2);
+            var style = Box(settings.Panel ? Accent : P.Bg, OrbSize / 2, Accent, 2);
             style.ShadowColor = new Color(0, 0, 0, 0.4f);
             style.ShadowSize = 8;
             _orb.AddThemeStyleboxOverride("panel", style);
@@ -325,8 +453,17 @@ internal sealed class Panel
         }
         // Where it was let go, kept inside the window as the card grows and shrinks.
         if (_grab == null && _card.IsInsideTree()) Place(new Vector2(settings.PanelX, settings.PanelY));
-        Tooltip(_orb, L10n.T("Click to open or close the panel, drag to move it"));
-        Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
+        Tooltip(_orb, window ? L10n.T("Click to show or hide the marks, drag to move it") : L10n.T("Click to open or close the panel, drag to move it"));
+        if (_opacity != null) Tooltip(_opacity, $"{L10n.T("Panel opacity")} {settings.Opacity * 100:0}%");
+        if (_open != null) Tooltip(_open, L10n.T("Move the panel into its own window, outside the game"));
+        if (_placeLabel != null) Label(_placeLabel, L10n.T("In game"));
+        foreach (var (button, mode) in _places)
+            Label(button, L10n.T(mode switch { InGame.Panel => "Panel + marks", InGame.Marks => "Marks only", _ => "Nothing" }));
+        if (_placeStyled != settings.InGame)
+        {
+            _placeStyled = settings.InGame;
+            foreach (var (button, mode) in _places) Restyle(button, mode == settings.InGame);
+        }
         _champion.Text = champion;
         _status.Text = status;
         var env = HeldAtNoSl ? PlayEnvironment.NoSL : settings.Env;
@@ -340,6 +477,7 @@ internal sealed class Panel
         _toolbar.Visible = drive != null && !Coop && _pressed != null;
         _effortRow.Visible = drive != null && _pressed != null;
         _options.Visible = drive is { Auto: true };
+        if (_controls != null) _controls.Visible = _toolbar.Visible || _effortRow.Visible;
         if (drive == null) return;
         Set(_auto, drive.Auto ? L10n.T("Pause") : L10n.T("Auto"), drive.Auto ? Icons.Pause : Icons.Play, true);
         // Every frame, so a change of the game's language shows.
@@ -439,7 +577,7 @@ internal sealed class Panel
     {
         var settings = Settings.Current;
         // The orb closes the marks with the card.
-        bool visible = !_hidden && settings.Panel;
+        bool visible = !_hidden && settings.Panel && settings.InGame != InGame.Nothing;
         _map.Show(settings.Route == RouteMode.Off ? null : route, visible, settings.Route == RouteMode.Whole);
         _combat.Show(plan, visible);
     }
@@ -451,7 +589,7 @@ internal sealed class Panel
             {
                 Env = default, Assist = default, Panel = default, Opacity = default, PanelX = default, PanelY = default, Speed = default, StopAtElites = default,
                 StopAtAncients = default, StopAtRewards = default,
-                Effort = default, TurnDecay = default,
+                Effort = default, TurnDecay = default, InGame = default, Window = default,
             },
             L10n.T("Next"));
         if (Equals(key, _built)) return;
@@ -471,7 +609,7 @@ internal sealed class Panel
     private void StatusStrip(Drive? drive)
     {
         if (drive == null) return;
-        var strip = Frame(StripFill, null, 8);
+        var strip = Frame(P.Raised, null, 8);
         var row = Row(10);
         strip.AddChild(row);
         var left = Column(2);
@@ -737,9 +875,9 @@ internal sealed class Panel
 
     internal static void RestyleTool(Button button, bool on)
     {
-        var fill = Box(on ? Color.FromHtml("#2a2238") : Colors.Transparent, 7);
+        var fill = Box(on ? P.Hover : Colors.Transparent, 7);
         fill.ContentMarginLeft = fill.ContentMarginRight = 8;
-        var hover = Box(Color.FromHtml("#2a2238"), 7);
+        var hover = Box(P.Hover, 7);
         hover.ContentMarginLeft = hover.ContentMarginRight = 8;
         foreach (var state in new[] { "normal", "pressed", "focus", "disabled" }) button.AddThemeStyleboxOverride(state, fill);
         button.AddThemeStyleboxOverride("hover", hover);
@@ -756,7 +894,7 @@ internal sealed class Panel
         button.AddThemeConstantOverride("icon_max_width", 12);
         var fill = Box(Colors.Transparent, 6);
         fill.SetContentMarginAll(4);
-        var hover = Box(Color.FromHtml("#2a2238"), 6);
+        var hover = Box(P.Hover, 6);
         hover.SetContentMarginAll(4);
         foreach (var state in new[] { "normal", "pressed", "focus" }) button.AddThemeStyleboxOverride(state, fill);
         button.AddThemeStyleboxOverride("hover", hover);
@@ -778,7 +916,7 @@ internal sealed class Panel
     {
         var fill = Box(on ? Accent : Colors.Transparent, 6);
         fill.ContentMarginLeft = fill.ContentMarginRight = 8;
-        var hover = Box(on ? Accent : Color.FromHtml("#2a2238"), 6);
+        var hover = Box(on ? Accent : P.Hover, 6);
         hover.ContentMarginLeft = hover.ContentMarginRight = 8;
         foreach (var state in new[] { "normal", "pressed", "focus" }) button.AddThemeStyleboxOverride(state, fill);
         button.AddThemeStyleboxOverride("hover", hover);

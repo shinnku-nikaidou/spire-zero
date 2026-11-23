@@ -4,7 +4,7 @@ namespace Sts2Ai.Mod.UI;
 
 /// <summary>
 /// The panel's icons, drawn here into textures so they need no file and no font: the toolbar's play, pause,
-/// step (an arrow over a dot) and finish (an arrow into a bar), and the head's opacity. The shapes are laid out on an 18-unit square and drawn at
+/// step (an arrow over a dot) and finish (an arrow into a bar), and the head's window and opacity. The shapes are laid out on an 18-unit square and drawn at
 /// three times that, then shown at <see cref="Shown"/>: the game scales its 1080p canvas up to the window, and a small
 /// texture would blur. Each pixel is the share of 4×4 samples inside the shape.
 /// </summary>
@@ -34,6 +34,10 @@ internal static class Icons
     /// <summary>An arrow to the right, into a bar.</summary>
     public static Texture2D Finish { get; } = Draw(Blue, (x, y) =>
         (y is >= 8 and <= 10 && x is >= 2 and <= 10) || Inside(x, y, (9, 4.5), (9, 13.5), (13, 9)) || (x is >= 14 and <= 16 && y is >= 3 and <= 15));
+
+    /// <summary>The panel's window button: a window's outline with its title bar, in white for the button to tint.</summary>
+    public static Texture2D Window { get; } = Draw(Colors.White, (x, y) =>
+        x is >= 2.5 and <= 15.5 && y is >= 3.5 and <= 14.5 && (x <= 4 || x >= 14 || y <= 7 || y >= 13));
 
     /// <summary>The panel's opacity button: a ring with its left half filled, in white for the button to tint.</summary>
     public static Texture2D Opacity { get; } = Draw(Colors.White, (x, y) =>

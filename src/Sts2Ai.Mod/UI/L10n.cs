@@ -51,6 +51,14 @@ internal static class L10n
         ["HP {0}/{1}"] = ["PV {0}/{1}", "PV {0}/{1}", "HP {0}/{1}", "HP {0}/{1}", "HP {0}/{1}"],
         ["Click to open or close the panel, drag to move it"] = ["Cliquer pour ouvrir ou fermer le panneau, glisser pour le déplacer",
             "Clic para abrir o cerrar el panel; arrastra para moverlo", "点击打开或收起面板，拖动可移动", "點擊打開或收起面板，拖曳可移動", "クリックでパネルを開閉、ドラッグで移動"],
+        ["Click to show or hide the marks, drag to move it"] = ["Cliquer pour afficher ou masquer les marques, glisser pour le déplacer",
+            "Clic para mostrar u ocultar las marcas; arrastra para moverlo", "点击显示或隐藏标记，拖动可移动", "點擊顯示或隱藏標記，拖曳可移動", "クリックでマークを表示・非表示、ドラッグで移動"],
+        ["Move the panel into its own window, outside the game"] = ["Mettre le panneau dans sa propre fenêtre, hors du jeu", "Pasar el panel a su propia ventana, fuera del juego",
+            "把面板移到游戏外自己的窗口", "把面板移到遊戲外自己的視窗", "パネルをゲーム外の専用ウィンドウに移す"],
+        ["In game"] = ["En jeu", "En el juego", "游戏内", "遊戲內", "ゲーム内"],
+        ["Panel + marks"] = ["Panneau + marques", "Panel + marcas", "面板+标记", "面板+標記", "パネル+マーク"],
+        ["Marks only"] = ["Marques seules", "Solo marcas", "只留标记", "只留標記", "マークのみ"],
+        ["Nothing"] = ["Rien", "Nada", "全关", "全關", "なし"],
 
         // The toolbar and the auto-play state.
         ["Auto"] = ["Auto", "Auto", "自动", "自動", "オート"],
@@ -178,6 +186,11 @@ internal static class L10n
             "关闭：mod 不询问也不显示任何东西", "關閉：mod 不詢問也不顯示任何東西", "オフ：Modは何も問い合わせず何も表示しない"],
         ["Panel"] = ["Panneau", "Panel", "面板", "面板", "パネル"],
         ["F8 hides everything at once"] = ["F8 masque tout d'un coup", "F8 oculta todo a la vez", "F8 一次隐藏全部", "F8 一次隱藏全部", "F8ですべて隠す"],
+        ["panel + marks: the panel over the game; otherwise in its own window, which you can move to another screen"] = [
+            "panneau + marques : le panneau sur le jeu ; sinon dans sa propre fenêtre, que vous pouvez déplacer sur un autre écran",
+            "panel + marcas: el panel sobre el juego; si no, en su propia ventana, que puedes mover a otra pantalla",
+            "面板+标记：面板在游戏里；其他选项：面板在自己的窗口里，可以拖到别的屏幕", "面板+標記：面板在遊戲裡；其他選項：面板在自己的視窗裡，可以拖到別的螢幕",
+            "パネル+マーク：パネルはゲームの上に。それ以外：パネルは専用ウィンドウに表示され、別の画面に移動できます"],
         ["Considered options"] = ["Options envisagées", "Opciones consideradas", "候选项", "候選項", "候補"],
         ["in the panel"] = ["dans le panneau", "en el panel", "在面板里", "在面板裡", "パネル内"],
         ["Values"] = ["Valeurs", "Valores", "数值", "數值", "数値"],

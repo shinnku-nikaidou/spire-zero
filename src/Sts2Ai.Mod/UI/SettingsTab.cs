@@ -91,6 +91,8 @@ internal static class SettingsTab
         content.AddChild(Header(L10n.T("Assist"), font));
         content.AddChild(Choice(L10n.T("AI assist"), L10n.T("off: the mod asks nothing and draws nothing"), font, onOff, bools, s => s.Assist, (s, v) => s with { Assist = v }, refresh));
         content.AddChild(Choice(L10n.T("Panel"), L10n.T("F8 hides everything at once"), font, onOff, bools, s => s.Panel, (s, v) => s with { Panel = v }, refresh));
+        content.AddChild(Choice(L10n.T("In game"), L10n.T("panel + marks: the panel over the game; otherwise in its own window, which you can move to another screen"), font,
+            [L10n.T("Panel + marks"), L10n.T("Marks only"), L10n.T("Nothing")], [InGame.Panel, InGame.Marks, InGame.Nothing], s => s.InGame, (s, v) => s with { InGame = v }, refresh));
         content.AddChild(Choice(L10n.T("Considered options"), L10n.T("in the panel"), font, [L10n.T("Off"), L10n.T("Values"), L10n.T("Values + bars")],
             [ConsideredMode.Off, ConsideredMode.Values, ConsideredMode.Bars], s => s.Considered, (s, v) => s with { Considered = v }, refresh));
         content.AddChild(Choice(L10n.T("Order numbers on cards"), L10n.T("the cards this turn's plan plays"), font, onOff, bools, s => s.Numbers, (s, v) => s with { Numbers = v }, refresh));

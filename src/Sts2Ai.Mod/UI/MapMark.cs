@@ -27,7 +27,7 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
 }
 
 /// <summary>
-/// A route on the map: a pulsing purple ring on its next point, and a purple line along each path
+/// A route on the map: a pulsing ring on its next point, and a line along each path, in the panel's accent,
 /// from where the player is to its end. It lives in the mod's layer and follows the game's nodes on screen every frame,
 /// since the map scrolls. The map screen keeps its point nodes and each path's dots in private dictionaries; a new act
 /// replaces them.
@@ -35,10 +35,9 @@ internal sealed record MapRoute(MapCoord? At, IReadOnlyList<MapCoord> Points)
 internal sealed class MapMark
 {
     private const int Segments = 48;
-    private static readonly Color Purple = Panel.Accent;
 
     private readonly CanvasLayer _layer;
-    private readonly Line2D _ring = new() { Width = 7, DefaultColor = Purple, Closed = true, Antialiased = true, Visible = false };
+    private readonly Line2D _ring = new() { Width = 7, Closed = true, Antialiased = true, Visible = false };
     private readonly List<(Line2D Line, IReadOnlyList<TextureRect> Dots)> _paths = [];
     private MapRoute? _route;
     private NMapPoint? _point;
@@ -59,9 +58,12 @@ internal sealed class MapMark
         {
             // A path's line runs from its first dot to its last, so it stops short of the points' icons.
             line.Visible = _ring.Visible && whole && GodotObject.IsInstanceValid(dots[0]) && GodotObject.IsInstanceValid(dots[^1]);
-            if (line.Visible) line.Points = [Center(dots[0]), Center(dots[^1])];
+            if (!line.Visible) continue;
+            line.Points = [Center(dots[0]), Center(dots[^1])];
+            line.DefaultColor = Panel.Accent with { A = 0.8f };
         }
         if (!_ring.Visible) return;
+        _ring.DefaultColor = Panel.Accent;
         var xf = _point!.GetGlobalTransformWithCanvas();
         float pulse = 1 + 0.1f * Mathf.Sin(Time.GetTicksMsec() / 1000f * Mathf.Tau);
         float radius = (Math.Max(_point.Size.X, _point.Size.Y) / 2 + 14) * xf.Scale.X * pulse;
@@ -82,7 +84,7 @@ internal sealed class MapMark
         foreach (var (from, to) in stops.Zip(stops.Skip(1)))
         {
             if (!paths.TryGetValue((from, to), out var dots) || dots.Count == 0) continue;
-            var line = new Line2D { Width = 5, DefaultColor = Purple with { A = 0.8f }, Antialiased = true, Visible = false };
+            var line = new Line2D { Width = 5, Antialiased = true, Visible = false };
             _layer.AddChild(line);
             _paths.Add((line, dots));
         }

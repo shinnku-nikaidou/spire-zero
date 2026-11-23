@@ -16,6 +16,13 @@ internal enum AutoSpeed { Slow, Medium, Fast }
 /// <summary>How hard the SL planner searches each fight: one of its presets (XHigh: Max with an early stop).</summary>
 internal enum SearchEffort { Low, Medium, High, XHigh, Max }
 
+/// <summary>What the mod draws over the game: the panel's card and its marks; or only the marks and the orb, the panel in
+/// its own desktop window (<see cref="DesktopWindow"/>); or nothing, the panel in its window.</summary>
+internal enum InGame { Panel, Marks, Nothing }
+
+/// <summary>Where the panel's desktop window is and how big, in the screens' pixels.</summary>
+internal readonly record struct WindowRect(int X, int Y, int W, int H);
+
 /// <summary>
 /// The player's choices for the mod, set in the game's settings screen (<see cref="SettingsTab"/>) and some in the
 /// panel. They are kept in one file in the mod's own folder (<see cref="Dir"/>), outside the game's
@@ -25,7 +32,8 @@ internal enum SearchEffort { Low, Medium, High, XHigh, Max }
 /// <param name="Env">SL or NoSL, set in the settings screen, its last setting, and by the panel's switch; a change starts the run anew for the brain.</param>
 /// <param name="Numbers">Order numbers on the cards the plan plays this turn.</param>
 /// <param name="Marks">The plan's target and end-turn marks.</param>
-/// <param name="Panel">The panel's card and its marks (combat, map) show; its orb opens and closes them.</param>
+/// <param name="Panel">The panel's card and its marks (combat, map) show; its orb opens and closes them. With the panel in its
+/// own window, the marks only.</param>
 /// <param name="Opacity">The card's opacity, all of it: its box, text and buttons.</param>
 /// <param name="PanelX">Where the panel's orb is, its top-left corner in the game's 1080p canvas; the card opens under it. The player drags it.</param>
 /// <param name="StopAtElites">Auto-play stops before it travels to an elite or a boss.</param>
@@ -40,6 +48,8 @@ internal enum SearchEffort { Low, Medium, High, XHigh, Max }
 /// <param name="Multiplayer">Runs of more than one player are served in every game session: the console's
 /// <c>ai mp always</c>, or the settings screen's Multiplayer switch (the user, 2026-11-22: 或在設定裡面打開開關); not
 /// <c>ai set</c>.</param>
+/// <param name="InGame">Whether the panel is over the game or in its own desktop window, and what it leaves over the game then.</param>
+/// <param name="Window">Where the panel's desktop window was left; null before it was first opened.</param>
 internal sealed record Settings(
     bool Assist = true,
     PlayEnvironment Env = PlayEnvironment.SL,
@@ -58,7 +68,9 @@ internal sealed record Settings(
     SearchEffort Effort = SearchEffort.Medium,
     bool TurnDecay = true,
     bool Details = false,
-    bool Multiplayer = false)
+    bool Multiplayer = false,
+    InGame InGame = InGame.Marks,
+    WindowRect? Window = null)
 {
     /// <summary>The effort as hello names it.</summary>
     public string EffortName => Effort.ToString().ToLowerInvariant();

@@ -8,41 +8,59 @@ namespace Sts2Ai.Mod.UI;
 /// The fight's details card beside the panel's: the picked line played out turn by turn (<see cref="FightTable"/>), as
 /// a table (the cards played, the HP the enemies lost, the block, the HP lost, the HP left, each enemy's HP) and as a
 /// chart of the player's HP and the enemies' total HP over the turns; where the line stops with the fight going on, the
-/// combat net's guess after it, dashed. The panel's button opens and closes it (<see cref="Settings.Details"/>). Built
-/// again only when the table changes.
+/// combat net's guess after it, dashed. The panel's button opens and closes it (<see cref="Settings.Details"/>). Over
+/// the game it is a card beside the panel's; in the panel's desktop window, under the answer (<see cref="Dock"/>). Built
+/// again only when the table or the colours change.
 /// </summary>
 internal sealed class Details
 {
     private const int ChartWidth = 440, ChartHeight = 150, Gap = 6;
 
+    private readonly CanvasLayer _layer;
     private readonly PanelContainer _card;
+    private readonly StyleBoxFlat _style;
     private readonly VBoxContainer _body;
     private object? _built;
+    private bool _docked;
 
     public Details(CanvasLayer layer)
     {
-        var style = Panel.Box(Color.FromHtml("#100c18") with { A = 0.92f }, 14, Panel.Rule);
-        style.SetContentMarginAll(12);
-        style.ContentMarginLeft = style.ContentMarginRight = 14;
-        style.ShadowColor = new Color(0, 0, 0, 0.4f);
-        style.ShadowSize = 12;
+        _layer = layer;
+        _style = Panel.Box(Palette.Current.Bg with { A = 0.92f }, 14, Panel.Rule);
+        _style.SetContentMarginAll(12);
+        _style.ContentMarginLeft = _style.ContentMarginRight = 14;
+        _style.ShadowColor = new Color(0, 0, 0, 0.4f);
+        _style.ShadowSize = 12;
         _card = Panel.Quiet(new PanelContainer { Visible = false });
-        _card.AddThemeStyleboxOverride("panel", style);
+        _card.AddThemeStyleboxOverride("panel", _style);
         _body = Panel.Column(10);
         _card.AddChild(_body);
         layer.AddChild(_card);
     }
 
+    /// <summary>The card into <paramref name="into"/> (the panel's window), laid out there; null: back over the game,
+    /// beside the panel's card.</summary>
+    public void Dock(Container? into)
+    {
+        _docked = into != null;
+        var parent = into ?? (Node)_layer;
+        if (_card.GetParent() == parent) return;
+        _card.GetParent()?.RemoveChild(_card);
+        parent.AddChild(_card);
+        _built = null;
+    }
+
     /// <summary>The card beside <paramref name="beside"/> (the panel's card): on its right, or on its left where the
-    /// window has no room; hidden with no table. <paramref name="coop"/>: a run of more than one player, whose search
-    /// takes the teammates as dead in SL and as playing nothing more this turn in NoSL.</summary>
+    /// window has no room; where it is docked, as its container lays it out. Hidden with no table.
+    /// <paramref name="coop"/>: a run of more than one player, whose search takes the teammates as dead in SL and as
+    /// playing nothing more this turn in NoSL.</summary>
     public void Show(FightTable? table, bool visible, Rect2 beside, float opacity, bool coop = false)
     {
         _card.Visible = visible && table != null;
         if (!_card.Visible) return;
         if (_card.Theme != Fonts.Theme) _card.Theme = Fonts.Theme;
         if (_card.Modulate.A != opacity) _card.Modulate = Colors.White with { A = opacity };
-        var key = (table, Settings.Current.Env, coop, L10n.T("Turn"));
+        var key = (table, Settings.Current.Env, coop, L10n.T("Turn"), Palette.Current);
         if (!Equals(key, _built))
         {
             _built = key;
@@ -51,9 +69,12 @@ internal sealed class Details
                 _body.RemoveChild(child);
                 child.QueueFree();
             }
+            _style.BgColor = Palette.Current.Bg with { A = 0.92f };
+            _style.BorderColor = Panel.Rule;
             Build(table!, coop);
             _card.CallDeferred(Control.MethodName.ResetSize);
         }
+        if (_docked) return;
         var window = _card.GetViewportRect().Size;
         float right = beside.End.X + Gap;
         float x = right + _card.Size.X <= window.X ? right : beside.Position.X - Gap - _card.Size.X;
@@ -156,8 +177,8 @@ internal sealed class Details
             legend.AddChild(item);
         }
         Item(L10n.T("Your HP"), Panel.Accent, false);
-        Item(L10n.T("Enemies' HP"), Panel.Warn, false);
-        if (table.Win != null) Item(L10n.T("net's guess · win {0}", Percent(table.Win.Value)), Panel.Muted, true);
+        Item(L10n.T("Enemies' HP"), Panel.Muted, false);
+        if (table.Win != null) Item(L10n.T("net's guess · win {0}", Percent(table.Win.Value)), Panel.Accent, true);
         return legend;
     }
 
@@ -183,7 +204,7 @@ internal sealed class Details
             chart.DrawLine(new Vector2(left, Y(top / 2)), new Vector2(ChartWidth - right, Y(top / 2)), Panel.Track, 1);
             foreach (var v in new[] { top, top / 2, 0 })
                 chart.DrawString(font, new Vector2(0, Y(v) + 4), v.ToString("0", CultureInfo.InvariantCulture), HorizontalAlignment.Right, left - 6, 11, Panel.Muted);
-            Series(chart, enemies.Select((v, i) => new Vector2(X(i), Y(v))).ToArray(), Panel.Warn, 2, 3);
+            Series(chart, enemies.Select((v, i) => new Vector2(X(i), Y(v))).ToArray(), Panel.Muted, 2, 3);
             var mine = hp.Select((v, i) => new Vector2(X(i), Y(v))).ToArray();
             Series(chart, mine, Panel.Accent, 2.5f, 4);
             var last = mine[^1];
@@ -191,8 +212,8 @@ internal sealed class Details
             if (guess is { } g)
             {
                 var at = new Vector2(X(points - 1), Y(g));
-                chart.DrawDashedLine(last, at, Panel.Muted, 2, 5, true, true);
-                chart.DrawCircle(at, 3.5f, Panel.Muted);
+                chart.DrawDashedLine(last, at, Panel.Accent, 2, 5, true, true);
+                chart.DrawCircle(at, 3.5f, Panel.Accent);
                 (last, end) = (at, $"≈{g:0} HP");
             }
             chart.DrawString(font, new Vector2(last.X - 120, last.Y - 9), end, HorizontalAlignment.Right, 120, 12, Panel.Fg);
