@@ -19,7 +19,7 @@ public static class Checkpoint
 {
     /// <summary>A checkpoint read (<see cref="Open"/>): the game's save, to load as the game's Continue loads one, and the
     /// relics' plain fields.</summary>
-    public sealed record Opened(string Save, IReadOnlyList<RelicFields> Relics);
+    public sealed record Opened(string Save, IReadOnlyList<RelicFields> Relics, string? Dominion);
 
     public sealed record RelicFields(string Id, Dictionary<string, string> Fields);
 
@@ -33,7 +33,8 @@ public static class Checkpoint
     /// read back), with <paramref name="player"/>'s relics.</summary>
     public static string Of(SerializableRun save, Player player) => JsonSerializer.Serialize(new Opened(
         SaveManager.ToJson(save),
-        [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))]));
+        [.. player.Relics.Select(r => new RelicFields(r.Id.Entry, Plain(r).ToDictionary(Key, f => Format(f.GetValue(r)!))))],
+        player.RunState.Dominion?.Id.Entry));
 
     /// <summary>Reads <paramref name="checkpoint"/>, once for every load of it.</summary>
     public static Opened Open(string checkpoint) =>
@@ -48,6 +49,21 @@ public static class Checkpoint
         foreach (var (saved, relic) in relics.Zip(player.Relics))
             foreach (var field in Plain(relic))
                 field.SetValue(relic, Parse(saved.Fields[Key(field)], field.FieldType));
+    }
+
+    /// <summary>
+    /// Takes the Dread mode's dominion off the run loaded from <paramref name="checkpoint"/> where the run it came from had
+    /// none: entering the act's boss room takes it off (DreadRunModel.RemoveDominionIfRoomIsBoss), but a load gives the
+    /// act's back (AfterRunLoaded), so the clone of a checkpoint after the boss's fight read a dominion the run no longer
+    /// had, and no state of its afterstates was ever the decision's (a card reward skipped there was opened again, 2026-11-23).
+    /// </summary>
+    public static void RestoreDominion(Opened checkpoint, RunState run)
+    {
+        string? loaded = run.Dominion?.Id.Entry;
+        if (loaded == checkpoint.Dominion) return;
+        if (checkpoint.Dominion != null)
+            throw new InvalidOperationException($"the loaded run's dominion {loaded ?? "none"} is not the checkpoint's {checkpoint.Dominion}");
+        run.SetDominion(null);
     }
 
     /// <summary>The relic's writable fields of a number, flag or enum type, from its own class up to RelicModel.</summary>
