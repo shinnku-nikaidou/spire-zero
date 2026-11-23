@@ -339,12 +339,16 @@ def check_seeds(kind: str, options: list[str]) -> None:
 
 def weights_of(full: str, inputs: str | None, options: list[str]) -> list[str]:
     """The net files a job's run reads, as weights/all/NAME.json: those its options name (--value, --combat-net, --f-net)
-    and those of the champion file it names (--champion, read at REV or in INPUTS)."""
+    and those of the champion file it names (--champion, read at REV or in INPUTS), its character's own nets
+    (`characters`, for the job's --character, run's default SILENT) over the file's options."""
     named = {}
     if "--champion" in options:
         path = options[options.index("--champion") + 1]
         text = (ROOT / inputs / path).read_text() if inputs else output("git", "-C", ROOT, "show", f"{full}:{path}")
-        named |= json.loads(text)["options"]
+        file = json.loads(text)
+        named |= file["options"]
+        character = options[options.index("--character") + 1] if "--character" in options else "SILENT"
+        named |= (file.get("characters") or {}).get(character.upper(), {})
     nets = ("value", "combat-net", "f-net")
     named |= {key: options[options.index(f"--{key}") + 1] for key in nets if f"--{key}" in options}
     return sorted({named[key] for key in nets if key in named})
