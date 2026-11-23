@@ -556,3 +556,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   presses nothing while a room changes (with the animations at normal speed it pressed a treasure room's proceed during
   the travel, the map opened over the next fight, a vote went into it, and the queued move stopped the SL planner). The
   DamageMeter Workshop mod is disabled in the game's settings (the user: DamageMeter mod 關閉, 下次修好这个mod後別打開).
+- 2026-11-23 18:0x: mod 1.0.15, a local build for this machine's game only, not uploaded. Built at bcf48a62 with
+  `LINUX_ONLY=1` (the first try aborted in port, a NullReferenceException inside Roslyn's nullability analysis in its
+  parallel loop; the same commit built on the second) and swapped in with the game closed, DamageMeter still disabled.
+  Its fix: an SL clone of a boss room's checkpoint has no dominion, as the run it came from (the cycle guard held no
+  state there, and the AI opened and skipped the act 2 boss's card reward twenty times; `clones` on that wire 0 → 7 of 7).
