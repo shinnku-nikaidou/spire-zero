@@ -532,3 +532,12 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   public API: updated 03:54:14Z, 533.1 MB; 1.0.11 on the changelog page), the 17 languages' texts with it, unchanged
   since 1.0.9. Note: tmp/release-1.0.11/note.txt. Installed in `mods/` over 1.0.10 (moved to
   `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates. Not tried in the real game yet.
+- 2026-11-23 14:4x: mod 1.0.12 uploaded (the user: 發版新的mod). Built at 28d3c882 for all three platforms (the Windows
+  VM started for it, shut down after): SILENT's SL champion v-sl-silent-1 with its own combat net c-sl-silent-1 and
+  f-sl-silent-1 (sl.json's characters.SILENT); nothing else changed since 1.0.11. The packed brain answered the SL
+  (FOOL) and NoSL v6 wires the same as 1.0.9, no errors; a SILENT SL wire (the 11-19 Mac wire, v6, medium) loaded
+  v-sl-silent-1 + c-sl-silent-1 + f-sl-silent-1 and answered all 11 decisions, no errors. The game closed here and on
+  the Mac (closed by the user for it). The commit went through at once (the public API: updated 06:45:48Z, 552.1 MB;
+  1.0.12 on the changelog page), the 17 languages' texts with it, unchanged since 1.0.9 (the SL table's SILENT row
+  is still the old nets' medium test). Note: tmp/release-1.0.12/note.txt. Installed in `mods/` over 1.0.11 (moved to
+  `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
