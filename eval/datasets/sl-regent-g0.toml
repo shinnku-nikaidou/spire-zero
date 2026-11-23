@@ -2,9 +2,11 @@
 # v-sl-regent-1, the Regent's first bundle of its own (nets per character since 2026-11-22).
 # Played by the bundle v-sl-regent-0 (sl-regent-g0.bundle.json beside this file): d2's V with REGENT's 24 card ids reset
 # to about a site-B card (eval/resets/2026-11-22-cards.toml), d2's combat net and f; REGENT's entry in eval/champions/sl.json.
-# Every fight at xhigh, as sl-silent-g0. No card family favored or refused: every run is an untouched run at the last SL
-# datasets' tiers.
-# A10 10,000, the Dread mode 10,000, A0-A9 10,000 (1,000 each): 30,000 runs (the user, 2026-11-23: "30000場, 1:1:1 A0-9, 10 恐懼").
+# Every fight at xhigh, as sl-silent-g0. Each place split 20 / 40 / 30 / 10 (the user, 2026-11-23: "20%的局有白卡傾向, 40%的局
+# 看見暴政就拿, 30%完全不管, 10%鑄劍傾向"; of Tyranny: "暴政就拿, 優先敲, 不准刪卡"): the colorless tilt, Tyranny taken on
+# sight, upgraded first and no card removed once it is in the deck, the untouched runs at the last SL datasets' tiers, the
+# forge tilt. The tilted runs at a low epsilon so that their decks take shape, as sl-silent-g0's.
+# A10 10,000, the Dread mode 10,000, A0-A9 10,000 (1,000 each): 30,000 runs (the user: "30000場, 1:1:1 A0-9, 10 恐懼").
 #
 # The bundle names weights/all/v-sl-regent-0.json, which box.py launch takes from this checkout and sends through the hub
 # (it refuses a net it lacks; the net is not on the GitHub release).
@@ -20,6 +22,16 @@ workers = 4
 # epsilon, the others by a softmax over log V at temperature tau.
 explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
 
+# REGENT's cards (v0.113.1, the multiplayer-only ones left out) for the three tilts of plans/2026-11-23-1545-sl-regent-g0.md 3.
+# colorless: the cards whose text names a colorless card, and those paid by each card created (a colorless card added to
+# the hand is created: AfterCardGeneratedForCombat). forge: the cards whose text names Forge or the Sovereign Blade.
+[families]
+colorless = ["BUNDLE_OF_JOY", "HEIRLOOM_HAMMER", "MANIFEST_AUTHORITY", "QUASAR", "SPECTRUM_SHIFT",
+             "ARSENAL", "PILLAR_OF_CREATION", "SUPERMASSIVE"]
+tyranny = ["TYRANNY"]
+forge = ["BEAT_INTO_SHAPE", "BIG_BANG", "BULWARK", "CONQUEROR", "FURNACE", "PARRY", "REFINE_BLADE", "SEEKING_EDGE",
+         "SPOILS_OF_BATTLE", "SUMMON_FORTH", "SWORD_SAGE", "THE_SMITH", "WROUGHT_IN_WAR"]
+
 # The whole game, every fight at xhigh (max's solver with the early stop, solve 16384 stop 1024).
 [games.full]
 auto_win = []
@@ -31,17 +43,73 @@ mode = "dread"
 auto_win = []
 effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
 
+# Each place split 20 / 40 / 30 / 10, a row each: the colorless tilt, Tyranny, the untouched runs (the file's tiers), the
+# forge tilt. Tyranny's bonus 10 in log V (V times e^10 for each copy an answer adds) takes it wherever an answer can.
 [[runs]]
 game = "full"
 asc = 10
-n = 10000
+n = 2000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }]
+
+[[runs]]
+game = "full"
+asc = 10
+n = 4000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+
+[[runs]]
+game = "full"
+asc = 10
+n = 3000
+
+[[runs]]
+game = "full"
+asc = 10
+n = 1000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["forge"], favor_by = 0.2 }]
 
 [[runs]]
 game = "dread"
 asc = 10
-n = 10000
+n = 2000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }]
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 4000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 3000
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 1000
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["forge"], favor_by = 0.2 }]
 
 [[runs]]
 game = "full"
 asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-n = [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000]
+n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["colorless"], favor_by = 0.2 }]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [400, 400, 400, 400, 400, 400, 400, 400, 400, 400]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["tyranny"], favor_by = 10, upgrade_first = ["tyranny"], no_removal_with = ["tyranny"] }]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [300, 300, 300, 300, 300, 300, 300, 300, 300, 300]
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+explore = [{ epsilon = 0.01, tau = 0.01, favor = ["forge"], favor_by = 0.2 }]
