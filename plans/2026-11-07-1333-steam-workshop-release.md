@@ -551,3 +551,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   with the game closed (1.0.12's copy kept in tmp/obs/mod-backup). Its two fixes, both met while recording a Dread run:
   a new run clears the steps the last one left running (an event left by abandoning a run stalled every later event),
   and auto-play survives the brain's restart (a segfault in sz_world_import had turned it off).
+- 2026-11-23 17:3x: mod 1.0.14, a local build for this machine's game only, not uploaded. Built at 4b85cc01 with
+  `LINUX_ONLY=1` and swapped in with the game closed (1.0.13's copy in tmp/obs/mod-backup). Its fix: auto-play's nudge
+  presses nothing while a room changes (with the animations at normal speed it pressed a treasure room's proceed during
+  the travel, the map opened over the next fight, a vote went into it, and the queued move stopped the SL planner). The
+  DamageMeter Workshop mod is disabled in the game's settings (the user: DamageMeter mod 關閉, 下次修好这个mod後別打開).
