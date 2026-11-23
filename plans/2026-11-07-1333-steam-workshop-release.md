@@ -523,3 +523,12 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   for the panel and the marks, and the game's mute and 30 FPS in the background following the whole game's focus. Only
   the mod's UI changed since 1.0.9, the brain and champions not, so the packed brain was not run on the wires again.
   Installed in `mods/` over 1.0.9 (moved to `tmp/modeng/old-installs/`) with the game closed; not tried in the real game yet.
+- 2026-11-23 11:5x: mod 1.0.11 uploaded (the user: 做完後打包發版到workshop). Built at 43e8e75c for all three platforms
+  (the Windows VM started for it, shut down after): the panel in its own desktop window (In game: Panel + marks, Marks
+  only by default, Nothing), each character's colours from the character select screen on, auto-play's speed and stops
+  kept with the toolbar, the fight's expected end (win, HP left, proved) in the status strip, and the game's mute and
+  30 FPS in the background following the whole game's focus. Only the mod's UI changed since 1.0.9, so the packed
+  brain was not run on the wires again. The game closed here and on the Mac. The commit went through at once (the
+  public API: updated 03:54:14Z, 533.1 MB; 1.0.11 on the changelog page), the 17 languages' texts with it, unchanged
+  since 1.0.9. Note: tmp/release-1.0.11/note.txt. Installed in `mods/` over 1.0.10 (moved to
+  `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates. Not tried in the real game yet.
