@@ -287,7 +287,12 @@ internal static class NodeRecord
             return;
         }
         bool sameRun = ReferenceEquals(run, _run);
-        if (!sameRun) (_run, Node) = (run, -1);
+        if (!sameRun)
+        {
+            (_run, Node) = (run, -1);
+            // A step of the last run that never ended (an event left by abandoning the run) holds no screen of this one.
+            _running.Clear();
+        }
         Node++;
         var following = sameRun && !continued ? _steps.Where(s => s.InSave).Select(s => s with { InSave = false }).ToList() : [];
         _steps.Clear();

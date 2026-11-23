@@ -591,9 +591,11 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
                 if (_connected || _down != down.Reason) ModLog.Info("brain", $"no brain: {down.Reason}");
                 (_connected, _down, _run) = (false, down.Reason, null);
                 Unanswered(down.Reason);
-                // The toolbar is gone without a brain: the AI stops, and starts again only when the player asks.
+                // The mod starts a brain that ended again: auto-play goes on once it is back, rather than stop the run.
+                var (goal, until) = (_goal, _until);
                 Reset();
                 Forget();
+                (_goal, _until) = (goal, until);
                 break;
             case Received { Message: Ready ready }:
                 _champion = ready.Shown;
