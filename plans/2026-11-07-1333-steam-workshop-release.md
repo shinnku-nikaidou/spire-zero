@@ -541,3 +541,8 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   1.0.12 on the changelog page), the 17 languages' texts with it, unchanged since 1.0.9 (the SL table's SILENT row
   is still the old nets' medium test). Note: tmp/release-1.0.12/note.txt. Installed in `mods/` over 1.0.11 (moved to
   `tmp/modeng/old-installs/`); the Mac has no local copy, its subscription updates.
+- 2026-11-23 14:5x: the listing's SL table took the Silent's new numbers (the user: 把頁面表格的SILENT成績更新, then
+  現在就填 xhigh 成績): v-sl-silent-1's test at xhigh on promotion-1-200, A0 199/200, A10 170/200, Dread 75/200; the
+  intro says the Silent's row is at XHigh, in the 17 languages (make.py). The texts alone sent (`upload` without
+  `--content`), all 17 OK; the public API's English description matches english.bbcode. The docs' numbers changed with
+  it, not deployed.
