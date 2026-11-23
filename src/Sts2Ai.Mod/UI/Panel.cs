@@ -125,7 +125,8 @@ internal sealed class Panel
     /// <c>ai mp sl</c>), and the SL/NoSL switch is held there. Set by the assist every frame.</summary>
     public bool HeldAtNoSl { get; set; }
 
-    /// <summary>The run's character (its id), whose colours the panel takes; null out of a run. Set by the assist every frame.</summary>
+    /// <summary>The run's character (its id), or the one picked on a screen that starts a run (<see cref="CharacterPick"/>),
+    /// whose colours the panel takes; null otherwise. Set by the assist every frame.</summary>
     public string? Character { get; set; }
     private PlayEnvironment? _envStyled;
     private InGame? _placeStyled;

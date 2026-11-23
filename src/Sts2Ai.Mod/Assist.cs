@@ -242,7 +242,7 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         // choices) and whose brain plays its fights with the teammates dead (the user, 2026-11-22: 隊友當然是當全部死光的sl).
         _coop = run is { Players.Count: > 1 };
         panel.Coop = _coop;
-        panel.Character = me?.Character.Id.Entry;
+        panel.Character = me?.Character.Id.Entry ?? CharacterPick.Shown;
         panel.HeldAtNoSl = _coop && !CoopSl;
         if (_coop && _goal != Goal.Off) Stop(L10n.T("advice only in multiplayer"));
         var env = _coop && !CoopSl ? PlayEnvironment.NoSL : settings.Env;

@@ -5,7 +5,8 @@ namespace Sts2Ai.Mod.UI;
 /// <summary>
 /// The mod's colours for the run's character: the accent from the character's own colour in the game (its name's colour;
 /// the Necrobinder's from its targeting line, pushed to pink away from the old purple; the Silent's darkened), the
-/// neutrals tinted with the same hue, in OKLCH; out of a run (the main menu), the mod's old purple. The state colours
+/// neutrals tinted with the same hue, in OKLCH; the picked one's on a screen that starts a run; elsewhere out of a run
+/// (the main menu), the mod's old purple. The state colours
 /// (a win chance up or down, warnings, the rooms' types) stay the same for every character (<see cref="Icons"/>,
 /// <see cref="Panel.Warn"/>, <see cref="Panel.Error"/>).
 /// </summary>
