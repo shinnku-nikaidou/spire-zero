@@ -569,3 +569,12 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   wrong; the checkpoint carries no dominion. `clones` on every decision of the dropped run 230 of 231 (the one left, the
   act's first screen, is asked before the game sets the dominion after the act's fade, as in every version), the boss
   wire 13 of 13, the loop wire 7 of 7. The recorded run was dropped and a new one starts from floor 0.
+- 2026-11-23 20:47: mod 1.0.18 (built at 8c74361d), a local build for this machine's game only, not uploaded, swapped in
+  once the user closed the game (1.0.17 kept in tmp/mp-noline), DamageMeter still disabled. The user's 3-player Silent
+  run showed "the solver found no line" for whole fights (floor 26, then the floor 45 boss): the mod asked a fight's
+  first decisions while the game's turn start still had every action queue paused (the synchronizer at NotPlayPhase),
+  the engine took in a combat no action changed, and once such a decision was cancelled mid-search the route kept its
+  failed solver, so every decision after failed at once. Combat decisions now wait for the synchronizer's PlayPhase, and
+  a failed solver is dropped (a6182f67). The brain on both fights at the game's own times: 1.0.17 fails to the end,
+  1.0.18 answers from the first decision in the play phase; `clones` on today's won run 881 of 885 (the same four
+  non-combat differences as before the change), the boss wire 13 of 13, the loop wire 7 of 7.
