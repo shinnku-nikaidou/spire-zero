@@ -67,7 +67,9 @@ public static class EventActions
     /// The event's numbers that the option's title and text and the page's text show, as shown, by "EVENT.Name". The
     /// event's other variables are left out: an event may keep there what it does not show. Its names (a card's, a
     /// relic's) are strings, not numbers: the hover tips show those models. Which variables a text shows is read from
-    /// <c>EventTexts.json</c>, not from the text: the headless game loads none.
+    /// <c>EventTexts.json</c>, not from the text: the headless game loads none. A number the game draws from the unseeded
+    /// <c>Rng.Chaotic</c> is left out too (<see cref="Chaotic"/>): no save or clone gives it back, so a clone of the run
+    /// would show another page than the run did.
     /// </summary>
     private static SortedDictionary<string, decimal> Numbers(EventModel ev, EventOption option)
     {
@@ -75,11 +77,17 @@ public static class EventActions
         foreach (var text in new[] { ev.Description, option.Title, option.Description })
             if (text is { LocTable: "events" } && Shown.TryGetValue(text.LocEntryKey, out var names))
                 foreach (string name in names)
-                    if (ev.DynamicVars.TryGetValue(name, out var v) && v is not StringVar)
+                    if (ev.DynamicVars.TryGetValue(name, out var v) && v is not StringVar && !Chaotic.Contains($"{ev.Id.Entry}.{v.Name}"))
                         // as a text shows it: the whole part (DynamicVar.ToString), 3 for an HP loss of 3.35
                         numbers[$"{ev.Id.Entry}.{v.Name}"] = (int)v.PreviewValue;
         return numbers;
     }
+
+    /// <summary>
+    /// The event numbers the game draws from <c>Rng.Chaotic</c>, flavor its texts show and nothing reads (v0.113.1):
+    /// Trial's entrant number (<c>Trial.CalculateVars</c>, 101 to 998), drawn again in every copy of the event.
+    /// </summary>
+    private static readonly HashSet<string> Chaotic = ["TRIAL.EntrantNumber"];
 
     /// <summary>The game's events text table as the nets need it (<c>EventTexts.json</c>, which <c>event_texts.py</c> writes
     /// from the game's pack): every option's key, and for each text that fills in variables, their names.</summary>
