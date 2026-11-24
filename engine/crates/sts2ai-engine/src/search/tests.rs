@@ -738,6 +738,40 @@ fn the_solvers_root_moves_with_the_combat() {
 }
 
 #[test]
+fn the_solvers_root_turn_with_no_line_to_play_is_searched_whole_within_its_nodes() {
+    let mut first = solver(16);
+    first.run(&toy_searcher(&[], 24, false), i64::MAX).expect("a search");
+    let line = result(&first).line.actions;
+    let off = vec![toy(24).legal().into_iter().find(|a| *a != line[0]).expect("another action")];
+    // Off the plan, the solver has no line to play: the root's turn is searched in the advance, then the rest.
+    let moved = |nodes: i32| {
+        let mut solver = solver(16).with_root_nodes(nodes);
+        solver.run(&toy_searcher(&[], 24, false), i64::MAX).expect("a search");
+        let before = solver.nodes();
+        solver.advance(&off, moves(&off), &toy_searcher(&off, 24, false)).expect("the root's turn");
+        let spent = solver.nodes() - before;
+        solver.run(&toy_searcher(&off, 24, false), i64::MAX).expect("a search");
+        (solver, spent)
+    };
+
+    // Within its nodes, the root's turn is searched whole, as with no limit.
+    let (whole, spent) = moved(i32::MAX);
+    let (within, same) = moved(spent as i32);
+    assert_eq!(spent, same);
+    assert!(whole.proved() && within.proved());
+    assert_eq!(result(&whole).line.actions, result(&within).line.actions);
+
+    // Past them, it is searched again with its nodes shared over its actions, and cut: the pick is never proved, and
+    // is a line the combat can play.
+    let (cut, cut_spent) = moved(spent as i32 / 4);
+    assert!(cut_spent <= spent);
+    assert!(!cut.proved());
+    let plan = result(&cut);
+    assert!(plan.value <= best(&off, 24, false) + 1e-9);
+    assert_replays(&plan, 24, &off, false);
+}
+
+#[test]
 fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
     // Paused after each node and gone on with in the next call: the same states in the same order, the same ends
     // asked of the leaf, the same cycles cashed out.
