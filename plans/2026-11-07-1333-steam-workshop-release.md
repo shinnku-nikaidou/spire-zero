@@ -598,4 +598,4 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   with a SILENT teammate whose Survivor waits for its discard): the export taken in by 1.0.19's and 1.0.20's engines,
   SL alone and NoSL, turns play on, the planner's lines identical to those without the teammate's play. The user was in
   a 2-player run, so a waiter swaps it into `mods/` once the game closes (tmp/coop-wait/install.log). DamageMeter
-  showed enabled in settings.save (written 11:36 today), left as it was until the user says.
+  showed enabled in settings.save (written 11:36 today); the user: leave it on.
