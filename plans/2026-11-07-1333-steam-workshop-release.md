@@ -589,3 +589,13 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   closed here and on the Mac. The commit went through at once (the public API: updated 14:32:39Z, 552.2 MB), the 17
   languages' texts with it, unchanged. Note: tmp/release-1.0.19/note.txt. Installed in `mods/` over 1.0.18 (moved to
   `tmp/modeng/old-installs/`), DamageMeter still disabled; the game not started on it yet.
+- 2026-11-24 16:08: mod 1.0.20 (built at b7d87871, `LINUX_ONLY=1`), a local build for this machine's game only, not
+  uploaded. In a co-op run the panel went to "Waiting for a decision" while a teammate's card waited for that teammate's
+  choice (a discard, an exhaust): the game's ActionQueueSet.IsEmpty stays false until they answer, though each player's
+  queue is their own and the local player plays on meanwhile. Settle.Idle now also passes queues that only wait on a
+  teammate's choice at their front, and that action going on afterwards ends the fight's steps since the last write-out
+  (47117518). Single-player runs have one queue and are unchanged. A probe in tmp/coop-wait (3 act 1 fights, DEFECT
+  with a SILENT teammate whose Survivor waits for its discard): the export taken in by 1.0.19's and 1.0.20's engines,
+  SL alone and NoSL, turns play on, the planner's lines identical to those without the teammate's play. The user was in
+  a 2-player run, so a waiter swaps it into `mods/` once the game closes (tmp/coop-wait/install.log). DamageMeter
+  showed enabled in settings.save (written 11:36 today), left as it was until the user says.
