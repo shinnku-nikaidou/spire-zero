@@ -396,7 +396,8 @@ internal sealed partial class Assist(BrainLink link, string gameVersion, string?
         // SL sends the record in a run of one player; a co-op run has none.
         bool sl = _env == PlayEnvironment.SL && !_coop;
         if (sl) SendNode();
-        // In the same frame as the observation, with the action queue empty: the combat as it is shown. SL's search
+        // In the same frame as the observation, with no action running (a teammate's may wait for their choice, at the
+        // front of their own queue): the combat as it is shown. SL's search
         // plays it; NoSL's draws its worlds from it, everything the player cannot see drawn again first.
         string? export = asking.Surface == Surfaces.Combat
             ? Convert.ToBase64String(_export.Value.Write(gameVersion, new EngineExport.Around(NodeRecord.Prompts)).Bytes)

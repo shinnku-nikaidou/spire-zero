@@ -276,6 +276,9 @@ internal static class NodeRecord
 
     private static void Executing(GameAction __instance) => Guard(() =>
     {
+        // A teammate's action goes on after their choice (Settle.Quiet lets a decision be asked while it waits): what it
+        // does from here is in no step of the fight.
+        if (__instance.State == GameActionState.ReadyToResumeExecuting && !Mine(__instance)) Teammate();
         if (_run == null || __instance.State != GameActionState.WaitingForExecution || !ActionQueueSet.IsGameActionPlayerDriven(__instance)) return;
         ModLog.Write("action", $"runs: {__instance}");
         if (__instance is VoteForMapCoordAction vote) Travelled(vote);

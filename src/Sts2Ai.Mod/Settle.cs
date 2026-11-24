@@ -1,6 +1,10 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
+using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
@@ -33,18 +37,42 @@ internal static class Settle
         harmony.Patch(AccessTools.DeclaredMethod(type, method), postfix: new HarmonyMethod(typeof(Settle), postfix));
 
     /// <summary>
-    /// The game runs nothing between the player's decisions: no action queued or running; no room being changed and no
-    /// loading sequence, which an act's entry is to its end, its hooks after the fade included (a Dread act's dominion
-    /// comes there: asked before it, Neow's first screen had none, 2026-11-23); no combat being set up (the last room's
-    /// proceed button, pressed during the travel, opened the map over the new room, 2026-11-23).
+    /// The game runs nothing between the player's decisions: no action queued or running, but for what waits on a
+    /// teammate's choice (<see cref="Quiet"/>); no room being changed and no loading sequence, which an act's entry is to
+    /// its end, its hooks after the fade included (a Dread act's dominion comes there: asked before it, Neow's first
+    /// screen had none, 2026-11-23); no combat being set up (the last room's proceed button, pressed during the travel,
+    /// opened the map over the new room, 2026-11-23).
     /// </summary>
     public static bool Idle
     {
         get
         {
             var rm = RunManager.Instance;
-            return rm.ActionQueueSet.IsEmpty && !rm.IsChangingRooms && !rm.NetService.IsGameLoading && !CombatManager.Instance.IsStarting;
+            return Quiet(rm.ActionQueueSet) && !rm.IsChangingRooms && !rm.NetService.IsGameLoading && !CombatManager.Instance.IsStarting;
         }
+    }
+
+    private static readonly AccessTools.FieldRef<ActionQueueSet, System.Collections.IList> Queues = AccessTools.FieldRefAccess<ActionQueueSet, System.Collections.IList>("_actionQueues");
+    private static readonly System.Reflection.FieldInfo QueueActions = AccessTools.Field(AccessTools.Inner(typeof(ActionQueueSet), "ActionQueue"), "actions");
+
+    /// <summary>
+    /// The queues hold nothing, or only a teammate's action that waits for that teammate's choice and what is queued
+    /// behind it. Each player has a queue of their own: one that waits on its owner's choice is passed over, and the
+    /// others' actions run meanwhile (ActionQueueSet.GetReadyAction), so the local player plays on while a teammate picks
+    /// what to discard or exhaust (the user's co-op runs, 2026-11-24: the panel went blank until the teammate had chosen).
+    /// </summary>
+    private static bool Quiet(ActionQueueSet set)
+    {
+        if (set.IsEmpty) return true;
+        bool waiting = false;
+        foreach (var queue in Queues(set))
+        {
+            var actions = (List<GameAction>)QueueActions.GetValue(queue)!;
+            if (actions.Count == 0) continue;
+            if (actions[0] is not { State: GameActionState.GatheringPlayerChoice } front || front.OwnerId == LocalContext.NetId) return false;
+            waiting = true;
+        }
+        return waiting;
     }
 
     /// <summary>
