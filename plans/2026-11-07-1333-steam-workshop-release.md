@@ -597,5 +597,6 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   (47117518). Single-player runs have one queue and are unchanged. A probe in tmp/coop-wait (3 act 1 fights, DEFECT
   with a SILENT teammate whose Survivor waits for its discard): the export taken in by 1.0.19's and 1.0.20's engines,
   SL alone and NoSL, turns play on, the planner's lines identical to those without the teammate's play. The user was in
-  a 2-player run, so a waiter swaps it into `mods/` once the game closes (tmp/coop-wait/install.log). DamageMeter
+  a 2-player run, so a waiter swapped it into `mods/` when the game closed, 16:09 (1.0.19 moved to
+  `tmp/modeng/old-installs/`). DamageMeter
   showed enabled in settings.save (written 11:36 today); the user: leave it on.
