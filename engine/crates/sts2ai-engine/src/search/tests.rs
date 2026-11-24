@@ -16,7 +16,7 @@ use super::solver::Solver;
 use super::state::{self, Action, History, State, Status};
 use super::toy::{Asked, Disliking, Loop, Plan, Prompted, Replay, Rules, Toy, ToyLeaf, jobs, picked, round, slugs, toy};
 use super::turn::{self, TurnEnd, TurnSearch};
-use crate::protocol::{CardView, CombatObservation, CreatureView, PowerView, RelicView};
+use crate::protocol::{CardChoice, CardView, ChoiceContext, CombatObservation, CreatureView, PowerView, RelicView};
 use crate::rt::Str;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2056,4 +2056,101 @@ fn a_state_at_a_prompt_has_no_plays_and_takes_only_its_answers() {
     let (answers, cut) = order::actions(&mut world, 0);
     assert_eq!(vec![Action::pick(vec![0])], answers);
     assert!(cut);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// A prompt inside an action (sl-regent-g0's run 6706286)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A turn where either card empties the hand and asks for a card, the same prompt over the same combat, and the answer
+/// then draws what the card owes: Light one card, Heavy two. What is owed is worked out before the prompt and shows
+/// nowhere at it, as the turn's draw counts its cards before the shuffle in the middle of it asks Stratagem's choice.
+#[derive(Clone)]
+struct Owing {
+    hand: Vec<u32>,
+    owed: u32,
+    asking: bool,
+    round: i32,
+}
+
+const LIGHT: u32 = 1;
+const HEAVY: u32 = 2;
+
+impl state::ToyWorld for Owing {
+    fn observe(&self) -> CombatObservation {
+        let mut obs = slugs();
+        obs.round = self.round;
+        let name = |uid: u32| Str::lit(match uid {
+            LIGHT => "LIGHT",
+            HEAVY => "HEAVY",
+            _ => "DRAWN",
+        });
+        obs.hand = self.hand.iter().map(|&uid| CardView { id: name(uid), uid: Some(uid), ..CardView::default() }).collect();
+        obs.draw = Vec::new();
+        obs.discard = Vec::new();
+        obs.prompt = self.asking.then(|| CardChoice {
+            options: vec![CardView { id: Str::lit("CHOSEN"), ..CardView::default() }],
+            min: 1,
+            max: 1,
+            context: ChoiceContext { purpose: Str::lit("draw_pile"), in_combat: true, ..ChoiceContext::default() },
+        });
+        obs
+    }
+
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+
+    fn hidden_key(&self) -> u64 {
+        self.round as u64
+    }
+
+    fn legal(&self) -> Vec<Action> {
+        if self.asking {
+            return Vec::new();
+        }
+        let mut legal = vec![Action::EndTurn];
+        legal.extend(self.hand.iter().filter(|&&card| card == LIGHT || card == HEAVY).map(|&card| Action::Play { card, target: None }));
+        legal
+    }
+
+    fn execute(&mut self, action: &Action) -> Result<(), String> {
+        let takes = match action {
+            Action::Pick(picks) => self.observe().prompt.as_ref().is_some_and(|p| p.accepts(picks)),
+            other => self.legal().contains(other),
+        };
+        if !takes {
+            return Err(format!("{} is not legal", action.text()));
+        }
+        match action {
+            Action::Play { card, .. } => (self.hand, self.owed, self.asking) = (Vec::new(), if *card == LIGHT { 1 } else { 2 }, true),
+            Action::Pick(_) => (self.hand, self.asking) = ((10..10 + self.owed).collect(), false),
+            _ => self.round += 1,
+        }
+        Ok(())
+    }
+
+    fn run(&self) -> crate::protocol::RunChange {
+        super::toy::around(&self.observe())
+    }
+
+    fn boxed(&self) -> Box<dyn state::ToyWorld> {
+        Box::new(self.clone())
+    }
+}
+
+#[test]
+fn a_prompt_two_states_come_to_alike_is_two_states_where_they_go_on_apart() {
+    let root = State::toy(Box::new(Owing { hand: vec![LIGHT, HEAVY], owed: 0, asking: false, round: 1 }));
+    let light = played(root.copy(), &[Action::Play { card: LIGHT, target: None }]);
+    let heavy = played(root.copy(), &[Action::Play { card: HEAVY, target: None }]);
+
+    // The combat stops alike at the prompt, and goes on apart from it.
+    assert_eq!((light.state_key, light.hash), (heavy.state_key, heavy.hash));
+    assert_ne!(light.hidden_key, heavy.hidden_key);
+    // The turn's search answers both, and so ends with each card's draw.
+    let found = search(&mut root.copy(), &ToyLeaf, UNLIMITED, usize::MAX, &Bounds::new());
+    let mut lines: Vec<String> = found.ends.iter().map(|end| text(&end.actions)).collect();
+    lines.sort();
+    assert_eq!(lines, vec!["end_turn", "play:1 pick:0 end_turn", "play:2 pick:0 end_turn"]);
 }

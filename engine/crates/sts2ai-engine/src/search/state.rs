@@ -169,7 +169,8 @@ pub struct State {
     pub status: Status,
     /// The observation's hash, the text C# writes of it (C#: ProtocolJson.Hash, `TurnEnd.Shown`).
     pub hash: u64,
-    /// C#: PimcBrain.StateKey and ICombatWorld.HiddenKey; 0 once the combat is over.
+    /// C#: PimcBrain.StateKey and ICombatWorld.HiddenKey; 0 once the combat is over. At a prompt a step came to, the
+    /// hidden key holds where the step came from too (`step`).
     pub state_key: u64,
     pub hidden_key: u64,
 }
@@ -249,7 +250,25 @@ impl State {
 
     /// The state after `action`, made from this one, which stays as it is (C#: ICombatWorld.Execute on a world whose
     /// snapshot stays). At a prompt crossed on the clone, the action is an answer to it.
+    ///
+    /// A state at a prompt stands inside an action, which goes on from where the action began, not from the combat as
+    /// it stops there: what the action worked out before the prompt is in neither key of it (the turn's draw counts its
+    /// cards before it draws, Hook.ModifyHandDraw, and the shuffle in the middle of the draw asks Stratagem's choice).
+    /// Two lines whose combats stop there alike can go on apart: in sl-regent-g0's run 6706286 a turn's search took
+    /// one's answer for the other's, and the solver played a pick the prompt did not have. So such a state's hidden key
+    /// holds the state the step came from, exactly, and the action too.
     pub fn step(&mut self, action: &Action) -> Result<State, String> {
+        use crate::protocol::Sink as _;
+        let mut after = self.stepped(action)?;
+        if after.status == Status::InProgress && after.obs.prompt.is_some() {
+            let mut from = Fnv(super::turn::mix(super::turn::mix(self.state_key, self.hidden_key), self.exact()));
+            from.put(action.text().as_bytes());
+            after.hidden_key = super::turn::mix(after.hidden_key, from.0);
+        }
+        Ok(after)
+    }
+
+    fn stepped(&mut self, action: &Action) -> Result<State, String> {
         if super::ffi::stopped() {
             return Err(super::ffi::STOPPED.into());
         }

@@ -1,5 +1,6 @@
 //! One turn searched depth first from a state to its ends: every action from each state once, transpositions merged by
-//! the state key and the full hidden key, each state where the turn or the combat ends valued by the leaf.
+//! the state key and the full hidden key (at a prompt, the hidden key holds the state the step came from too:
+//! `State::step`), each state where the turn or the combat ends valued by the leaf.
 //!
 //! Every action from the current state is tried, once per state: the plays where the player is on this turn
 //! (`order.rs`), the answers where a card prompt waits. At the turn's start the nodes are shared over the actions, each
