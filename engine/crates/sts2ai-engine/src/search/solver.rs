@@ -34,10 +34,10 @@
 //! as the search's memo. The root's turn is searched in the runs like any state's, first and in pieces: until its search
 //! is done, the pick is the line the combat is playing (the pick it went on along, at the start the seed's), and where
 //! the combat goes on into the turn meanwhile, the search of the rest of it takes what the paused one went through as
-//! its memo. With no line to play, the root's turn is searched at once, whole where it takes `ROOT_NODES` at most; a
-//! bigger one is searched as the beam searches a turn instead, `ROOT_NODES` shared over its actions, and is cut. The
-//! states live in an arena, by index; what the root no longer reaches is let go once the root's turn is searched
-//! (`settle`).
+//! its memo. With no line to play, the root's turn is searched at once. Either way, it is searched whole while it takes
+//! `ROOT_NODES` at most; past them, it is searched again as the beam searches a turn, those nodes shared over its
+//! actions, and is cut. The states live in an arena, by index; what the root no longer reaches is let go once the
+//! root's turn is searched (`settle`).
 //!
 //! The one rule written by hand prunes it too (`bound.rs`): a state that cannot end the combat with the HP plus max HP
 //! of a win found with the same potions is dropped, in a turn's search as soon as a line reaches it, and among the states
@@ -225,6 +225,9 @@ struct Rooting {
     before: Bounds,
     crossing: bool,
     memo: Option<Memo>,
+    /// The nodes the root's turn's searches stepped since the combat came into the turn, each taking what the last went
+    /// through as its memo (`root_turn`).
+    spent: i64,
 }
 
 /// C#: SlSolver.
@@ -255,7 +258,7 @@ pub struct Solver {
     going: Vec<usize>,
     /// The fewest nodes a turn spends in a batch (`PIECE`).
     piece: i64,
-    /// The most nodes the root's turn is searched whole with where the solver has no line to play (`ROOT_NODES`).
+    /// The most nodes the root's turn is searched whole with (`ROOT_NODES`).
     root_nodes: i32,
     /// The root's turn, while its search goes on.
     rooting: Option<Rooting>,
@@ -287,14 +290,18 @@ const PIECE: i64 = 256;
 /// with every turn's graph kept).
 const GRAPH_NODES: usize = 1024;
 
-/// The most nodes the root's turn is searched whole with where the solver has no line to play meanwhile (`root_turn`).
-/// A turn that takes more is searched again as the beam searches a turn: these nodes shared over its actions, each line
-/// down depth first within its share, with what the first search went through as its memo, and cut where a share runs
-/// out. Two A10 Regent runs of sl-regent-g0 grew without end there, in turns whose cards and answers keep
-/// branching (Brightest Flame, Quasar, Heirloom Hammer; Mad Science, Jack of All Trades): 3.4 million nodes, 920
-/// thousand states and 3 GB in 1.2 hours, not done (plans/2026-11-23-1545-sl-regent-g0.md, 8). Of the step's 7.86
-/// million combat decisions, the one that spent the most nodes, its root's turn searched whole and its run with it,
-/// spent 316,624: none of them would have been searched otherwise.
+/// The most nodes the root's turn is searched whole with (`root_turn`): at once where the solver has no line to play,
+/// else the nodes its searches step in the runs while the combat plays its line into the turn (not the steps they take
+/// from their memo). A turn that takes more is searched again as the beam searches a turn: these nodes shared over its
+/// actions, each line down depth first within its share, with what the search went through as its memo, and cut where
+/// a share runs out. Two A10 Regent runs of sl-regent-g0 grew without end there, in turns whose cards and answers keep
+/// branching (Brightest Flame, Quasar, Heirloom Hammer; Mad Science, Jack of All Trades): with no line to play, 3.4
+/// million nodes, 920 thousand states and 3 GB in 1.2 hours, not done; with the line played into the turn, its search
+/// in the runs took each decision longer than the last, 23 s to 90 s in 30 of them, 40 MB more each
+/// (plans/2026-11-23-1545-sl-regent-g0.md, 8). Of the step's 7.5 million combat decisions searched, 6 spent more, each a
+/// root's turn searched whole with no line to play (0.77 to 2.5 million nodes, in 100 to 480 s): those are what the
+/// limit changes there. The nodes of all the decisions of one turn, those 6 left out, passed it in one turn only, of 521
+/// decisions that each stopped early, its root's turn searched.
 const ROOT_NODES: i32 = 1 << 19;
 
 fn end_turns(actions: &[Action]) -> i32 {
@@ -345,8 +352,7 @@ impl Solver {
         self
     }
 
-    /// The solver with the root's turn searched whole, where it has no line to play, within `nodes` instead of
-    /// `ROOT_NODES`.
+    /// The solver with the root's turn searched whole within `nodes` instead of `ROOT_NODES`.
     pub fn with_root_nodes(mut self, nodes: i32) -> Solver {
         self.root_nodes = nodes;
         self
@@ -443,7 +449,7 @@ impl Solver {
             // prompt's answers, to where the player can play again, and each state there waits to be searched as the
             // solver's states do. Every answer is valued, not only the few a turn's search of all of them reaches.
             let reached = if search.root_waits() { Reached::Crossing } else { Reached::Turn };
-            self.begin(search, reached, None, None)?;
+            self.begin(search, reached, None, None, 0)?;
             self.look();
         }
         while (self.rooting.is_some() || !(self.queue.is_empty() && self.going.is_empty())) && self.nodes < until {
@@ -557,12 +563,17 @@ impl Solver {
         let reached = self.reached(played);
         // Into a turn whose search the solver holds the graph of, the root's turn is searched with it as its memo;
         // where the root's turn was being searched, with what that search went through so far, or the memo it was to
-        // take. The states held were searched under the bounds they had before it.
-        let (memo, before) = match self.rooting.take() {
-            Some(rooting) => (self.nodes_of[self.root].turn.take().map(Memo::Paused).or(rooting.memo), Some(rooting.before)),
+        // take, and the nodes those searches stepped while the combat stays in the turn. The states held were searched
+        // under the bounds they had before it.
+        let (memo, before, spent) = match self.rooting.take() {
+            Some(rooting) => (
+                self.nodes_of[self.root].turn.take().map(Memo::Paused).or(rooting.memo),
+                Some(rooting.before),
+                if end_turns(played) == 0 { rooting.spent } else { 0 },
+            ),
             None => match reached {
-                Reached::Within(at) => (self.nodes_of[at].graph.clone().map(Memo::Graph), None),
-                _ => (None, None),
+                Reached::Within(at) => (self.nodes_of[at].graph.clone().map(Memo::Graph), None, 0),
+                _ => (None, None, 0),
             },
         };
         self.order += 1;
@@ -586,7 +597,7 @@ impl Solver {
         self.worlds.advance(played);
         self.seed = self.seed.take().and_then(|(line, from)| Some((along(line, played)?, from)));
         self.playing = playing;
-        self.begin(search, reached, memo, before)?;
+        self.begin(search, reached, memo, before, spent)?;
         self.look();
         Ok(())
     }
@@ -692,8 +703,11 @@ impl Solver {
     /// C#: Start. The root's turn is to be searched again (unless it was searched already, `advance`): in the runs, or
     /// here where the solver has no line to play meanwhile (`root_turn`). Once it is, the states it reaches are kept
     /// (`settle`). `memo`: what the root's search takes as its memo; `before`, the bounds the states held were searched
-    /// under, where the root's turn was being searched already.
-    fn begin(&mut self, search: &dyn Searcher, reached: Reached, memo: Option<Memo>, before: Option<Bounds>) -> Result<(), String> {
+    /// under, where the root's turn was being searched already; `spent`, the nodes its searches stepped in the turn so
+    /// far (`Rooting::spent`).
+    fn begin(
+        &mut self, search: &dyn Searcher, reached: Reached, memo: Option<Memo>, before: Option<Bounds>, spent: i64,
+    ) -> Result<(), String> {
         self.started = true;
         let before = before.unwrap_or_else(|| std::mem::take(&mut self.bounds));
         self.bounds = Bounds::new();
@@ -708,6 +722,7 @@ impl Solver {
             before,
             crossing: matches!(reached, Reached::Crossing),
             memo,
+            spent,
         });
         if self.playing.is_none() {
             self.root_turn(search, i64::MAX)?;
@@ -716,10 +731,11 @@ impl Solver {
     }
 
     /// The root's turn searched on: to the nodes up to `until` where the solver has a line to play meanwhile
-    /// (`playing`), at least the nodes of a batch's pieces; else to its end, where it ends within `root_nodes`, and
-    /// otherwise again as the beam searches a turn, `root_nodes` shared over its actions, with what the first search
-    /// went through as its memo, cut. Alone in a call of the searcher. Once its search is done, the states it reaches
-    /// are kept (`settle`).
+    /// (`playing`), at least the nodes of a batch's pieces; else to its end, where it ends within `root_nodes`. Where its
+    /// searches stepped more than `root_nodes` in the turn before its end (with no line to play, where it stopped there),
+    /// it is searched again as the beam searches a turn, `root_nodes` shared over its actions, with what it went through
+    /// as its memo, cut. Alone in a call of the searcher. Once its search is done, the states it reaches are kept
+    /// (`settle`).
     fn root_turn(&mut self, search: &dyn Searcher, until: i64) -> Result<(), String> {
         let root = self.root;
         let rooting = self.rooting.as_mut().expect("the root's turn being searched");
@@ -742,9 +758,9 @@ impl Solver {
         };
         let first = job(Some(most), self.nodes_of[root].turn.take(), rooting.memo.take());
         let mut found = search.search(&[first], UNLIMITED, usize::MAX)?.pop().expect("the root's turn");
-        if self.playing.is_none()
-            && let Some(turn) = found.paused.take()
-        {
+        rooting.spent += found.nodes as i64;
+        let past = self.playing.is_none() || rooting.spent > self.root_nodes as i64;
+        if past && let Some(turn) = found.paused.take() {
             self.nodes += found.nodes as i64;
             let shared = job(None, None, Some(Memo::Paused(turn)));
             found = search.search(&[shared], self.root_nodes, usize::MAX)?.pop().expect("the root's turn");

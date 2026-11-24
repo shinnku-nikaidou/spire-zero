@@ -772,6 +772,37 @@ fn the_solvers_root_turn_with_no_line_to_play_is_searched_whole_within_its_nodes
 }
 
 #[test]
+fn the_solvers_root_turn_searched_in_pieces_is_searched_whole_within_its_nodes() {
+    let beam = planned(&toy(24), &ToyLeaf, &budget(10, 1));
+    // The seed's line is played meanwhile, and the root's turn is searched a node a run until its search is done.
+    let rooted = |nodes: i32| {
+        let mut solver = solver(1).with_piece(1).with_root_nodes(nodes);
+        solver.seed(beam.line.clone(), beam.from);
+        let searcher = toy_searcher(&[], 24, false);
+        solver.run(&searcher, 1).expect("a search");
+        while solver.rooting() {
+            solver.run(&searcher, 1).expect("a search");
+        }
+        let spent = solver.nodes();
+        solver.run(&searcher, i64::MAX).expect("a search");
+        (solver, spent)
+    };
+
+    // Within its nodes, the root's turn is searched whole, as with no limit.
+    let (whole, spent) = rooted(i32::MAX);
+    let (within, same) = rooted(spent as i32);
+    assert_eq!(spent, same);
+    assert!(whole.proved() && within.proved());
+    assert_eq!(result(&whole).line.actions, result(&within).line.actions);
+
+    // Once its search went through more, it is searched again with its nodes shared over its actions, and cut.
+    let (cut, cut_spent) = rooted(spent as i32 / 4);
+    assert!(cut_spent < spent);
+    assert!(!cut.proved());
+    assert_replays(&result(&cut), 24, &[], false);
+}
+
+#[test]
 fn a_turns_search_paused_after_every_node_finds_what_it_finds_whole() {
     // Paused after each node and gone on with in the next call: the same states in the same order, the same ends
     // asked of the leaf, the same cycles cashed out.
