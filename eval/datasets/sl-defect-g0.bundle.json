@@ -1,0 +1,15 @@
+{
+  "bundle": "v-sl-defect-0",
+  "what": "The bundle that plays the dataset sl-defect-g0 (eval/datasets/sl-defect-g0.toml; plans/2026-11-25-0142-sl-defect-g0.md): the champion d2's V with DEFECT's 15 card ids reset to the mean rows of its site-B cards (learn/carry.py reset, eval/resets/2026-11-22-cards.toml, no training), with d2's combat net and f; DEFECT's entry in eval/champions/sl.json. Not a champion file: the dataset's options only.",
+  "env": "SL",
+  "options": {
+    "env": "SL",
+    "policy": "plan",
+    "macro": "l0",
+    "effort": "medium",
+    "value": "weights/all/v-sl-defect-0.json",
+    "afterstates": "clone",
+    "combat-net": "weights/all/c-sl-12-1-d2.json",
+    "f-net": "weights/all/f-sl-12-1-d2.json"
+  }
+}
