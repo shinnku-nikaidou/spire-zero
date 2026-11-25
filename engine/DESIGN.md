@@ -278,7 +278,7 @@ puts a selector of its own on the selector stack.
 
 ```
 { "format": 1,
-  "game": "v0.113.1",                                         // port.toml [game]
+  "game": "v0.114.0",                                         // port.toml [game]
   "roots":   [{ "name": "combat_manager__instance",           // the statics that are state (port.toml [roots])
                 "class": "MegaCrit.Sts2.Core.Combat.CombatManager", "member": "Instance",
                 "cs": "<Instance>k__BackingField",            // the static field, as reflection names it
@@ -341,7 +341,7 @@ puts a selector of its own on the selector stack.
 it (`import.rs`, with the reader `port` generates beside the structs, `gen/import.rs`). Format 2:
 
 ```json
-{ "format": 2, "game": "v0.113.1", "schema": "9f2c..", "sim": { "prompts": 0, "draw_log": [ { "op": "reset", "cards": ["STRIKE_IRONCLAD", ".."] } ] },
+{ "format": 2, "game": "v0.114.0", "schema": "9f2c..", "sim": { "prompts": 0, "draw_log": [ { "op": "reset", "cards": ["STRIKE_IRONCLAD", ".."] } ] },
   "roots":  { "combat_manager__instance": ["combat_manager", 0], "local_context__net_id": 1 },
   "arenas": { "creature":   [ { "class": "Creature", "Creature": { "_block": 0, "_current_hp": 70 } } ],
               "card_model": [ { "class": "Deflect",

@@ -186,16 +186,7 @@ pub fn seen(st: CombatState, player: Player, c: &mut Combat) -> (CombatObservati
                         .count() as i32,
                 )
             },
-            arrow_slots: if arrows.is_empty() {
-                None
-            } else {
-                Some(
-                    arrows
-                        .iter()
-                        .filter(|a| g::entities_fool_arrows::arrow_slot::status(**a, c) != ArrowStatus::Destroyed)
-                        .count() as i32,
-                )
-            },
+            arrow_slots: if arrows.is_empty() { None } else { Some(arrows.len() as i32) },
             melodies: melodies(st, player, c),
         },
         hand: {
@@ -442,7 +433,7 @@ fn fresh_vars(id: ModelId, up: i32, c: &Combat) -> Vec<(Str, Dec)> {
     g::dispatch::card_model::after_deserialized(copy, c);
     if !rt::is(copy, Kind::DeprecatedCard, c) {
         for _ in 0..up {
-            g::models::card_model::upgrade_internal(copy, c);
+            g::models::card_model::upgrade_internal(copy, false, c);
             g::models::card_model::finalize_upgrade_internal(copy, c);
         }
     }
@@ -626,7 +617,7 @@ fn upgrade_preview(deck_card: CardModel, c: &Combat) -> CardView {
     let mut scratch = c.clone();
     let c = &mut scratch;
     let preview = g::models::abstract_model::mutable_clone(deck_card, c);
-    g::models::card_model::upgrade_internal(preview, c);
+    g::models::card_model::upgrade_internal(preview, false, c);
     g::models::card_model::finalize_upgrade_internal(preview, c);
     card(preview, false, c)
 }

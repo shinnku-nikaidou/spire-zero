@@ -69,7 +69,7 @@ public sealed record PlayerView
     public required IReadOnlyList<OrbView> Orbs { get; init; }
     /// <summary>The arrows held, ready to shoot, of those the icons beside the player show; null for a player with no arrows.</summary>
     public int? Arrows { get; init; }
-    /// <summary>All the arrows those icons show: the ones held and the ones stuck in enemies. A destroyed arrow is not shown.</summary>
+    /// <summary>All the arrows those icons show: the ones held and the ones stuck in enemies.</summary>
     public int? ArrowSlots { get; init; }
     /// <summary>The melodies played this turn, as the symbols beside the player show them: of Wah, Cho and Ki, in this order.</summary>
     public IReadOnlyList<string>? Melodies { get; init; }

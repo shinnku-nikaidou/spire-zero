@@ -3,11 +3,11 @@
 
 [game]
 # The version the tables below are for: gen.sh reads the decompiled source of this version, the schema carries it.
-version = "v0.113.1"
+version = "v0.114.0"
 # The version whose code the hand-stated facts below (a fixed value, a member written by hand, [only], a cache, ...)
 # were last read against. On a new version port compares the code each rests on and lists those whose code changed
 # for a person to read again (report.txt; DESIGN.md, "When the game changes"); once they are read, this is the new one.
-facts = "v0.113.1"
+facts = "v0.114.0"
 
 [scope]
 # Translated: every class of these namespaces (the namespace itself, not the ones below it), and the types named in full.

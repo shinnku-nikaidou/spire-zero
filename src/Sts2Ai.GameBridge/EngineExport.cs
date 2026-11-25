@@ -228,7 +228,7 @@ public sealed class EngineSchema
 /// bounds the walk and names every field, so nothing is mapped by hand: what the schema does not list is not written.
 ///
 /// <code>
-/// {"format":2,"game":"v0.113.1","schema":"9f2c..","sim":{"prompts":0,"draw_log":[..]},
+/// {"format":2,"game":"v0.114.0","schema":"9f2c..","sim":{"prompts":0,"draw_log":[..]},
 ///  "roots":{"combat_manager__instance":["combat_manager",0],"local_context__net_id":1,...},
 ///  "arenas":{"creature":[{"class":"Creature","Creature":{"_block":0,...}}],
 ///            "card_model":[{"class":"Deflect","AbstractModel":{...},"CardModel":{...}}]},

@@ -146,7 +146,7 @@ A machine's layout:
 ```
 ~/sts2/                       mode 700
 ├─ dotnet/                    the .NET runtime only
-├─ gamebin/v0.113.1/          the game's assemblies the simulator loads
+├─ gamebin/v0.114.0/          the game's assemblies the simulator loads
 ├─ builds/REV/release/        a build
 ├─ sim-REV.sh                 its launcher
 ├─ home/                      the redirected HOME

@@ -12,7 +12,7 @@ nets learn it from the AI's own runs. Training runs the game's own `sts2.dll` he
 game's, not a model of them.
 
 This is an unofficial fan project, not affiliated with or endorsed by Mega Crit. It contains no game files: building
-and running it needs your own copy of the game, pinned at **v0.113.1** (the `public-beta` branch).
+and running it needs your own copy of the game, pinned at **v0.114.0** (the `public-beta` branch).
 
 ## Layout
 
@@ -30,7 +30,7 @@ and running it needs your own copy of the game, pinned at **v0.113.1** (the `pub
 ## Building
 
 The game's assemblies are referenced, not shipped: copy `sts2.dll`, `GodotSharp.dll`, `SmartFormat.dll` and
-`0Harmony.dll` (and what they load) from the game's data folder to `tmp/gamebin/v0.113.1/`, or pass
+`0Harmony.dll` (and what they load) from the game's data folder to `tmp/gamebin/v0.114.0/`, or pass
 `-p:Sts2BinDir=PATH` (see `src/GameReferences.props`).
 
 ```bash

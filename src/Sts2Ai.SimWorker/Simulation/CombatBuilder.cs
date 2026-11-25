@@ -438,18 +438,19 @@ internal static class CombatBuilder
 
     /// <summary>
     /// The player's arrows as the observation shows them: as many as shown, of which those held are ready and each
-    /// other is stuck in an enemy, kept by the power that shows it there. An arrow the player has beyond those shown
-    /// is a destroyed one, which nothing shows. A player the observation gives no arrows at all has none, destroyed
-    /// ones included: one who is not the Fool, before the first Shoot card enters a pile.
+    /// other is stuck in an enemy, kept by the power that shows it there. A player the observation gives no arrows at
+    /// all has none: one who is not the Fool, before the first Shoot card enters a pile. An arrow is never lost in a
+    /// combat (v0.114.0), so the fresh combat's start never has more than the observation shows.
     /// </summary>
     private static void Arrows(CombatState st, Player player, CombatObservation obs)
     {
         var pcs = player.PlayerCombatState!;
         int shown = obs.Player.ArrowSlots ?? 0, held = obs.Player.Arrows ?? 0;
         if (obs.Player.ArrowSlots is null) ((List<ArrowSlot>)ArrowList.GetValue(pcs)!).Clear();
-        else while (pcs.Arrows.Count < Math.Max(shown, 1)) pcs.GainArrow();
+        else while (pcs.Arrows.Count < shown) pcs.GainArrow();
         var slots = pcs.Arrows;
-        for (int i = 0; i < slots.Count; i++) slots[i].Status = i < held ? ArrowStatus.Retrieved : i < shown ? ArrowStatus.Away : ArrowStatus.Destroyed;
+        if (slots.Count != shown) throw new ArgumentException($"{shown} arrows shown, the fresh combat has {slots.Count}");
+        for (int i = 0; i < slots.Count; i++) slots[i].Status = i < held ? ArrowStatus.Retrieved : ArrowStatus.Away;
         int next = held;
         // Only the arrows shown: the fresh combat's start can have stuck one already (Whispering Earring plays a Shoot card).
         foreach (var impaled in st.Enemies.SelectMany(e => e.GetPowerInstances<ImpaledPower>()).Where(p => p.Applier == player.Creature))
@@ -738,8 +739,8 @@ internal static class CombatBuilder
         foreach (var k in want.Except(have)) card.AddKeyword(Enum.Parse<CardKeyword>(k));
 
         Costs(card, view, inHand);
-        // A number the card states from one it keeps to itself is found from the stated one: The Shot's damage, from the
-        // cards its Florescence exhausted. One stated from the combat's history stays as the built combat gives it.
+        // A number the card states from one it keeps to itself is found from the stated one. One stated from the combat's
+        // history stays as the built combat gives it.
         if (view.Calc is decimal calc && card.DynamicVars.Values.OfType<CalculatedVar>().FirstOrDefault() is { } stated)
             Solve(() => (int)stated.Calculate(null), (int)calc, DecimalKnobs(card, typeof(CardModel)));
     }

@@ -117,7 +117,7 @@ public static class Observe
                 OrbSlots = pcs.OrbQueue.Capacity,
                 Orbs = [.. pcs.OrbQueue.Orbs.Select(o => new OrbView(o.Id.Entry, o.PassiveVal, o.EvokeVal))],
                 Arrows = arrows.Count > 0 ? arrows.Count(a => a.Status == ArrowStatus.Retrieved) : null,
-                ArrowSlots = arrows.Count > 0 ? arrows.Count(a => a.Status != ArrowStatus.Destroyed) : null,
+                ArrowSlots = arrows.Count > 0 ? arrows.Count : null,
                 Melodies = Melodies(st, player),
             },
             Hand = [.. pcs.Hand.Cards.Select(c => Card(c, withUid: true))],

@@ -6,7 +6,7 @@
     SimWorker resolves them from Sts2BinDir at run time (override with STS2_BIN_DIR), and the mod runs inside the game.
   -->
   <PropertyGroup>
-    <Sts2BinDir Condition="'$(Sts2BinDir)' == ''">$(MSBuildThisFileDirectory)../tmp/gamebin/v0.113.1</Sts2BinDir>
+    <Sts2BinDir Condition="'$(Sts2BinDir)' == ''">$(MSBuildThisFileDirectory)../tmp/gamebin/v0.114.0</Sts2BinDir>
     <Sts2BinDir>$([System.IO.Path]::GetFullPath('$(Sts2BinDir)'))</Sts2BinDir>
   </PropertyGroup>
 

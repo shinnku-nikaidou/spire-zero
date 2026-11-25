@@ -98,7 +98,7 @@ internal sealed class CombatDump(EngineExport export, string root)
 
         ## `combat.json`
 
-            {"format":1,"game":"v0.113.1","i":1080,"character":"SILENT","ascension":10,"encounter":"NIBBITS_WEAK","act":0,
+            {"format":1,"game":"v0.114.0","i":1080,"character":"SILENT","ascension":10,"encounter":"NIBBITS_WEAK","act":0,
              "seed":"...","deck":"starting","loadout":"...","policy_seed":123,"outcome":"Win",
              "decisions":[{"round":1,"status":"in_progress","legal":["play:0","play:1:0","end_turn"],
                            "hidden_key":123,"state_key":456,"action":"play:1:0"},
