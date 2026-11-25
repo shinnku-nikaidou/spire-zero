@@ -571,6 +571,8 @@ fn spent(relic: RelicModel, c: &mut Combat) -> Option<bool> {
         RelicModelExt::CentennialPuzzle(d) => d._used_this_combat,
         RelicModelExt::ConductorsBaton(d) => d._triggered_this_turn,
         RelicModelExt::DemonTongue(d) => d._triggered_this_turn,
+        RelicModelExt::FakeHappyFlower(d) => d._grant_energy_this_turn,
+        RelicModelExt::HappyFlower(d) => d._grant_energy_this_turn,
         RelicModelExt::LavaLamp(d) => d._took_damage_this_combat,
         RelicModelExt::MiniRegent(d) => d._used_this_turn,
         RelicModelExt::MusicBox(d) => d._was_used_this_turn,

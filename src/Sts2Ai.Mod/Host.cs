@@ -43,10 +43,12 @@ internal static class Host
         ModLog.Write("start", $"settings: {Settings.Current}");
         if (version != PinnedVersion)
         {
-            _off = $"off: game {version}, the mod is for {PinnedVersion}";
-            ModLog.Warn("start", _off);
+            // Nothing on screen at all, only this line in the mod's log: a panel that only says "off" would be a nuisance
+            // to everyone the game updated ahead of the mod (the user, 2026-11-25).
+            ModLog.Warn("start", $"off: game {version}, the mod is for {PinnedVersion}; nothing is shown");
+            return;
         }
-        else if (PatchesUndone())
+        if (PatchesUndone())
         {
             // The game's language loads after the mods: the panel translates it each frame.
             (_off, _offForSeLinux) = ("SELinux would undo the mod's hooks", true);
