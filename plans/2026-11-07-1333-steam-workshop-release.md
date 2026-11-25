@@ -600,3 +600,16 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   a 2-player run, so a waiter swapped it into `mods/` when the game closed, 16:09 (1.0.19 moved to
   `tmp/modeng/old-installs/`). DamageMeter
   showed enabled in settings.save (written 11:36 today); the user: leave it on.
+- 2026-11-25 09:12: mod 1.0.21 uploaded (the user: 出新版 mod; then: Workshop 的 REGENT 成績也更新). Built at f09dc0cf for
+  all three platforms (the Windows VM started for it, shut down after; the Mac reached on a second try): REGENT plays its
+  own bundle v-sl-regent-1 + c-sl-regent-1 + f-sl-regent-1 (promoted 11-25, its three nets on the weights release),
+  Trial's entrant number is out of the observation (bea30dfb: the game draws it from the unseeded Rng.Chaotic, so the
+  clone check stopped every run at TRIAL), the solver's root turn is capped at ROOT_NODES (07ce7b19, f8416e9d), and
+  1.0.20's co-op wait reaches the Workshop. The packed brain: a REGENT SL hello is ready with c-sl-regent-1 + f-sl-regent-1
+  and v-sl-regent-1, SILENT's with its own bundle, IRONCLAD's with v-sl-ironclad-0 and d2's c and f; the SILENT SL wire
+  (11 answers), the NoSL v6 wire (8) and the old FOOL Dread SL wire (7, its decision 0 refused as in 1.0.19) answer as
+  1.0.19 did. The texts: the Regent's SL row is v-sl-regent-1's at xhigh (test-v-sl-regent-1-b: A0 199/200, A10 163/200,
+  Dread 82/200) and the intro names the Silent and the Regent at XHigh, 17 languages (44acb4ab), sent with the content.
+  The game closed here and on the Mac (no local copy there). The commit went through at once (the public API: updated
+  01:12:59Z, 571.2 MB). Note: tmp/release-1.0.21/note.txt. Installed in `mods/` over 1.0.20 (moved to
+  `tmp/modeng/old-installs/`); the game not started on it yet.
