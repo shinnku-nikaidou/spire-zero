@@ -621,3 +621,15 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   selector's order (3a1e48b4). Checked on that room's wire excerpt (tmp/regent-clone): with the pick's index in that
   order, all 52 of its decisions ask the same on the clone (before: 42). The game closed after the win was saved,
   1.0.21 moved to `tmp/modeng/old-installs/`, the game relaunched on 1.0.22 (`start mod 1.0.22`, 02:11:24Z).
+- 2026-11-25 13:02: mod 1.1.0 uploaded (the user: sts2新版出了, 我的mod也得更新到新版; 直接做好, 然後上傳成1.1.0到steam), for
+  game v0.114.0 (public-beta, out 2026-11-25 09:08), built at f4253025 for all three platforms (the Windows VM started for
+  it). The port (7a37d99d): arrows are never destroyed any more, `UpgradeInternal(silent)`, every pin at v0.114.0; on
+  gcpsg the C# tests 176 + 74 pass, the self-test 68 of 71 on each character with the same 3 failures as v0.113.1 at
+  9029d096 (the two cycle checks and "SL plan is worth V", which compares the fight score with V since f), parity
+  --world engine 0 differences over 2,160 sweep combats and 720 Fool combats of the changed cards; the whole runs had one,
+  Happy Flower's new `_grantEnergyThisTurn` (fixed in f4253025). The engine's determinize test `drawn_at_a_prompt` fails
+  on a whole sweep dump on v0.113.1 too (69 there, 63 here; NoSL only). A version mismatch now shows nothing (the
+  user: mod如果版本不符,就完全不顯示), the 17 texts say so. The packed brain's hellos ready on v0.114.0 for all six
+  characters, SL and NoSL. The game closed here, the Mac's too (no local copy there). The first commit timed out with the
+  content through (the public API: updated 05:02:25Z), then the texts alone. Installed in `mods/` over 1.0.22 (moved to
+  `tmp/modeng/old-installs/`); the game not started on it yet. Note: tmp/release-1.1.0/note.txt.
