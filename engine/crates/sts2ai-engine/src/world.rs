@@ -545,6 +545,14 @@ fn kill_teammates(c: &mut Combat) -> R<()> {
 /// Runs the queued actions and the turn loop in turn until neither can go on. A hook that paused for the player in
 /// the turn loop's last move has its action started (manual/hook_player_choice_context.rs): its rest runs then, and
 /// the turn loop may move again after it.
+///
+/// The game's own turn loop can go on without end where the player never acts again: a hit whose result says it does
+/// not kill the player kills them all the same where a hook of the same hit lowered their HP first (Thorns hits back
+/// before the damage is applied, kills the attacker, and its Explosive hits the player), so they are never killed, no
+/// loss is recorded, and the dead player's turns end by themselves, round after round (sl-defect-g0-b's run 7812484;
+/// the game's code from the same combat, `sim combat --from`, loops alike). The fight cap (`cap`) is looked at only
+/// where the player can act, so a step past its last round and the one after is in that loop: it fails as the game's
+/// throws do, and its run is dropped.
 fn pump(c: &mut Combat) -> R<()> {
     let executor = RunManagerData::of(c.s.run_manager__instance, c).action_executor;
     let manager = c.s.combat_manager__instance;
@@ -552,6 +560,11 @@ fn pump(c: &mut Combat) -> R<()> {
         manual::action_executor::execute_actions(executor, c)?;
         if !manual::combat_manager::turn_loop(manager, c)? && c.x.hooks.started.is_null() {
             return Ok(());
+        }
+        let state = g::combat::combat_manager::debug_only_get_state(manager, c);
+        if !is_null(&state) && g::combat::combat_state::round_number(state, c) > MAX_ROUNDS + 1 {
+            let last = MAX_ROUNDS + 1;
+            panic!("the turn loop went past round {last} without the player acting: the game's own endless loop");
         }
     }
 }
