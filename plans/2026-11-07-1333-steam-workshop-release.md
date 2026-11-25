@@ -613,3 +613,11 @@ Paid distribution, multiplayer, an installer outside Steam, NoSL-only builds, th
   The game closed here and on the Mac (no local copy there). The commit went through at once (the public API: updated
   01:12:59Z, 571.2 MB). Note: tmp/release-1.0.21/note.txt. Installed in `mods/` over 1.0.20 (moved to
   `tmp/modeng/old-installs/`); the game not started on it yet.
+- 2026-11-25 10:11: mod 1.0.22 (built at bac69f7e, `LINUX_ONLY=1`), a local build for this machine's game only, not
+  uploaded. The user's REGENT A10 run (won) showed "這個房間沒有 SL 複本" at floor 48's rewards (the user: 局內無sl副本):
+  Secret Technique's draw-pile prompt was recorded by the pile's own order, while the game hands a selector the draw
+  pile by rarity, then card (CardSelectCmd.FromCombatPile), so the clone took index 7 as Know Thy Place instead of
+  Gather Light and could not follow the fight two steps later. The mod now reads a draw-pile prompt's cards in the
+  selector's order (3a1e48b4). Checked on that room's wire excerpt (tmp/regent-clone): with the pick's index in that
+  order, all 52 of its decisions ask the same on the clone (before: 42). The game closed after the win was saved,
+  1.0.21 moved to `tmp/modeng/old-installs/`, the game relaunched on 1.0.22 (`start mod 1.0.22`, 02:11:24Z).
