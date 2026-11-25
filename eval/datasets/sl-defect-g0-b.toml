@@ -1,0 +1,44 @@
+# The SL self-play dataset sl-defect-g0's second step, on game v0.114.0 (plans/2026-11-25-0142-sl-defect-g0.md 13).
+# sl-defect-g0 (eval/datasets/sl-defect-g0.toml, at a7ecaad2 on game v0.113.1) was stopped on 2026-11-25 05:09 UTC
+# with 2,089 runs when the game moved to v0.114.0 (the user: "The Defect 開新的session換新版"); its runs stay in the
+# dataset (the user: 留著). This file plays the rest of its rows, so the two steps together hold its 30,000 runs:
+# each row's n is sl-defect-g0's less the runs it played.
+# The same bundle, games, tiers and efforts as sl-defect-g0; only the seeds (a new ledger block) and the amounts differ.
+name = "sl-defect-g0-b"
+deadline = "+72h"                   # box.py deadline sl-defect-g0-b UNTIL moves it; about 52 h of the pool at xhigh
+priority = 0
+seeds = 7600000                     # the ledger's blocks 7600000-8199999; DEFECT (k = 2) plays 7800000-7827910, the smoke from 7899000
+characters = ["DEFECT"]
+champion = "eval/datasets/sl-defect-g0.bundle.json"   # v-sl-defect-0
+workers = 4
+
+# sl-defect-g0's tiers: a third of a row's runs each, a decision drawn evenly with chance epsilon, the others by a
+# softmax over log V at temperature tau.
+explore = [{ epsilon = 0.06, tau = 0.01 }, { epsilon = 0.03, tau = 0.01 }, { epsilon = 0.01, tau = 0.01 }]
+
+# The whole game, every fight at xhigh (max's solver with the early stop, solve 16384 stop 1024).
+[games.full]
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+# The Dread mode, which the game plays at ascension 10 only.
+[games.dread]
+mode = "dread"
+auto_win = []
+effort = { monster = "xhigh", elite = "xhigh", boss = "xhigh" }
+
+# sl-defect-g0 played A10 688, the Dread mode 698, A0-A9 72, 69, 70, 71, 68, 72, 70, 70, 70, 71.
+[[runs]]
+game = "full"
+asc = 10
+n = 9312
+
+[[runs]]
+game = "dread"
+asc = 10
+n = 9302
+
+[[runs]]
+game = "full"
+asc = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+n = [928, 931, 930, 929, 932, 928, 930, 930, 930, 929]
