@@ -75,8 +75,15 @@ internal sealed class Screens
             case NCombatRoom:
                 return Combat(run, me);
             case NCombatPileCardSelectScreen pile:
-                return Prompt(run, me, pile, Field<CardSelectorPrefs>(pile, "_prefs"),
-                    [.. Field<CardPile>(pile, "_pile").Cards.Where(Field<Func<CardModel, bool>?>(pile, "_filter") ?? (_ => true))]);
+            {
+                var from = Field<CardPile>(pile, "_pile");
+                var cards = from.Cards.Where(Field<Func<CardModel, bool>?>(pile, "_filter") ?? (_ => true));
+                // A selector gets the draw pile by rarity, then card (CardSelectCmd.FromCombatPile), not in its order: the
+                // pick's index must mean the same card on the node's clone (Secret Technique, the user's REGENT A10 run,
+                // floor 48: index 7 was Gather Light here and Know Thy Place there).
+                if (from.Type == PileType.Draw) cards = cards.OrderBy(c => c.Rarity).ThenBy(c => c);
+                return Prompt(run, me, pile, Field<CardSelectorPrefs>(pile, "_prefs"), [.. cards]);
+            }
             case NCardGridSelectionScreen grid:
                 return Prompt(run, me, grid, Field<CardSelectorPrefs>(grid, "_prefs"), Field<IReadOnlyList<CardModel>>(grid, "_cards"));
             case NChooseACardSelectionScreen choose:
